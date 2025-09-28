@@ -79,33 +79,6 @@ Use “Test Connection” to verify connectivity without sending actual requests
 
 ---
 
-## 📈 CI / Suggested Workflow
-
-Here’s a sample GitHub Actions workflow that you can include in `.github/workflows/build.yml`:
-
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
-      - name: Build
-        run: mvn -q -DskipTests package
-```
-
 You can expand this with test jobs, linting, deployment, etc.
 
 ---
