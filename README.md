@@ -1,13 +1,16 @@
 <div align="center">
     
-###VISTA – Vulnerability Insight & Strategic Test Assistant
+# VISTA – Vulnerability Insight & Strategic Test Assistant
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()  
-[![Release](https://img.shields.io/badge/release-0.2.1-blue)]()  
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)  
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()  [![Release](https://img.shields.io/badge/release-0.2.1-blue)]()  [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)  
+
+<img width="1920" height="922" alt="image" src="https://github.com/user-attachments/assets/1570ed80-9664-44d9-8f53-b3a42ffd2c4a" />
+
 </div>
-<div align="center">
-VISTA (Vulnerability Insight & Strategic Test Assistant) is an AI-powered **Burp Suite extension** that gives **request-specific testing guidance** using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, payload suggestions, and context-aware advice — helping you find and exploit vulnerabilities faster and more smartly.
+
+## 🦉 VISTA Overview
+
+VISTA is an AI-powered **Burp Suite extension** that gives **request-specific testing guidance** using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, payload suggestions, and context-aware advice — helping you find and exploit vulnerabilities faster and more smartly.
 
 ---
 
@@ -30,13 +33,8 @@ cd path/to/project
 mvn -q clean package
 ```
 
-The compiled JAR will be available under `target/vista-0.2.1.jar`.
+The compiled JAR will be available for direct use.
 
-You can also download a release JAR from the [GitHub Releases page](https://github.com/Adw0rm-sec/VISTA/releases/latest).
-
-> ⚠️ For production builds, tests have been removed to reduce footprint. Maintain a dev branch with tests if needed.
-
----
 
 ### 2. Load in Burp
 
@@ -112,7 +110,7 @@ If you like **VISTA**, feel free to ⭐ the repo, contribute with issues or pull
 ## 🧾 About
 
 **VISTA** (Vulnerability Insight & Strategic Test Assistant) — an AI extension for Burp Suite that helps pentesters with smart, per-request guidance.  
-Built by **Adw0rm-sec** | No external website yet  
+Built by **Adw0rm-sec** 
 
 ---
 
