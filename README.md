@@ -1,6 +1,10 @@
+<div align="center">
 # VISTA – Vulnerability Insight & Strategic Test Assistant
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()  [![Release](https://img.shields.io/badge/release-0.2.1-blue)]()  [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)  
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()  
+[![Release](https://img.shields.io/badge/release-0.2.1-blue)]()  
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)  
+</div>
 
 VISTA (Vulnerability Insight & Strategic Test Assistant) is an AI-powered **Burp Suite extension** that gives **request-specific testing guidance** using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, payload suggestions, and context-aware advice — helping you find and exploit vulnerabilities faster and more smartly.
 
