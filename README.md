@@ -77,11 +77,6 @@ Use “Test Connection” to verify connectivity without sending actual requests
 - The extension performs minimal JSON parsing; highly unusual or nested responses may cause parse failures.  
 - Data sent to Azure / OpenAI **may include sensitive info**; by default we **strip Authorization / Cookie headers** when sending.  
 - **Only test systems you have permission to test**. This tool assumes ethical use.
-
----
-
-You can expand this with test jobs, linting, deployment, etc.
-
 ---
 
 ## 🎯 Roadmap / Future Ideas
