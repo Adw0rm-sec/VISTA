@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project adheres loosely to Semantic Versioning.
 
 ## [0.2.0] - 2025-09-28
+## [0.2.1] - 2025-09-28
+### Changed
+- Rebuilt and polished UI chat styling (per-speaker colors); production packaging.
+
 ### Added
 - Rebrand to VISTA (Vulnerability Insight & Strategic Test Assistant).
 - OpenAI provider alongside Azure AI.

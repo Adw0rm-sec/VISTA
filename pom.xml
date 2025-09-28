@@ -5,7 +5,7 @@
 
     <groupId>com.burpraj</groupId>
     <artifactId>vista</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1</version>
     <name>VISTA</name>
     <description>VISTA - Vulnerability Insight &amp; Strategic Test Assistant (Azure AI / OpenAI)</description>
     <licenses>

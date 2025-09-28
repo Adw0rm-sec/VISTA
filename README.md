@@ -17,7 +17,7 @@ cd e:\BurpAIEx
 mvn -q clean package
 ```
 
-Output jar: `target/vista-0.2.0.jar`
+Output jar: `target/vista-0.2.1.jar`
 
 Note: Tests have been removed for the production distribution to minimize footprint. Maintain a separate branch with tests for ongoing development if desired.
 
