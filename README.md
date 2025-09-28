@@ -108,7 +108,3 @@ If you like **VISTA**, feel free to ⭐ the repo, contribute with issues or pull
 Built by **Adw0rm-sec** 
 
 ---
-
-## 🔖 Acknowledgements and Inspiration
-
-This README was inspired by the style and structure of the **Strix** project’s documentation.  
