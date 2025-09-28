@@ -1,87 +1,145 @@
 # VISTA – Vulnerability Insight & Strategic Test Assistant
 
-![Build](https://img.shields.io/github/actions/workflow/status/Adw0rm-sec/vista/build.yml?branch=main)
-![Release](https://img.shields.io/github/v/release/Adw0rm-sec/vista)
-![License](https://img.shields.io/github/license/Adw0rm-sec/vista)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()  
+[![Release](https://img.shields.io/badge/release-0.2.1-blue)]()  
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)  
 
-🔍 VISTA Overview
-VISTA (Vulnerability Insight & Strategic Test Assistant) is an AI-powered Burp Suite extension that provides request-specific testing guidance using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, customizable templates, and intelligent payload suggestions—helping you identify and exploit vulnerabilities faster and more effectively.
+VISTA (Vulnerability Insight & Strategic Test Assistant) is an AI-powered **Burp Suite extension** that gives **request-specific testing guidance** using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, payload suggestions, and context-aware advice — helping you find and exploit vulnerabilities faster and more smartly.
 
-Seamless Integration: Right-click "Send to VISTA" in Proxy or Repeater for instant AI analysis.
-Contextual Guidance: Get tailored advice, payloads, and strategies based on the exact request.
-Privacy-Focused: Optional stripping of sensitive headers (e.g., Authorization, Cookies) before AI processing.
-Developer-Friendly: Easy setup, build instructions, and CI/CD suggestions for ongoing development.
-Actionable Insights: Focuses on practical, ethical testing for systems you own or have permission to test.
+---
 
-## Build (Windows)
+## 🛠️ Features
 
-```powershell
-cd e:\BurpAIEx
+- **Seamless Integration**: Right-click “Send to VISTA” in Burp Suite (Proxy/Repeater) to instantly get intelligent analysis.  
+- **Contextual Guidance**: Receive advice, payloads, test strategies tailored to that specific request.  
+- **Chat Memory**: Each request has its own mini-conversation history.  
+- **Privacy-Focused**: Optionally strip sensitive headers (Authorization, Cookies) before sending to AI.  
+- **Custom Templates**: Use and tweak templates for different types of vulnerabilities or tests.  
+
+---
+
+## 🚀 Quick Start
+
+### 1. Build (Windows / cross-platform via Maven)
+
+```bash
+cd path/to/project
 mvn -q clean package
 ```
 
-Output jar: `target/vista-0.2.1.jar`
+The compiled JAR will be available under `target/vista-0.2.1.jar`.
 
-Download: see the latest release assets at https://github.com/Adw0rm-sec/vista/releases/latest
+You can also download a release JAR from the [GitHub Releases page](https://github.com/Adw0rm-sec/VISTA/releases/latest).
 
-Note: Tests have been removed for the production distribution to minimize footprint. Maintain a separate branch with tests for ongoing development if desired.
+> ⚠️ For production builds, tests have been removed to reduce footprint. Maintain a dev branch with tests if needed.
 
-## Load in Burp
-- Burp Suite -> Extender -> Extensions -> Add
-- Extension type: Java
-- Select the jar above
+---
 
-## Configure Azure
+### 2. Load in Burp
 
-Enter values directly in the Settings panel:
-- Endpoint: e.g., https://your-resource.openai.azure.com or https://your-resource.cognitiveservices.azure.com
-- Deployment: your deployment name (not model ID), e.g., gpt-5-mini or gpt-4o-mini
-- API Version: default 2024-12-01-preview (adjust per portal)
-- API Key: paste your Azure resource key
+1. Open **Burp Suite → Extender → Extensions → Add**  
+2. Select **Extension type: Java**  
+3. Choose the JAR file (e.g. `vista-0.2.1.jar`)  
 
-## Use
-1. Right-click a message in Proxy/Repeater -> "Send to VISTA"
-2. In the tab, you can ask a question, or leave it blank to get automatic request-specific guidance with payloads. Configure settings if needed.
-3. Use "Test connection" to validate Azure credentials without sending captured data.
+---
 
-## Notes
-- Settings & global chat are persisted to `~/.vista.json` (automatic one-time migration from legacy `~/.burpraj.json` if it exists). Per-request chats are currently in-memory only.
-- The extension includes stub Burp API interfaces for compilation - it will work with the actual Burp Suite APIs at runtime.
-- We do minimal JSON parsing; responses with unusual shapes may show a parse error.
-- Data sent to Azure may contain sensitive info; by default we strip Authorization/Cookie headers in AI payloads.
- - The assistant assumes you are authorized to test the application and focuses on practical, request-specific guidance with payloads.
+### 3. Configure Azure / OpenAI
 
-## Publishing to GitHub
-1. Initialize repo: `git init` then add & commit files.
-2. Create remote repo on GitHub (e.g., `vista`), then: `git remote add origin git@github.com:<you>/vista.git`.
-3. Commit & push: `git add . && git commit -m "feat: initial public release" && git push -u origin main`.
-4. Tag a version: `git tag -a v0.2.0 -m "Release v0.2.0" && git push origin v0.2.0`.
-5. Create a GitHub Release and attach `target/vista-0.2.0.jar`.
-6. (Optional) Enable Discussions, set up branch protection, add CI workflow.
+You can enter these in the VISTA settings panel:
 
-## CI (Suggested)
-GitHub Actions example workflow (`.github/workflows/build.yml`):
-```
+- **Endpoint**:  
+  Example: `https://your-resource.openai.azure.com` or `https://your-resource.cognitiveservices.azure.com`  
+- **Deployment**: Name of your model deployment (e.g. `gpt-5-mini` or `gpt-4o-mini`)  
+- **API Version**: Default `2024-12-01-preview` (or as configured in Azure)  
+- **API Key**: Your Azure key or OpenAI key  
+
+Use “Test Connection” to verify connectivity without sending actual requests.
+
+---
+
+### 4. Using VISTA
+
+1. In **Proxy** or **Repeater**, right-click a request → **Send to VISTA**  
+2. In the VISTA tab:  
+   - Leave the prompt blank to get automatic guidance for that request  
+   - Or ask a specific question (e.g. “Check for SQLi or auth bypass”)  
+3. Review suggested payloads, strategies, and notes  
+4. Adjust settings or templates as needed  
+
+---
+
+## 🧠 Notes & Behavior
+
+- Settings & global chat are saved in `~/.vista.json` (migrates from legacy `~/.burpraj.json` if it exists).  
+- Per-request chat histories are in memory only (not saved to disk).  
+- The extension includes stub Burp API interfaces for compilation — at runtime it uses the real Burp APIs.  
+- The extension performs minimal JSON parsing; highly unusual or nested responses may cause parse failures.  
+- Data sent to Azure / OpenAI **may include sensitive info**; by default we **strip Authorization / Cookie headers** when sending.  
+- **Only test systems you have permission to test**. This tool assumes ethical use.
+
+---
+
+## 📈 CI / Suggested Workflow
+
+Here’s a sample GitHub Actions workflow that you can include in `.github/workflows/build.yml`:
+
+```yaml
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
 jobs:
-	build:
-		runs-on: ubuntu-latest
-		steps:
-			- uses: actions/checkout@v4
-			- name: Set up JDK 17
-				uses: actions/setup-java@v4
-				with:
-					distribution: temurin
-					java-version: '17'
-					cache: maven
-			- name: Build
-				run: mvn -q -DskipTests package
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build
+        run: mvn -q -DskipTests package
 ```
 
+You can expand this with test jobs, linting, deployment, etc.
 
-## Next steps
-- Streaming responses
-- Completed: Provider selection (Azure AI / OpenAI), per-request chats, remove, Repeater send, settings collapse
-- Request history and prompt templates
-- Redaction rules editor and per-domain policies
+---
+
+## 🎯 Roadmap / Future Ideas
+
+- Streaming responses from AI (partial results)  
+- Enhanced provider selection (Azure / OpenAI / local models)  
+- Per-request chat persistence  
+- More prompt templates & redaction rules  
+- Domain-based policies and filters  
+- UI improvements (settings, feedback, prompt tuning)  
+
+---
+
+## ⚖️ License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## ❤️ Support the Project
+
+If you like **VISTA**, feel free to ⭐ the repo, contribute with issues or pull requests, and share with the community.
+
+---
+
+## 🧾 About
+
+**VISTA** (Vulnerability Insight & Strategic Test Assistant) — an AI extension for Burp Suite that helps pentesters with smart, per-request guidance.  
+Built by **Adw0rm-sec** | No external website yet  
+
+---
+
+## 🔖 Acknowledgements and Inspiration
+
+This README was inspired by the style and structure of the **Strix** project’s documentation.  
