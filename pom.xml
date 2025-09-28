@@ -8,6 +8,20 @@
     <version>0.2.1</version>
     <name>VISTA</name>
     <description>VISTA - Vulnerability Insight &amp; Strategic Test Assistant (Azure AI / OpenAI)</description>
+    <url>https://github.com/Adw0rm-sec/vista</url>
+    <scm>
+        <url>https://github.com/Adw0rm-sec/vista</url>
+        <connection>scm:git:https://github.com/Adw0rm-sec/vista.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/Adw0rm-sec/vista.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+    <developers>
+        <developer>
+            <id>Adw0rm-sec</id>
+            <name>Adw0rm-sec</name>
+            <url>https://github.com/Adw0rm-sec</url>
+        </developer>
+    </developers>
     <licenses>
         <license>
             <name>MIT License</name>

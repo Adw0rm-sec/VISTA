@@ -1,5 +1,9 @@
 # VISTA – Vulnerability Insight & Strategic Test Assistant
 
+![Build](https://img.shields.io/github/actions/workflow/status/Adw0rm-sec/vista/build.yml?branch=main)
+![Release](https://img.shields.io/github/v/release/Adw0rm-sec/vista)
+![License](https://img.shields.io/github/license/Adw0rm-sec/vista)
+
 AI-assisted Burp Suite extension providing request-specific testing guidance (Azure AI / OpenAI) with per-request chat histories, templates, and payload suggestions.
 
 License: MIT (see `LICENSE`)
@@ -18,6 +22,8 @@ mvn -q clean package
 ```
 
 Output jar: `target/vista-0.2.1.jar`
+
+Download: see the latest release assets at https://github.com/Adw0rm-sec/vista/releases/latest
 
 Note: Tests have been removed for the production distribution to minimize footprint. Maintain a separate branch with tests for ongoing development if desired.
 
