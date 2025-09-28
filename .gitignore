@@ -1,0 +1,41 @@
+#############################
+# General
+#############################
+*.log
+*.tmp
+*.swp
+*.DS_Store
+Thumbs.db
+
+#############################
+# Maven / Build Artifacts
+#############################
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+
+#############################
+# IntelliJ / Eclipse / VSCode
+#############################
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.vscode/
+
+#############################
+# OS
+#############################
+ehthumbs.db
+Desktop.ini
+
+#############################
+# Local State / Keys (add any API key files here if used later)
+#############################
+.vista.json
+.burpraj.json
