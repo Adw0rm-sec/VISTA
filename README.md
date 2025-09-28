@@ -4,15 +4,14 @@
 ![Release](https://img.shields.io/github/v/release/Adw0rm-sec/vista)
 ![License](https://img.shields.io/github/license/Adw0rm-sec/vista)
 
-AI-assisted Burp Suite extension providing request-specific testing guidance (Azure AI / OpenAI) with per-request chat histories, templates, and payload suggestions.
+🔍 VISTA Overview
+VISTA (Vulnerability Insight & Strategic Test Assistant) is an AI-powered Burp Suite extension that provides request-specific testing guidance using Azure AI or OpenAI. It enhances your pentesting workflow with per-request chat histories, customizable templates, and intelligent payload suggestions—helping you identify and exploit vulnerabilities faster and more effectively.
 
-License: MIT (see `LICENSE`)
-
-Features:
-- Context menu: "Send to VISTA" in Proxy/Repeater
-- Tab with Request/Response viewers and a small chat
-- Settings panel to enter Azure endpoint, deployment, api version, and key
-- Optional stripping of sensitive headers before sending to AI
+Seamless Integration: Right-click "Send to VISTA" in Proxy or Repeater for instant AI analysis.
+Contextual Guidance: Get tailored advice, payloads, and strategies based on the exact request.
+Privacy-Focused: Optional stripping of sensitive headers (e.g., Authorization, Cookies) before AI processing.
+Developer-Friendly: Easy setup, build instructions, and CI/CD suggestions for ongoing development.
+Actionable Insights: Focuses on practical, ethical testing for systems you own or have permission to test.
 
 ## Build (Windows)
 
