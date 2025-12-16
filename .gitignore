@@ -17,6 +17,11 @@ pom.xml.versionsBackup
 release.properties
 
 #############################
+# JAR files (built artifacts)
+#############################
+*.jar
+
+#############################
 # IntelliJ / Eclipse / VSCode
 #############################
 .idea/
@@ -27,6 +32,7 @@ release.properties
 .project
 .settings/
 .vscode/
+.kiro/
 
 #############################
 # OS
@@ -35,7 +41,14 @@ ehthumbs.db
 Desktop.ini
 
 #############################
-# Local State / Keys (add any API key files here if used later)
+# Local State / Keys
 #############################
 .vista.json
+.vista-config.json
 .burpraj.json
+
+#############################
+# Archives
+#############################
+*.zip
+*.tar.gz

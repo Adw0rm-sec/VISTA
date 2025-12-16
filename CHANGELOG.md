@@ -1,30 +1,60 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to VISTA will be documented in this file.
 
-The format is based on Keep a Changelog, and this project adheres loosely to Semantic Versioning.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2025-09-28
-## [0.2.1] - 2025-09-28
-### Changed
-- Rebuilt and polished UI chat styling (per-speaker colors); production packaging.
+## [1.0.0-MVP] - 2024-12-16
 
 ### Added
-- Rebrand to VISTA (Vulnerability Insight & Strategic Test Assistant).
-- OpenAI provider alongside Azure AI.
-- Per-request chat isolation & response binding.
-- Styled chat with colored speaker tags (VISTA, You, etc.).
-- Template loading with size budget & truncation.
-- Persistence migrated to `.vista.json` (auto-migrate from `.burpraj.json`).
-- Preset vulnerability focus areas (CSRF, IDOR, SQLi, SSRF, XSS).
+- **AI Integration**
+  - Azure OpenAI support with configurable endpoint, deployment, and API version
+  - OpenAI support with model selection and custom base URL
+  - Temperature control for AI response creativity
+  - Connection testing functionality
 
-### Changed
-- Artifact renamed to `vista` with version `0.2.0`.
-- Removed unused presets (Authentication/JWT, Business Logic, Race Conditions, RCE).
-- Simplified persistence: only global chat persisted.
+- **Security Analysis**
+  - Session cookie detection (JSESSIONID, PHPSESSID, ASP.NET_SessionId, JWT, etc.)
+  - Authentication header detection (Bearer, Basic, API keys)
+  - Security flag analysis (Secure, HttpOnly, SameSite)
+  - Parameter reflection detection with context analysis
+  - XSS risk level assessment (Critical/High/Medium/Low)
+  - 11 vulnerability presets (SQLi, XSS, CSRF, IDOR, SSRF, etc.)
 
-### Removed
-- Test suite (moved out for production packaging).
+- **Request Management**
+  - Multi-request list with summaries
+  - Request grouping with custom names and 10 color options
+  - Color-coded request list by group
+  - Send to Repeater/Intruder integration
+  - Per-request analysis history
 
-## [0.1.0] - Initial
-- Original BurpRaj MVP (Azure only, basic chat, request list, header stripping).
+- **Payload Library**
+  - 70+ built-in security payloads
+  - Categories: XSS, SQLi, SSRF, Path Traversal, Command Injection
+  - Custom payload support
+
+- **Productivity Features**
+  - Quick action buttons for common tasks
+  - Keyboard shortcuts (Ctrl+Enter, Delete, Escape)
+  - Findings management with severity levels
+  - Markdown report export
+  - Custom template support
+
+- **UI/UX**
+  - Tabbed interface (Request, Response, Parameters, Session, Reflections)
+  - Collapsible settings panel
+  - Status indicators and progress bar
+  - Chat-style AI interaction
+
+### Technical
+- Refactored package structure to `com.vista.security`
+- Industry-standard naming conventions
+- Configuration persistence in `~/.vista-config.json`
+- GitHub Actions CI/CD pipeline
+
+## [0.2.1] - Previous Release
+
+- Initial public release
+- Basic AI integration
+- Request/Response viewing
