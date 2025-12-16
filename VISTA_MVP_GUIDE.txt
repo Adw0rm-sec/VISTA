@@ -1,0 +1,373 @@
+================================================================================
+                    VISTA MVP - IMPLEMENTATION & TESTING GUIDE
+          Vulnerability Insight & Strategic Test Assistant for Burp Suite
+================================================================================
+
+VERSION: 1.0.0-MVP
+BUILD: Run `mvn package` to generate target/vista-1.0.0-MVP.jar
+
+================================================================================
+                           PROJECT STRUCTURE
+================================================================================
+
+src/main/java/
+├── burp/                                    # Burp Suite API interfaces
+│   ├── BurpExtender.java                    # Main extension entry point
+│   ├── IBurpExtender.java
+│   ├── IBurpExtenderCallbacks.java
+│   └── ...
+│
+└── com/vista/security/                      # VISTA core package
+    │
+    ├── VistaExtension.java                  # Alternative entry point
+    │
+    ├── core/                                # Core utilities
+    │   ├── HttpMessageParser.java           # HTTP request/response parsing
+    │   ├── ParameterAnalyzer.java           # Parameter extraction & analysis
+    │   ├── PayloadLibrary.java              # Security testing payloads
+    │   ├── ReportGenerator.java             # Report generation
+    │   ├── SessionAnalyzer.java             # Session/cookie detection
+    │   ├── ReflectionAnalyzer.java          # Parameter reflection detection
+    │   └── VulnerabilityTemplates.java      # Built-in vuln templates
+    │
+    ├── model/                               # Data models
+    │   └── RequestGroup.java                # Request grouping with colors
+    │
+    ├── service/                             # AI service integrations
+    │   ├── AIService.java                   # Common AI interface
+    │   ├── AzureAIService.java              # Azure OpenAI implementation
+    │   └── OpenAIService.java               # OpenAI implementation
+    │
+    └── ui/                                  # User interface
+        └── MainPanel.java                   # Main UI panel
+
+================================================================================
+                           NAMING CONVENTIONS
+================================================================================
+
+PACKAGES:
+  com.vista.security          - Root package (product-focused, not personal)
+  com.vista.security.core     - Core utilities and business logic
+  com.vista.security.service  - External service integrations
+  com.vista.security.ui       - User interface components
+
+CLASSES:
+  MainPanel                   - Primary UI panel (not "VistaPanel")
+  HttpMessageParser           - HTTP parsing utility (not "HttpFormat")
+  ParameterAnalyzer           - Parameter extraction (not "ParameterExtractor")
+  VulnerabilityTemplates      - Full name, no abbreviations (not "VulnTemplates")
+  PayloadLibrary              - Payload collection (not "PayloadGenerator")
+  ReportGenerator             - Report creation (not "ReportExporter")
+  AzureAIService              - Azure AI integration (not "AzureClient")
+  OpenAIService               - OpenAI integration (not "OpenAIClient")
+  AIService                   - Common interface for AI providers
+
+METHODS:
+  - Use full words: extractSummary(), not extractAll()
+  - Use verb-noun: generateMarkdownReport(), not toMarkdown()
+  - Boolean methods: isValid(), hasError(), not valid(), error()
+
+CONSTANTS:
+  - UPPER_SNAKE_CASE: EXTENSION_NAME, DEFAULT_BASE_URL
+  - Descriptive names: CONNECT_TIMEOUT, REQUEST_TIMEOUT
+
+================================================================================
+                           IMPLEMENTED FEATURES
+================================================================================
+
+1. CORE EXTENSION
+   ✓ Burp Suite integration via standard interfaces
+   ✓ Custom "VISTA" tab in Burp Suite
+   ✓ Right-click context menu "Send to VISTA"
+   ✓ State persistence (~/.vista-config.json)
+
+2. REQUEST MANAGEMENT
+   ✓ Multi-request list with summaries
+   ✓ Request/Response/Parameters/Session/Reflections tabs
+   ✓ Remove individual or all requests
+   ✓ Send to Repeater (double-click)
+   ✓ Send to Intruder (with fallback)
+   ✓ Per-request analysis history
+   ✓ Request grouping with custom names and colors
+   ✓ Color-coded request list by group
+
+3. AI INTEGRATION
+   ✓ Azure AI and OpenAI support
+   ✓ Temperature control (0-1.0)
+   ✓ Connection testing
+   ✓ Sensitive header stripping
+   ✓ Configurable max characters
+
+4. SECURITY ANALYSIS
+   ✓ Quick question buttons
+   ✓ Auto-Analyze feature
+   ✓ Vulnerability presets (11 types)
+   ✓ Custom template support
+   ✓ Parameter extraction with test suggestions
+   ✓ Auto-detection of vulnerability types
+
+5. PAYLOAD LIBRARY
+   ✓ 70+ built-in payloads
+   ✓ Categories: XSS, SQLi, SSRF, Path Traversal, etc.
+   ✓ Double-click to copy
+   ✓ Add custom payloads
+
+6. FINDINGS MANAGEMENT
+   ✓ Add findings with severity
+   ✓ Per-request tracking
+   ✓ View/remove findings
+
+7. REPORT EXPORT
+   ✓ Markdown format
+   ✓ Executive summary
+   ✓ Detailed findings
+   ✓ Analysis notes
+
+8. SESSION ANALYSIS
+   ✓ Auto-detect session cookies (JSESSIONID, PHPSESSID, etc.)
+   ✓ Detect auth headers (Bearer, Basic, API keys)
+   ✓ JWT token detection
+   ✓ Security issue detection (missing Secure/HttpOnly flags)
+   ✓ SameSite attribute analysis
+   ✓ Confidence scoring for session cookies
+
+9. REFLECTION ANALYSIS
+   ✓ Detect parameter reflections in responses
+   ✓ Context detection (HTML, JS, attribute, URL, JSON)
+   ✓ Risk level assessment (Critical/High/Medium/Low)
+   ✓ Encoded reflection detection
+   ✓ XSS vulnerability indicators
+   ✓ Snippet extraction for context
+
+10. REQUEST GROUPING
+    ✓ Create custom groups with names
+    ✓ 10 preset colors (Red, Orange, Yellow, Green, Blue, etc.)
+    ✓ Assign/unassign requests to groups
+    ✓ Color-coded request list
+    ✓ Group indicator in request list
+
+================================================================================
+                           TESTING GUIDE
+================================================================================
+
+INSTALLATION
+------------
+1. Build: mvn package
+2. Load in Burp Suite: Extensions > Add > Java > target/vista-1.0.0-MVP.jar
+3. Verify: Check for "VISTA" tab and output messages
+
+--------------------------------------------------------------------------------
+
+TEST 1: REQUEST CAPTURE
+-----------------------
+Steps:
+1. Browse through Burp Proxy
+2. Right-click request in HTTP History
+3. Select "Send to VISTA"
+
+Expected:
+- Request appears in VISTA list
+- Request/Response tabs populated
+- Parameters tab shows extracted params
+
+--------------------------------------------------------------------------------
+
+TEST 2: AI CONFIGURATION
+------------------------
+OpenAI:
+1. Settings > Provider: OpenAI
+2. Enter model (gpt-4o-mini) and API key
+3. Click "Test Connection"
+
+Azure:
+1. Settings > Provider: Azure AI
+2. Enter endpoint, deployment, API key
+3. Click "Test Connection"
+
+Expected: Success message in chat
+
+--------------------------------------------------------------------------------
+
+TEST 3: SECURITY ANALYSIS
+-------------------------
+Steps:
+1. Select a request
+2. Click "Suggest Tests" or type question
+3. Press Ctrl+Enter or click "Ask VISTA"
+
+Expected:
+- Progress indicator shows
+- AI response with payloads and steps
+- Response formatted with headers
+
+--------------------------------------------------------------------------------
+
+TEST 4: PARAMETER EXTRACTION
+----------------------------
+Steps:
+1. Select request with parameters
+2. Click "📋 Extract Parameters"
+
+Expected:
+- Parameters tab shows all params
+- Grouped by location (URL, Cookie, JSON, etc.)
+- Security test suggestions per param
+
+--------------------------------------------------------------------------------
+
+TEST 5: PAYLOAD LIBRARY
+-----------------------
+Steps:
+1. View Payload Library in sidebar
+2. Double-click a payload
+3. Paste to verify copy
+
+Expected:
+- Payload copied to clipboard
+- Status shows "Copied: [name]"
+
+--------------------------------------------------------------------------------
+
+TEST 6: FINDINGS
+----------------
+Steps:
+1. Click "⚠️ Add Finding"
+2. Enter title, severity, description
+3. View in Findings list
+
+Expected:
+- Finding appears with severity tag
+- Persists per request
+
+--------------------------------------------------------------------------------
+
+TEST 7: REPORT EXPORT
+---------------------
+Steps:
+1. Add requests and findings
+2. Click "📄 Export Report"
+3. Save as .md file
+
+Expected:
+- Markdown file with summary
+- Findings and analysis included
+
+--------------------------------------------------------------------------------
+
+TEST 8: SESSION ANALYSIS
+------------------------
+Steps:
+1. Send a request with cookies to VISTA
+2. Click "🔐 Analyze Session" in sidebar
+3. Check Session tab
+
+Expected:
+- Session cookies detected with type (SESSION_ID, JWT, etc.)
+- Auth headers identified (Bearer, Basic, API Key)
+- Security issues flagged (missing Secure/HttpOnly)
+- Confidence scores shown for each cookie
+- Summary in chat panel
+
+--------------------------------------------------------------------------------
+
+TEST 9: REFLECTION ANALYSIS
+---------------------------
+Steps:
+1. Send a request with parameters that reflect in response
+2. Click "🔄 Find Reflections" in sidebar
+3. Check Reflections tab
+
+Expected:
+- Reflected parameters listed with source (URL, Body, Cookie)
+- Context type shown (HTML_BODY, JAVASCRIPT, HTML_ATTRIBUTE)
+- Risk level indicated (🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM)
+- Snippet showing reflection context
+- Summary in chat panel
+
+--------------------------------------------------------------------------------
+
+TEST 10: REQUEST GROUPING
+-------------------------
+Steps:
+1. Click "+" button next to Group dropdown
+2. Enter group name (e.g., "Auth Endpoints")
+3. Select a color (e.g., Blue)
+4. Select a request and choose group from dropdown
+5. Click "Assign"
+
+Expected:
+- Group appears in dropdown
+- Request shows colored background in list
+- Group indicator (●) appears before request name
+- Group persists after reload
+
+--------------------------------------------------------------------------------
+
+TEST 11: KEYBOARD SHORTCUTS
+---------------------------
+- Ctrl+Enter: Send question
+- Enter (empty): Auto-suggest
+- Delete: Remove request
+- Escape: Cancel processing
+- Double-click: Send to Repeater
+
+================================================================================
+                           QUICK REFERENCE
+================================================================================
+
+VULNERABILITY PRESETS
+---------------------
+Auto-detect, CSRF, IDOR, SQL Injection, SSRF, XSS,
+Authentication, Authorization, File Upload, XXE, Command Injection
+
+QUICK ACTIONS
+-------------
+🔍 Auto-Analyze    - Comprehensive security analysis
+📋 Extract Params  - Show all parameters with suggestions
+🔐 Analyze Session - Detect session cookies and auth headers
+🔄 Find Reflections- Detect parameter reflections in response
+📄 Export Report   - Generate Markdown report
+⚠️ Add Finding     - Record security finding
+
+REQUEST GROUPS
+--------------
+Colors: Red, Orange, Yellow, Green, Blue, Purple, Gray, Dark Blue, Teal, Light
+Usage: Create groups to organize requests by feature, endpoint, or test scenario
+
+CHAT COLORS
+-----------
+Red    - VISTA responses
+Blue   - Your questions
+Green  - Info messages
+Dark Red - Errors
+
+CONFIG FILE
+-----------
+Location: ~/.vista-config.json
+Contains: Provider settings, preferences, global chat
+Note: API keys are NOT persisted for security
+
+================================================================================
+                           TROUBLESHOOTING
+================================================================================
+
+"API key is empty"
+→ Enter API key in Settings panel
+
+"Endpoint doesn't look like Azure"
+→ Use: https://your-resource.openai.azure.com
+
+"Configuration incomplete"
+→ Fill all required fields for selected provider
+
+Slow responses
+→ Reduce "Max Chars" setting
+→ Check network connectivity
+
+Extension not loading
+→ Check Burp Extensions > Errors tab
+→ Ensure Java 17+ is used
+
+================================================================================
+                              END OF GUIDE
+================================================================================
