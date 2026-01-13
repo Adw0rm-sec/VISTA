@@ -9,4 +9,6 @@ public interface IBurpExtenderCallbacks {
     IExtensionHelpers getHelpers();
     // Classic Burp API method to send requests to Repeater
     void sendToRepeater(String host, int port, boolean useHttps, byte[] request, String tabCaption);
+    // Make HTTP request and get response
+    IHttpRequestResponse makeHttpRequest(IHttpService httpService, byte[] request);
 }

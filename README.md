@@ -11,7 +11,7 @@
 
 **AI-powered Burp Suite extension for intelligent security testing**
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Configuration](#configuration) • [Contributing](#contributing)
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Configuration](#configuration) • [Contributing](#contributing) 
 
 </div>
 

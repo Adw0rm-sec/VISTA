@@ -82,6 +82,9 @@ public class MainPanel {
     private final JTextArea sessionArea = new JTextArea();
     private final JTextArea reflectionArea = new JTextArea();
 
+    // Auto-Exploit Engine
+    private AutoExploitEngine autoExploitEngine;
+
     // Status
     private final JLabel statusLabel = new JLabel("Ready");
     private final JProgressBar progressBar = new JProgressBar();
@@ -101,6 +104,7 @@ public class MainPanel {
         this.callbacks = callbacks;
         this.helpers = callbacks.getHelpers();
         this.animationTimer = new javax.swing.Timer(400, e -> animateStatus());
+        this.autoExploitEngine = new AutoExploitEngine(callbacks);
         this.rootPanel = buildUI();
         loadDefaultPayloads();
         loadPersistedState();
@@ -343,6 +347,7 @@ public class MainPanel {
         JButton extractBtn = new JButton("📋 Extract Parameters");
         JButton sessionBtn = new JButton("🔐 Analyze Session");
         JButton reflectionBtn = new JButton("🔄 Find Reflections");
+        JButton autoExploitBtn = new JButton("🚀 Auto-Exploit");
         JButton reportBtn = new JButton("📄 Export Report");
         JButton findingBtn = new JButton("⚠️ Add Finding");
         
@@ -350,6 +355,7 @@ public class MainPanel {
         extractBtn.addActionListener(e -> extractParameters());
         sessionBtn.addActionListener(e -> analyzeSessionDetails());
         reflectionBtn.addActionListener(e -> analyzeReflectionDetails());
+        autoExploitBtn.addActionListener(e -> showAutoExploitDialog());
         reportBtn.addActionListener(e -> exportReport());
         findingBtn.addActionListener(e -> addFinding());
         
@@ -357,6 +363,7 @@ public class MainPanel {
         actionsPanel.add(extractBtn);
         actionsPanel.add(sessionBtn);
         actionsPanel.add(reflectionBtn);
+        actionsPanel.add(autoExploitBtn);
         actionsPanel.add(reportBtn);
         actionsPanel.add(findingBtn);
 
@@ -1076,6 +1083,193 @@ public class MainPanel {
         }
         chatMsg.append("\nSee Reflections tab for details.");
         appendChat("INFO", chatMsg.toString());
+    }
+
+    // ==================== Auto-Exploit ====================
+
+    private void showAutoExploitDialog() {
+        if (currentRequest == null) {
+            appendChat("VISTA", "Select a request first.");
+            return;
+        }
+
+        if (autoExploitEngine.isRunning()) {
+            int stop = JOptionPane.showConfirmDialog(rootPanel, 
+                "Auto-exploit is running. Stop it?", "Stop Exploit", JOptionPane.YES_NO_OPTION);
+            if (stop == JOptionPane.YES_OPTION) {
+                autoExploitEngine.stop();
+                appendChat("INFO", "Auto-exploit stopped by user.");
+            }
+            return;
+        }
+
+        // Extract parameters for selection
+        String requestText = HttpMessageParser.requestToText(helpers, currentRequest.getRequest());
+        List<String> params = extractParameterNames(requestText);
+        
+        if (params.isEmpty()) {
+            appendChat("VISTA", "No parameters found in request.");
+            return;
+        }
+
+        // Build dialog
+        JPanel panel = new JPanel(new GridLayout(0, 2, 8, 8));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        JComboBox<String> paramCombo = new JComboBox<>(params.toArray(new String[0]));
+        JComboBox<String> typeCombo = new JComboBox<>(new String[]{
+            "XSS", "SQLi", "Command", "Path Traversal", "Auth Bypass", "Generic"
+        });
+        JSpinner maxPayloadsSpinner = new JSpinner(new SpinnerNumberModel(30, 5, 100, 5));
+        JSpinner delaySpinner = new JSpinner(new SpinnerNumberModel(100, 0, 2000, 50));
+        JCheckBox stopOnFirstCheck = new JCheckBox("Stop on first finding");
+
+        panel.add(new JLabel("Target Parameter:"));
+        panel.add(paramCombo);
+        panel.add(new JLabel("Exploit Type:"));
+        panel.add(typeCombo);
+        panel.add(new JLabel("Max Payloads:"));
+        panel.add(maxPayloadsSpinner);
+        panel.add(new JLabel("Delay (ms):"));
+        panel.add(delaySpinner);
+        panel.add(new JLabel(""));
+        panel.add(stopOnFirstCheck);
+
+        int result = JOptionPane.showConfirmDialog(rootPanel, panel, 
+            "🚀 Auto-Exploit Configuration", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        
+        if (result != JOptionPane.OK_OPTION) return;
+
+        // Build config
+        AutoExploitEngine.ExploitConfig config = new AutoExploitEngine.ExploitConfig();
+        config.targetParameter = (String) paramCombo.getSelectedItem();
+        config.exploitType = (String) typeCombo.getSelectedItem();
+        config.maxPayloads = (Integer) maxPayloadsSpinner.getValue();
+        config.delayMs = (Integer) delaySpinner.getValue();
+        config.stopOnFirstFind = stopOnFirstCheck.isSelected();
+
+        // Run exploit in background
+        runAutoExploit(config);
+    }
+
+    private void runAutoExploit(AutoExploitEngine.ExploitConfig config) {
+        appendChat("VISTA", "🚀 Starting Auto-Exploit on parameter: " + config.targetParameter);
+        appendChat("INFO", "Type: " + config.exploitType + " | Max payloads: " + config.maxPayloads);
+        
+        setStatus(true, "Auto-Exploit running");
+
+        new Thread(() -> {
+            try {
+                AutoExploitEngine.ExploitSummary summary = autoExploitEngine.runExploit(
+                    currentRequest,
+                    config,
+                    status -> SwingUtilities.invokeLater(() -> statusLabel.setText(status)),
+                    finding -> SwingUtilities.invokeLater(() -> {
+                        appendChat("VISTA", "🎯 POTENTIAL BYPASS FOUND!\n" +
+                            "Payload: " + finding.payload + "\n" +
+                            "Indicator: " + finding.bypassIndicator + "\n" +
+                            "Status: " + finding.statusCode + " | Length: " + finding.responseLength);
+                        
+                        // Auto-add as finding
+                        String findingText = "[High] Auto-Exploit: " + config.targetParameter + 
+                            " - " + finding.bypassIndicator;
+                        List<String> requestFindings = findings.computeIfAbsent(currentRequest, k -> new ArrayList<>());
+                        requestFindings.add(findingText);
+                        updateFindingsList();
+                    })
+                );
+
+                // Show summary
+                SwingUtilities.invokeLater(() -> {
+                    StringBuilder summaryMsg = new StringBuilder();
+                    summaryMsg.append("═══ AUTO-EXPLOIT COMPLETE ═══\n\n");
+                    summaryMsg.append("Parameter: ").append(config.targetParameter).append("\n");
+                    summaryMsg.append("Payloads tested: ").append(summary.allResults.size()).append("\n");
+                    summaryMsg.append("Time: ").append(summary.totalTime / 1000.0).append("s\n\n");
+                    
+                    if (summary.hasFindings()) {
+                        summaryMsg.append("🎯 FINDINGS: ").append(summary.potentialBypasses.size()).append("\n\n");
+                        for (AutoExploitEngine.ExploitResult r : summary.potentialBypasses) {
+                            summaryMsg.append("• Payload: ").append(truncateForChat(r.payload, 50)).append("\n");
+                            summaryMsg.append("  Reason: ").append(r.bypassIndicator).append("\n");
+                            summaryMsg.append("  Response: ").append(r.statusCode).append(" (").append(r.responseLength).append(" bytes)\n\n");
+                        }
+                    } else {
+                        summaryMsg.append("No bypasses detected. The validation may be robust, or try different payload types.");
+                    }
+                    
+                    appendChat("VISTA", summaryMsg.toString());
+                    setStatus(false, "Ready");
+                });
+
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    appendChat("ERROR", "Auto-exploit failed: " + e.getMessage());
+                    setStatus(false, "Error");
+                });
+                callbacks.printError("Auto-exploit error: " + e);
+            }
+        }, "VISTA-AutoExploit").start();
+    }
+
+    private List<String> extractParameterNames(String requestText) {
+        List<String> params = new ArrayList<>();
+        
+        // URL parameters
+        String firstLine = requestText.split("\r?\n")[0];
+        int queryStart = firstLine.indexOf('?');
+        int pathEnd = firstLine.lastIndexOf(" HTTP");
+        if (queryStart > 0 && pathEnd > queryStart) {
+            String query = firstLine.substring(queryStart + 1, pathEnd);
+            for (String pair : query.split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    String name = pair.substring(0, eq);
+                    if (!params.contains(name)) params.add(name);
+                }
+            }
+        }
+        
+        // Body parameters
+        int bodyStart = requestText.indexOf("\r\n\r\n");
+        if (bodyStart > 0) {
+            String body = requestText.substring(bodyStart + 4);
+            
+            // Form data
+            for (String pair : body.split("&")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    String name = pair.substring(0, eq).trim();
+                    if (!name.isEmpty() && !params.contains(name)) params.add(name);
+                }
+            }
+            
+            // JSON
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"([^\"]+)\"\\s*:").matcher(body);
+            while (m.find()) {
+                String name = m.group(1);
+                if (!params.contains(name)) params.add(name);
+            }
+        }
+        
+        // Cookies
+        String cookieHeader = HttpMessageParser.extractHeader(requestText, "Cookie");
+        if (cookieHeader != null) {
+            for (String cookie : cookieHeader.split(";")) {
+                int eq = cookie.indexOf('=');
+                if (eq > 0) {
+                    String name = cookie.substring(0, eq).trim();
+                    if (!params.contains(name)) params.add(name);
+                }
+            }
+        }
+        
+        return params;
+    }
+
+    private String truncateForChat(String s, int max) {
+        if (s == null) return "";
+        return s.length() > max ? s.substring(0, max) + "..." : s;
     }
 
     private void addFinding() {
