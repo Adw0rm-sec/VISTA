@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# GitHub
+.github
+
+# IDE
+.idea
+.vscode
+*.iml
+.DS_Store
+
+# Build
+target/
+*.class
+*.jar
+*.war
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+
+# Misc
+*.log
+*.tmp
+.env

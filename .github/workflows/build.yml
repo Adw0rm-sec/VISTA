@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,6 +14,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -21,8 +24,15 @@ jobs:
           java-version: '17'
           cache: maven
 
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
       - name: Build with Maven
-        run: mvn -B -q package -DskipTests
+        run: mvn -B clean package -DskipTests
 
       - name: Run tests
         run: mvn -B test
@@ -33,15 +43,37 @@ jobs:
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           SHORT_SHA=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +%Y%m%d-%H%M%S)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+
+      - name: Generate build info
+        run: |
+          echo "Build Information" > build-info.txt
+          echo "=================" >> build-info.txt
+          echo "Version: ${{ steps.version.outputs.version }}" >> build-info.txt
+          echo "Commit: ${{ steps.version.outputs.short_sha }}" >> build-info.txt
+          echo "Date: ${{ steps.version.outputs.build_date }}" >> build-info.txt
+          echo "Branch: ${GITHUB_REF#refs/heads/}" >> build-info.txt
+          echo "Java Version: $(java -version 2>&1 | head -n 1)" >> build-info.txt
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: vista-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
-          path: target/vista-*.jar
+          path: |
+            target/vista-*.jar
+            build-info.txt
           retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: target/surefire-reports/
+          retention-days: 7
 
   test-java-versions:
     runs-on: ubuntu-latest

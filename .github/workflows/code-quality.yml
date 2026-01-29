@@ -1,0 +1,85 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Compile code
+        run: mvn -B clean compile
+
+      - name: Check code style
+        run: mvn -B checkstyle:check
+        continue-on-error: true
+
+      - name: Run SpotBugs
+        run: mvn -B spotbugs:check
+        continue-on-error: true
+
+      - name: Generate dependency tree
+        run: mvn dependency:tree > dependency-tree.txt
+
+      - name: Upload dependency tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-tree
+          path: dependency-tree.txt
+          retention-days: 7
+
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Build and analyze
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then
+            mvn -B verify sonar:sonar \
+              -Dsonar.projectKey=Adw0rm-sec_VISTA \
+              -Dsonar.organization=adw0rm-sec \
+              -Dsonar.host.url=https://sonarcloud.io
+          else
+            echo "SONAR_TOKEN not set, skipping SonarCloud analysis"
+          fi
+        continue-on-error: true

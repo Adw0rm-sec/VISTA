@@ -49,7 +49,34 @@ jobs:
         run: |
           echo "## What's New" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
-          git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD >> RELEASE_NOTES.md 2>/dev/null || echo "- Initial release" >> RELEASE_NOTES.md
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "### Changes since $PREV_TAG" >> RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> RELEASE_NOTES.md
+          else
+            echo "### Initial Release" >> RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            git log --pretty=format:"- %s (%h)" --max-count=20 >> RELEASE_NOTES.md
+          fi
+          echo "" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Installation" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "1. Download \`vista-${{ steps.version.outputs.version }}.jar\`" >> RELEASE_NOTES.md
+          echo "2. In Burp Suite: Extensions → Add → Java → Select JAR" >> RELEASE_NOTES.md
+          echo "3. Configure your AI provider in VISTA → Settings" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Requirements" >> RELEASE_NOTES.md
+          echo "- Java 17+" >> RELEASE_NOTES.md
+          echo "- Burp Suite Professional or Community" >> RELEASE_NOTES.md
+
+      - name: Verify JAR
+        run: |
+          JAR_FILE=$(ls target/vista-*.jar)
+          echo "JAR file: $JAR_FILE"
+          echo "JAR size: $(du -h $JAR_FILE | cut -f1)"
+          jar tf $JAR_FILE | head -20
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

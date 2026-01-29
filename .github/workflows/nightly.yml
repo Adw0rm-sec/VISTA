@@ -1,0 +1,81 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  nightly-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B clean package
+
+      - name: Run all tests
+        run: mvn -B test verify
+        continue-on-error: true
+
+      - name: Generate build timestamp
+        id: timestamp
+        run: echo "timestamp=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Upload nightly build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vista-nightly-${{ steps.timestamp.outputs.timestamp }}
+          path: target/vista-*.jar
+          retention-days: 7
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly build failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `The nightly build has failed. Please check the [workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`,
+              labels: ['build', 'automated']
+            });
+
+  dependency-update-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Check for dependency updates
+        run: mvn versions:display-dependency-updates > dependency-updates.txt
+
+      - name: Check for plugin updates
+        run: mvn versions:display-plugin-updates > plugin-updates.txt
+
+      - name: Upload update reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-updates
+          path: |
+            dependency-updates.txt
+            plugin-updates.txt
+          retention-days: 7

@@ -1,0 +1,145 @@
+name: Auto Build and Commit
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+  workflow_dispatch:
+
+jobs:
+  build-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +%Y%m%d-%H%M%S)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+
+      - name: Build JAR
+        run: mvn -B clean package -DskipTests
+
+      - name: Verify JAR exists
+        run: |
+          if [ ! -f target/vista-*.jar ]; then
+            echo "Error: JAR file not found!"
+            exit 1
+          fi
+          JAR_FILE=$(ls target/vista-*.jar)
+          echo "Built JAR: $JAR_FILE"
+          echo "Size: $(du -h $JAR_FILE | cut -f1)"
+
+      - name: Create builds directory
+        run: mkdir -p builds
+
+      - name: Copy JAR to builds directory
+        run: |
+          cp target/vista-*.jar builds/vista-latest.jar
+          cp target/vista-*.jar builds/vista-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}.jar
+
+      - name: Generate build info
+        run: |
+          cat > builds/BUILD_INFO.txt << EOF
+          VISTA Build Information
+          =======================
+          Version: ${{ steps.version.outputs.version }}
+          Commit: ${{ steps.version.outputs.short_sha }}
+          Build Date: ${{ steps.version.outputs.build_date }}
+          Branch: ${GITHUB_REF#refs/heads/}
+          Workflow: ${{ github.workflow }}
+          Run Number: ${{ github.run_number }}
+          
+          Installation:
+          1. Download vista-latest.jar
+          2. In Burp Suite: Extensions → Add → Java → Select JAR
+          3. Configure AI provider in VISTA → Settings
+          
+          Requirements:
+          - Java 17+
+          - Burp Suite Professional or Community
+          EOF
+
+      - name: Update README with build info
+        run: |
+          if grep -q "<!-- BUILD_INFO -->" README.md; then
+            sed -i "/<!-- BUILD_INFO -->/c\<!-- BUILD_INFO --> **Latest Build:** ${{ steps.version.outputs.build_date }} | **Version:** ${{ steps.version.outputs.version }} | **Commit:** ${{ steps.version.outputs.short_sha }}" README.md
+          else
+            echo "" >> README.md
+            echo "<!-- BUILD_INFO --> **Latest Build:** ${{ steps.version.outputs.build_date }} | **Version:** ${{ steps.version.outputs.version }} | **Commit:** ${{ steps.version.outputs.short_sha }}" >> README.md
+          fi
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git add builds/
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit -m "build: auto-build JAR for commit ${{ steps.version.outputs.short_sha }} [skip ci]"
+          git push
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vista-build-${{ steps.version.outputs.short_sha }}
+          path: |
+            builds/vista-latest.jar
+            builds/BUILD_INFO.txt
+          retention-days: 90
+
+      - name: Create build summary
+        run: |
+          echo "## 🎉 Build Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ steps.version.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date:** ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- \`builds/vista-latest.jar\` - Latest build (committed to repo)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`builds/vista-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}.jar\` - Versioned build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Quick Install" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Download latest build" >> $GITHUB_STEP_SUMMARY
+          echo "curl -L https://github.com/${{ github.repository }}/raw/main/builds/vista-latest.jar -o vista.jar" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Or clone and use" >> $GITHUB_STEP_SUMMARY
+          echo "git clone https://github.com/${{ github.repository }}.git" >> $GITHUB_STEP_SUMMARY
+          echo "# JAR is in builds/vista-latest.jar" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

@@ -2,16 +2,16 @@
 
 # VISTA
 
-### Vulnerability Insight & Strategic Test Assistant
+### AI-Powered Security Testing Assistant
 
 [![CI Build](https://github.com/rajrathod-code/VISTA/actions/workflows/build.yml/badge.svg)](https://github.com/rajrathod-code/VISTA/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/rajrathod-code/VISTA?include_prereleases)](https://github.com/rajrathod-code/VISTA/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange)](https://openjdk.org/)
 
-**AI-powered Burp Suite extension for intelligent security testing**
+**Burp Suite extension with AI-powered vulnerability testing**
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Configuration](#configuration) • [Contributing](#contributing) 
+[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Configuration](#configuration)
 
 </div>
 
@@ -19,36 +19,90 @@
 
 ## Overview
 
-VISTA is a Burp Suite extension that integrates AI capabilities to accelerate penetration testing workflows. It provides contextual security recommendations, automated vulnerability detection, and intelligent payload suggestions tailored to each HTTP request.
+VISTA is a Burp Suite extension that uses AI to accelerate penetration testing. It analyzes HTTP requests, generates targeted payloads, and provides evidence-based vulnerability assessments.
 
 ## Features
 
-### Core Capabilities
-- **AI-Assisted Analysis** - Integrates with Azure OpenAI and OpenAI for intelligent security recommendations
-- **Request Management** - Organize and analyze multiple requests with per-request chat history
-- **Vulnerability Presets** - 11 built-in vulnerability templates (SQLi, XSS, CSRF, IDOR, SSRF, etc.)
+### 🎯 Dual-Mode AI Assistant
+VISTA offers **two distinct modes** to match your testing workflow:
 
-### Security Analysis
-- **Session Detection** - Auto-detect session cookies, JWT tokens, and authentication headers
-- **Reflection Analysis** - Find parameter reflections with XSS risk assessment
-- **Parameter Extraction** - Detailed parameter analysis with security test suggestions
+#### 1. Quick Suggestions Mode
+- Get immediate methodology and payload suggestions
+- 10-20+ payloads in a single response
+- Complete testing approach at once
+- Perfect for experienced testers
 
-### Productivity
-- **Request Grouping** - Organize requests with custom names and color coding
-- **Payload Library** - 70+ built-in security payloads across multiple categories
-- **Findings Management** - Track vulnerabilities with severity levels per request
-- **Report Export** - Generate Markdown reports with findings and analysis
+#### 2. Interactive Assistant Mode
+- AI guides you step-by-step through testing
+- You test in Burp Repeater and report results
+- AI adapts based on what you observe
+- Perfect for learning and complex scenarios
+
+[📖 Read the Dual-Mode Guide](DUAL_MODE_GUIDE.md)
+
+### 🚀 Advanced Testing Features
+- **WAF Detection** - Detects 8 major WAFs (Cloudflare, AWS, ModSecurity, etc.)
+- **Bypass Knowledge** - 500+ real-world techniques from PayloadsAllTheThings
+- **Systematic Methodologies** - Step-by-step testing approaches
+- **Headless Browser Verification** - Verify XSS actually executes
+- **Conversation Mode** - Follow-up questions with context awareness
+
+### 📝 Custom AI Prompt Templates
+- **20+ Built-in Templates** - XSS, SQLi, SSRF, Auth Bypass, API Testing, etc.
+- **Custom Templates** - Create your own specialized testing templates
+- **Variable System** - 24 dynamic variables (URL, METHOD, HEADERS, etc.)
+- **Template Management** - Search, filter, import/export templates
+- **Usage Tracking** - See which templates work best
+
+[📖 Read the Prompt Templates Guide](PROMPT_TEMPLATES_USER_GUIDE.md)
+
+### 🎯 Payload Library Manager
+- **100+ Built-in Payloads** - XSS, SQLi, SSTI, SSRF, Command Injection, XXE
+- **Custom Libraries** - Create and manage your own payload collections
+- **Bulk Import** - Paste multiple payloads at once with auto-detection
+- **AI Integration** - AI automatically suggests relevant payloads
+- **Success Tracking** - Track which payloads work best
+- **Context-Aware** - Payloads filtered by vulnerability type and context
+
+[📖 Read the Payload Library Guide](PAYLOAD_LIBRARY_USER_GUIDE.md)
+
+### 📁 Request Collection Engine
+- **Organize Requests** - Group similar requests into named collections
+- **Testing Tracking** - Mark requests as tested/success
+- **Comparison View** - Side-by-side request/response comparison
+- **Notes System** - Add observations to individual requests
+- **Export/Import** - Share collections with team as JSON
+- **Pattern Detection** - Auto-detect similar requests
+- **Context Menu** - Right-click any request → "Add to Collection"
+
+[📖 Read the Collections User Guide](REQUEST_COLLECTION_USER_GUIDE.md)
+
+### 🎨 Modern UI/UX
+- **Dashboard** - Quick stats and actions
+- **AI Advisor** - Dual-mode testing interface
+- **Findings** - Track confirmed vulnerabilities
+- **Settings** - Easy AI configuration
+
+### 🔍 Supported Vulnerabilities
+- Cross-Site Scripting (XSS)
+- SQL Injection (SQLi)
+- Server-Side Template Injection (SSTI)
+- Command Injection
+- Server-Side Request Forgery (SSRF)
+- XML External Entity (XXE)
+- Local File Inclusion (LFI)
+- Insecure Direct Object Reference (IDOR)
+- Authentication Bypass
 
 ## Installation
 
-### Prerequisites
-- Java 17 or higher
-- Burp Suite Professional or Community Edition
-- Maven 3.6+ (for building from source)
+### Requirements
+- Java 17+
+- Burp Suite Professional or Community
 
-### Download Release
-1. Download the latest JAR from [Releases](https://github.com/rajrathod-code/VISTA/releases)
-2. In Burp Suite: **Extensions → Add → Java → Select JAR**
+### Download
+1. Get the latest JAR from [Releases](https://github.com/rajrathod-code/VISTA/releases)
+2. In Burp: **Extensions → Add → Java → Select JAR**
 
 ### Build from Source
 ```bash
@@ -56,107 +110,100 @@ git clone https://github.com/rajrathod-code/VISTA.git
 cd VISTA
 mvn package -DskipTests
 ```
-The JAR will be in `target/vista-1.0.0-MVP.jar`
 
-## Usage
+## Quick Start
 
-### Quick Start
-1. Load the extension in Burp Suite
-2. Browse to target application through Burp Proxy
-3. Right-click any request → **Send to VISTA**
-4. Configure AI provider in Settings (optional)
-5. Use quick actions or ask questions about the request
+### Quick Suggestions Mode
+1. **Configure AI** - Go to VISTA → Settings tab → Enter your API key
+2. **Send Request** - Right-click any request → "Send to VISTA AI Advisor"
+3. **Select Mode** - Choose "Quick Suggestions" from dropdown
+4. **Ask** - "How to test for XSS?" or click quick action buttons
+5. **Get Results** - Receive complete methodology + payloads instantly
 
-### Quick Actions
-| Action | Description |
-|--------|-------------|
-| 🔍 Auto-Analyze | Comprehensive security analysis |
-| 📋 Extract Parameters | Show all parameters with suggestions |
-| 🔐 Analyze Session | Detect session cookies and auth headers |
-| 🔄 Find Reflections | Detect parameter reflections in response |
-| 📄 Export Report | Generate Markdown report |
-| ⚠️ Add Finding | Record security finding |
-
-### Keyboard Shortcuts
-- `Ctrl+Enter` - Send question to AI
-- `Enter` (empty field) - Auto-suggest tests
-- `Delete` - Remove selected request
-- `Escape` - Cancel processing
-- `Double-click` - Send to Repeater
+### Interactive Assistant Mode
+1. **Configure AI** - Go to VISTA → Settings tab → Enter your API key
+2. **Send Request** - Right-click any request → "Send to VISTA AI Advisor"
+3. **Select Mode** - Choose "Interactive Assistant" from dropdown
+4. **Start** - "Test for SQL injection"
+5. **Follow Steps** - AI gives you STEP 1 to test
+6. **Test** - Try it in Burp Repeater
+7. **Report** - Tell AI what you observed
+8. **Continue** - AI adapts and gives you STEP 2
+9. **Repeat** - Until exploitation succeeds
 
 ## Configuration
 
-### AI Providers
-
-#### Azure OpenAI
+### OpenAI
 ```
+Provider: OpenAI
+API Key: sk-...
+Model: gpt-4o-mini (recommended for cost)
+```
+
+### Azure AI
+```
+Provider: Azure AI
+API Key: your-key
 Endpoint: https://your-resource.openai.azure.com
-Deployment: gpt-4o-mini
-API Version: 2024-12-01-preview
-API Key: <your-key>
+Deployment: your-deployment-name
 ```
 
-#### OpenAI
-```
-Model: gpt-4o-mini
-Base URL: https://api.openai.com/v1
-API Key: <your-key>
-```
+### Cost Optimization
+- Default temperature: 0.3 (focused responses)
+- Efficient prompts with truncated request/response
+- Recommended model: gpt-4o-mini (~$0.001-0.003 per interaction)
+- Interactive mode uses multiple calls but provides deeper guidance
 
-### Settings
-- **Temperature** - Control AI response creativity (0.0-1.0)
-- **Strip Headers** - Remove sensitive headers before AI analysis
-- **Max Characters** - Limit request/response size sent to AI
+## Tabs
 
-### Configuration File
-Settings are persisted in `~/.vista-config.json`
+| Tab | Purpose |
+|-----|---------|
+| 🏠 Dashboard | Quick stats, system status, and actions |
+| 💡 AI Advisor | Dual-mode testing (Quick Suggestions + Interactive Assistant) |
+| 🎯 Findings | Track and manage confirmed vulnerabilities |
+| ⚙️ Settings | Configure AI provider (OpenAI or Azure AI) |
+
+## Documentation
+
+- [📖 Dual-Mode Guide](DUAL_MODE_GUIDE.md) - Complete guide to Quick Suggestions vs Interactive Assistant
+- [🚀 Advanced Features](ADVANCED_FEATURES.md) - WAF detection, bypass knowledge, browser verification
+- [🧪 Systematic Testing](SYSTEMATIC_TESTING.md) - Step-by-step methodologies for each vulnerability
+- [🎨 UI Redesign](UI_REDESIGN.md) - Modern interface details
 
 ## Project Structure
 
 ```
 src/main/java/
-├── burp/                           # Burp Suite API interfaces
-│   └── BurpExtender.java           # Extension entry point
+├── burp/                                    # Burp Suite interfaces
+│   └── BurpExtender.java                    # Extension entry point
 └── com/vista/security/
-    ├── core/                       # Core utilities
-    │   ├── HttpMessageParser.java
-    │   ├── ParameterAnalyzer.java
-    │   ├── PayloadLibrary.java
-    │   ├── ReflectionAnalyzer.java
-    │   ├── ReportGenerator.java
-    │   ├── SessionAnalyzer.java
-    │   └── VulnerabilityTemplates.java
-    ├── model/                      # Data models
-    │   └── RequestGroup.java
-    ├── service/                    # AI integrations
-    │   ├── AIService.java
-    │   ├── AzureAIService.java
-    │   └── OpenAIService.java
-    └── ui/                         # User interface
-        └── MainPanel.java
+    ├── core/
+    │   ├── AIConfigManager.java             # Centralized AI config
+    │   ├── WAFDetector.java                 # WAF detection & bypass
+    │   ├── BypassKnowledgeBase.java         # PayloadsAllTheThings
+    │   ├── SystematicTestingEngine.java     # Testing methodologies
+    │   ├── InteractiveExploitAdvisor.java   # Context-aware Q&A
+    │   ├── HeadlessBrowserVerifier.java     # XSS verification
+    │   └── ...
+    ├── model/
+    ├── service/
+    │   ├── OpenAIService.java
+    │   └── AzureAIService.java
+    └── ui/
+        ├── DashboardPanel.java              # Dashboard tab
+        ├── TestingSuggestionsPanel.java     # AI Advisor (dual-mode)
+        ├── FindingsPanel.java               # Findings tab
+        ├── SettingsPanel.java               # Settings tab
+        └── ...
 ```
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Security
-
-Please report security vulnerabilities responsibly. See [SECURITY.md](SECURITY.md) for details.
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+MIT License - See [LICENSE](LICENSE)
 
 ## Disclaimer
 
-This tool is intended for authorized security testing only. Users are responsible for ensuring they have proper authorization before testing any systems. The authors are not responsible for misuse of this tool.
+For authorized security testing only. Users are responsible for proper authorization.
 
 ---
 
