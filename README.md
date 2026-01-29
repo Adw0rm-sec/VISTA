@@ -131,23 +131,27 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 
 ## 🚀 Installation
 
+### Quick Install (Recommended)
+
+**Download the latest release:**
+
+1. Go to [Releases](https://github.com/Adw0rm-sec/VISTA/releases/latest)
+2. Download `vista-2.8.0.jar` from Assets
+3. In Burp Suite: **Extensions → Add → Java → Select JAR**
+4. VISTA tab appears in Burp
+
+**Or use command line:**
+```bash
+# Download latest release
+curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/v2.8.0/vista-2.8.0.jar
+
+# Or download latest auto-build
+curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
+```
+
 ### Requirements
 - Java 17 or higher
 - Burp Suite Professional or Community Edition
-
-### Quick Install
-
-1. **Download the latest JAR:**
-   ```bash
-   curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
-   ```
-
-2. **Or download from [Releases](https://github.com/Adw0rm-sec/VISTA/releases)**
-
-3. **Load in Burp Suite:**
-   - Extensions → Add → Java
-   - Select the downloaded JAR file
-   - VISTA tab appears in Burp
 
 ### Build from Source
 
