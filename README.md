@@ -424,4 +424,4 @@ Made with ❤️ for the security community
 
 </div>
 
-<!-- BUILD_INFO --> **Latest Build:** 20260129-070310 | **Version:** 1.0.0-MVP | **Commit:** 53d4e4f
+<!-- BUILD_INFO --> **Latest Build:** 20260129-072307 | **Version:** 2.8.0 | **Commit:** 9c0eb40
