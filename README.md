@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎯 VISTA
+# 🎯 VISTA - Vulnerability Insight & Strategic Test Assistant
 
 ### AI-Powered Security Testing Assistant for Burp Suite
 
