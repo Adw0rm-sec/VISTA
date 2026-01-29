@@ -5,8 +5,8 @@
 ### AI-Powered Security Testing Assistant for Burp Suite
 
 [![CI Build](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml/badge.svg)](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml)
-[![Security Scan](https://github.com/Adw0rm-sec/VISTA/actions/workflows/security.yml/badge.svg)](https://github.com/Adw0rm-sec/VISTA/actions/workflows/security.yml)
-[![Release](https://img.shields.io/github/v/release/Adw0rm-sec/VISTA?include_prereleases)](https://github.com/Adw0rm-sec/VISTA/releases)
+[![Release](https://img.shields.io/github/v/release/Adw0rm-sec/VISTA)](https://github.com/Adw0rm-sec/VISTA/releases)
+[![Downloads](https://img.shields.io/github/downloads/Adw0rm-sec/VISTA/total)](https://github.com/Adw0rm-sec/VISTA/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange)](https://openjdk.org/)
 
@@ -22,7 +22,7 @@
 
 VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp Suite extension that combines AI-powered testing guidance with practical pentesting tools. It helps security professionals test faster and smarter through intelligent suggestions, organized workflows, and reusable testing components.
 
-**Current Version**: 2.8.0 | **Build Status**: ✅ Production Ready | **JAR Size**: 353KB
+**Current Version**: 2.8.0 | **Build Status**: ✅ Production Ready | **JAR Size**: ~370KB
 
 ---
 
@@ -155,7 +155,7 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
 mvn clean package
-# JAR will be in target/vista-1.0.0-MVP.jar
+# JAR will be in target/vista-2.8.0.jar
 ```
 
 ---
