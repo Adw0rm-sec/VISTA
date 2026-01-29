@@ -2,145 +2,188 @@
 
 # VISTA
 
-### AI-Powered Security Testing Assistant
+### AI-Powered Security Testing Assistant for Burp Suite
 
-[![CI Build](https://github.com/rajrathod-code/VISTA/actions/workflows/build.yml/badge.svg)](https://github.com/rajrathod-code/VISTA/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/rajrathod-code/VISTA?include_prereleases)](https://github.com/rajrathod-code/VISTA/releases)
+[![CI Build](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml/badge.svg)](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml)
+[![Security Scan](https://github.com/Adw0rm-sec/VISTA/actions/workflows/security.yml/badge.svg)](https://github.com/Adw0rm-sec/VISTA/actions/workflows/security.yml)
+[![Release](https://img.shields.io/github/v/release/Adw0rm-sec/VISTA?include_prereleases)](https://github.com/Adw0rm-sec/VISTA/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange)](https://openjdk.org/)
 
-**Burp Suite extension with AI-powered vulnerability testing**
+**Intelligent vulnerability testing with AI-powered guidance, custom templates, payload libraries, and request organization**
 
-[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Configuration](#configuration)
+[Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](#-documentation)
 
 </div>
 
 ---
 
-## Overview
+## 🎯 Overview
 
-VISTA is a Burp Suite extension that uses AI to accelerate penetration testing. It analyzes HTTP requests, generates targeted payloads, and provides evidence-based vulnerability assessments.
+VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp Suite extension that combines AI-powered testing guidance with practical pentesting tools. It helps security professionals test faster and smarter through intelligent suggestions, organized workflows, and reusable testing components.
 
-## Features
+**Current Version**: 2.8.0 | **Build Status**: ✅ Production Ready | **JAR Size**: 353KB
 
-### 🎯 Dual-Mode AI Assistant
-VISTA offers **two distinct modes** to match your testing workflow:
+---
 
-#### 1. Quick Suggestions Mode
-- Get immediate methodology and payload suggestions
-- 10-20+ payloads in a single response
-- Complete testing approach at once
-- Perfect for experienced testers
+## ✨ Features
 
-#### 2. Interactive Assistant Mode
-- AI guides you step-by-step through testing
-- You test in Burp Repeater and report results
-- AI adapts based on what you observe
-- Perfect for learning and complex scenarios
+### 🤖 AI-Powered Testing Assistant
 
-[📖 Read the Dual-Mode Guide](DUAL_MODE_GUIDE.md)
+**Unified AI Advisor** - Get intelligent testing guidance powered by OpenAI or Azure AI:
+- Analyzes HTTP requests and suggests testing approaches
+- Provides vulnerability-specific payloads and methodologies
+- Adapts suggestions based on response patterns
+- Supports multi-request analysis for complex workflows
+- Context-aware follow-up questions
 
-### 🚀 Advanced Testing Features
-- **WAF Detection** - Detects 8 major WAFs (Cloudflare, AWS, ModSecurity, etc.)
-- **Bypass Knowledge** - 500+ real-world techniques from PayloadsAllTheThings
-- **Systematic Methodologies** - Step-by-step testing approaches
-- **Headless Browser Verification** - Verify XSS actually executes
-- **Conversation Mode** - Follow-up questions with context awareness
+**Supported AI Providers:**
+- OpenAI (GPT-4, GPT-4o, GPT-4o-mini)
+- Azure OpenAI Service
 
 ### 📝 Custom AI Prompt Templates
-- **20+ Built-in Templates** - XSS, SQLi, SSRF, Auth Bypass, API Testing, etc.
-- **Custom Templates** - Create your own specialized testing templates
-- **Variable System** - 24 dynamic variables (URL, METHOD, HEADERS, etc.)
-- **Template Management** - Search, filter, import/export templates
-- **Usage Tracking** - See which templates work best
 
-[📖 Read the Prompt Templates Guide](PROMPT_TEMPLATES_USER_GUIDE.md)
+**20+ Built-in Templates** covering common testing scenarios:
+- XSS Testing (Reflected, Stored, DOM-based)
+- SQL Injection (Error-based, Blind, Time-based)
+- SSRF, SSTI, Command Injection
+- Authentication & Authorization Testing
+- API Security Testing
+- File Upload Vulnerabilities
+
+**Template Features:**
+- 24 dynamic variables ({{URL}}, {{METHOD}}, {{HEADERS}}, etc.)
+- Create custom templates for your workflows
+- Search and filter templates
+- Import/Export for team sharing
+- Usage tracking and favorites
+
+[📖 Prompt Templates Guide](PROMPT_TEMPLATES_USER_GUIDE.md)
 
 ### 🎯 Payload Library Manager
-- **100+ Built-in Payloads** - XSS, SQLi, SSTI, SSRF, Command Injection, XXE
-- **Custom Libraries** - Create and manage your own payload collections
-- **Bulk Import** - Paste multiple payloads at once with auto-detection
-- **AI Integration** - AI automatically suggests relevant payloads
-- **Success Tracking** - Track which payloads work best
-- **Context-Aware** - Payloads filtered by vulnerability type and context
 
-[📖 Read the Payload Library Guide](PAYLOAD_LIBRARY_USER_GUIDE.md)
+**100+ Built-in Payloads** across 8 vulnerability categories:
+- XSS (Basic, Event Handlers, Encoding Bypasses)
+- SQL Injection (MySQL, PostgreSQL, MSSQL, Oracle)
+- SSTI (Jinja2, Twig, Freemarker, Velocity)
+- SSRF (Cloud Metadata, Internal Networks)
+- Command Injection (Linux, Windows)
+- XXE (File Disclosure, SSRF)
+- LFI/Path Traversal
+- NoSQL Injection
+
+**Library Features:**
+- Create custom payload libraries
+- Bulk import with auto-detection
+- AI-powered payload suggestions
+- Success rate tracking
+- Context-aware filtering
+- Export/Import for sharing
+
+[📖 Payload Library Guide](PAYLOAD_LIBRARY_USER_GUIDE.md)
 
 ### 📁 Request Collection Engine
-- **Organize Requests** - Group similar requests into named collections
-- **Testing Tracking** - Mark requests as tested/success
-- **Comparison View** - Side-by-side request/response comparison
-- **Notes System** - Add observations to individual requests
-- **Export/Import** - Share collections with team as JSON
-- **Pattern Detection** - Auto-detect similar requests
-- **Context Menu** - Right-click any request → "Add to Collection"
 
-[📖 Read the Collections User Guide](REQUEST_COLLECTION_USER_GUIDE.md)
+**Organize and Track Your Testing:**
+- Group similar requests into named collections
+- Mark requests as tested/success
+- Add notes and observations
+- Side-by-side request comparison
+- Pattern detection for similar endpoints
+- Export/Import collections as JSON
+- Statistics and progress tracking
 
-### 🎨 Modern UI/UX
-- **Dashboard** - Quick stats and actions
-- **AI Advisor** - Dual-mode testing interface
-- **Findings** - Track confirmed vulnerabilities
-- **Settings** - Easy AI configuration
+**Use Cases:**
+- Systematic endpoint testing
+- Parameter fuzzing workflows
+- Multi-step attack chains
+- Team collaboration and handoffs
 
-### 🔍 Supported Vulnerabilities
-- Cross-Site Scripting (XSS)
-- SQL Injection (SQLi)
-- Server-Side Template Injection (SSTI)
-- Command Injection
-- Server-Side Request Forgery (SSRF)
-- XML External Entity (XXE)
-- Local File Inclusion (LFI)
-- Insecure Direct Object Reference (IDOR)
-- Authentication Bypass
+[📖 Request Collections Guide](REQUEST_COLLECTION_USER_GUIDE.md)
 
-## Installation
+### 🛡️ Advanced Security Features
+
+**WAF Detection** - Automatically detects 8 major WAFs:
+- Cloudflare, AWS WAF, ModSecurity
+- Akamai, Imperva, F5 BIG-IP
+- Barracuda, Fortinet FortiWeb
+
+**Bypass Knowledge Base** - 500+ real-world bypass techniques from PayloadsAllTheThings
+
+**Systematic Testing Engine** - Step-by-step methodologies for 9 vulnerability types
+
+**Headless Browser Verification** - Verify XSS payloads actually execute
+
+**Reflection Analysis** - Detect where input is reflected in responses
+
+**Repeater Integration** - Seamless integration with Burp Repeater
+
+[📖 Advanced Features Guide](ADVANCED_FEATURES.md)
+
+### 🎨 Modern User Interface
+
+**6 Intuitive Tabs:**
+
+1. **🏠 Dashboard** - Quick stats, system status, and actions
+2. **💡 AI Advisor** - Unified AI testing assistant
+3. **📝 Prompt Templates** - Custom AI prompt management
+4. **🎯 Payload Library** - Payload organization and AI integration
+5. **📁 Collections** - Request organization and comparison
+6. **⚙️ Settings** - AI provider configuration
+
+**Context Menu Integration:**
+- Right-click any request → "💡 Send to VISTA AI Advisor"
+- Right-click any request → "📁 Add to Collection"
+
+---
+
+## 🚀 Installation
 
 ### Requirements
-- Java 17+
-- Burp Suite Professional or Community
+- Java 17 or higher
+- Burp Suite Professional or Community Edition
 
-### Download
-1. Get the latest JAR from [Releases](https://github.com/rajrathod-code/VISTA/releases)
-2. In Burp: **Extensions → Add → Java → Select JAR**
+### Quick Install
+
+1. **Download the latest JAR:**
+   ```bash
+   curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
+   ```
+
+2. **Or download from [Releases](https://github.com/Adw0rm-sec/VISTA/releases)**
+
+3. **Load in Burp Suite:**
+   - Extensions → Add → Java
+   - Select the downloaded JAR file
+   - VISTA tab appears in Burp
 
 ### Build from Source
+
 ```bash
-git clone https://github.com/rajrathod-code/VISTA.git
+git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
-mvn package -DskipTests
+mvn clean package
+# JAR will be in target/vista-1.0.0-MVP.jar
 ```
 
-## Quick Start
+[📖 Build Pipeline Documentation](BUILD_PIPELINE.md)
 
-### Quick Suggestions Mode
-1. **Configure AI** - Go to VISTA → Settings tab → Enter your API key
-2. **Send Request** - Right-click any request → "Send to VISTA AI Advisor"
-3. **Select Mode** - Choose "Quick Suggestions" from dropdown
-4. **Ask** - "How to test for XSS?" or click quick action buttons
-5. **Get Results** - Receive complete methodology + payloads instantly
+---
 
-### Interactive Assistant Mode
-1. **Configure AI** - Go to VISTA → Settings tab → Enter your API key
-2. **Send Request** - Right-click any request → "Send to VISTA AI Advisor"
-3. **Select Mode** - Choose "Interactive Assistant" from dropdown
-4. **Start** - "Test for SQL injection"
-5. **Follow Steps** - AI gives you STEP 1 to test
-6. **Test** - Try it in Burp Repeater
-7. **Report** - Tell AI what you observed
-8. **Continue** - AI adapts and gives you STEP 2
-9. **Repeat** - Until exploitation succeeds
+## ⚡ Quick Start
 
-## Configuration
+### 1. Configure AI Provider
 
-### OpenAI
+Go to **VISTA → Settings** tab:
+
+**For OpenAI:**
 ```
 Provider: OpenAI
 API Key: sk-...
 Model: gpt-4o-mini (recommended for cost)
 ```
 
-### Azure AI
+**For Azure AI:**
 ```
 Provider: Azure AI
 API Key: your-key
@@ -148,68 +191,255 @@ Endpoint: https://your-resource.openai.azure.com
 Deployment: your-deployment-name
 ```
 
-### Cost Optimization
+### 2. Start Testing
+
+**Method 1: AI Advisor**
+1. Right-click any request → "💡 Send to VISTA AI Advisor"
+2. AI analyzes the request automatically
+3. Get testing suggestions and payloads
+4. Ask follow-up questions
+
+**Method 2: Use Templates**
+1. Go to **Prompt Templates** tab
+2. Select a template (e.g., "XSS Testing - Reflected")
+3. Click "Use Template"
+4. AI provides targeted testing guidance
+
+**Method 3: Organize with Collections**
+1. Right-click requests → "📁 Add to Collection"
+2. Group similar endpoints together
+3. Track testing progress
+4. Compare responses side-by-side
+
+---
+
+## 📖 Documentation
+
+### User Guides
+- [Prompt Templates User Guide](PROMPT_TEMPLATES_USER_GUIDE.md) - Custom AI prompts
+- [Payload Library User Guide](PAYLOAD_LIBRARY_USER_GUIDE.md) - Payload management
+- [Request Collections User Guide](REQUEST_COLLECTION_USER_GUIDE.md) - Request organization
+- [Advanced Features Guide](ADVANCED_FEATURES.md) - WAF detection, bypass techniques
+- [Build Pipeline Guide](BUILD_PIPELINE.md) - CI/CD and development
+
+### Technical Documentation
+- [Implementation Status](IMPLEMENTATION_STATUS.md) - Current features and roadmap
+- [Release Notes v2.8.0](RELEASE_v2.8.0_SUMMARY.md) - Latest release details
+- [Contributing Guide](.github/CONTRIBUTING.md) - How to contribute
+
+---
+
+## 🎯 Supported Vulnerabilities
+
+| Vulnerability | AI Guidance | Payloads | Bypass Techniques | Methodologies |
+|--------------|-------------|----------|-------------------|---------------|
+| XSS | ✅ | ✅ | ✅ | ✅ |
+| SQL Injection | ✅ | ✅ | ✅ | ✅ |
+| SSTI | ✅ | ✅ | ✅ | ✅ |
+| Command Injection | ✅ | ✅ | ✅ | ✅ |
+| SSRF | ✅ | ✅ | ✅ | ✅ |
+| XXE | ✅ | ✅ | ✅ | ✅ |
+| LFI/Path Traversal | ✅ | ✅ | ✅ | ✅ |
+| IDOR | ✅ | ✅ | ✅ | ✅ |
+| Auth Bypass | ✅ | ✅ | ✅ | ✅ |
+| NoSQL Injection | ✅ | ✅ | ✅ | ✅ |
+
+---
+
+## 💡 Use Cases
+
+### For Penetration Testers
+- Get AI-powered testing suggestions instantly
+- Use proven payload libraries
+- Organize testing workflows
+- Track progress across engagements
+- Share findings with team
+
+### For Bug Bounty Hunters
+- Test faster with AI guidance
+- Reuse successful payloads
+- Organize similar endpoints
+- Document testing methodology
+- Export findings for reports
+
+### For Security Teams
+- Standardize testing approaches
+- Share custom templates
+- Build team payload libraries
+- Collaborate on collections
+- Maintain testing consistency
+
+---
+
+## 🔧 Configuration
+
+### AI Provider Settings
+
+**Cost Optimization:**
 - Default temperature: 0.3 (focused responses)
 - Efficient prompts with truncated request/response
 - Recommended model: gpt-4o-mini (~$0.001-0.003 per interaction)
-- Interactive mode uses multiple calls but provides deeper guidance
 
-## Tabs
+**Data Privacy:**
+- Requests are truncated before sending to AI
+- Sensitive headers can be filtered
+- No data stored by VISTA (only AI provider)
 
-| Tab | Purpose |
-|-----|---------|
-| 🏠 Dashboard | Quick stats, system status, and actions |
-| 💡 AI Advisor | Dual-mode testing (Quick Suggestions + Interactive Assistant) |
-| 🎯 Findings | Track and manage confirmed vulnerabilities |
-| ⚙️ Settings | Configure AI provider (OpenAI or Azure AI) |
+### Data Storage
 
-## Documentation
+VISTA stores data locally in `~/.vista/`:
+- `templates/` - Custom prompt templates
+- `payloads/` - Payload libraries
+- `collections/` - Request collections
+- `config.json` - AI configuration
 
-- [📖 Dual-Mode Guide](DUAL_MODE_GUIDE.md) - Complete guide to Quick Suggestions vs Interactive Assistant
-- [🚀 Advanced Features](ADVANCED_FEATURES.md) - WAF detection, bypass knowledge, browser verification
-- [🧪 Systematic Testing](SYSTEMATIC_TESTING.md) - Step-by-step methodologies for each vulnerability
-- [🎨 UI Redesign](UI_REDESIGN.md) - Modern interface details
+---
 
-## Project Structure
+## 🏗️ Project Structure
 
 ```
 src/main/java/
-├── burp/                                    # Burp Suite interfaces
-│   └── BurpExtender.java                    # Extension entry point
+├── burp/
+│   └── BurpExtender.java              # Extension entry point
 └── com/vista/security/
     ├── core/
-    │   ├── AIConfigManager.java             # Centralized AI config
-    │   ├── WAFDetector.java                 # WAF detection & bypass
-    │   ├── BypassKnowledgeBase.java         # PayloadsAllTheThings
-    │   ├── SystematicTestingEngine.java     # Testing methodologies
-    │   ├── InteractiveExploitAdvisor.java   # Context-aware Q&A
-    │   ├── HeadlessBrowserVerifier.java     # XSS verification
+    │   ├── AIConfigManager.java       # AI configuration
+    │   ├── PromptTemplateManager.java # Template management
+    │   ├── PayloadLibraryManager.java # Payload management
+    │   ├── RequestCollectionManager.java # Collection management
+    │   ├── WAFDetector.java           # WAF detection
+    │   ├── BypassKnowledgeBase.java   # Bypass techniques
     │   └── ...
     ├── model/
+    │   ├── PromptTemplate.java        # Template model
+    │   ├── Payload.java               # Payload model
+    │   ├── RequestCollection.java     # Collection model
+    │   └── ...
     ├── service/
-    │   ├── OpenAIService.java
-    │   └── AzureAIService.java
+    │   ├── OpenAIService.java         # OpenAI integration
+    │   └── AzureAIService.java        # Azure AI integration
     └── ui/
-        ├── DashboardPanel.java              # Dashboard tab
-        ├── TestingSuggestionsPanel.java     # AI Advisor (dual-mode)
-        ├── FindingsPanel.java               # Findings tab
-        ├── SettingsPanel.java               # Settings tab
-        └── ...
+        ├── DashboardPanel.java        # Dashboard tab
+        ├── TestingSuggestionsPanel.java # AI Advisor tab
+        ├── PromptTemplatePanel.java   # Templates tab
+        ├── PayloadLibraryPanel.java   # Payloads tab
+        ├── RequestCollectionPanel.java # Collections tab
+        └── SettingsPanel.java         # Settings tab
 ```
 
-## License
+---
 
-MIT License - See [LICENSE](LICENSE)
+## 🚀 CI/CD Pipeline
 
-## Disclaimer
+VISTA uses GitHub Actions for automated builds and testing:
 
-For authorized security testing only. Users are responsible for proper authorization.
+- ✅ **Automated Builds** - JAR built on every push
+- ✅ **Multi-Platform Testing** - Ubuntu, Windows, macOS
+- ✅ **Security Scanning** - CodeQL, Trivy, OWASP, TruffleHog
+- ✅ **Code Quality** - Checkstyle, SpotBugs, SonarCloud
+- ✅ **Test Coverage** - JaCoCo with Codecov integration
+- ✅ **Docker Support** - Multi-stage builds with caching
+
+**Download Latest Build:**
+```bash
+curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
+```
+
+[📖 Build Pipeline Documentation](BUILD_PIPELINE.md)
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](.github/CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/Adw0rm-sec/VISTA.git
+cd VISTA
+
+# Build
+mvn clean package
+
+# Run tests
+mvn test
+
+# Check code quality
+mvn checkstyle:check spotbugs:check
+```
+
+---
+
+## 📊 Statistics
+
+- **Total Java Files**: 50+
+- **Lines of Code**: 15,000+
+- **Built-in Templates**: 20+
+- **Built-in Payloads**: 100+
+- **Supported Vulnerabilities**: 10+
+- **WAF Detection**: 8 major WAFs
+- **Bypass Techniques**: 500+
+- **Zero External Dependencies**: Pure Java + Burp API
+
+---
+
+## 🔒 Security
+
+VISTA is designed for authorized security testing only. Users are responsible for:
+- Obtaining proper authorization before testing
+- Complying with applicable laws and regulations
+- Using the tool ethically and responsibly
+
+For security issues, please see [SECURITY.md](SECURITY.md).
+
+---
+
+## 📜 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **PayloadsAllTheThings** - Bypass techniques and payloads
+- **Burp Suite** - Extensibility API
+- **OpenAI & Azure** - AI capabilities
+- **Security Community** - Testing methodologies and feedback
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/Adw0rm-sec/VISTA/issues)
+- **Documentation**: [Full Documentation](https://github.com/Adw0rm-sec/VISTA)
+- **Discussions**: [GitHub Discussions](https://github.com/Adw0rm-sec/VISTA/discussions)
+
+---
+
+## 🗺️ Roadmap
+
+### v2.9.0 (Planned)
+- AI-powered collection analysis
+- Bulk import from Proxy/Repeater
+- Advanced response comparison
+- Search and filter enhancements
+
+### v3.0.0 (Future)
+- Smart Findings Manager
+- Automated vulnerability detection
+- Report generation
+- Plugin system
 
 ---
 
 <div align="center">
 
 **[⬆ Back to Top](#vista)**
+
+Made with ❤️ for the security community
 
 </div>
 
