@@ -1,0 +1,17 @@
+VISTA Build Information
+=======================
+Version: 1.0.0-MVP
+Commit: 53d4e4f
+Build Date: 20260129-070310
+Branch: main
+Workflow: Auto Build and Commit
+Run Number: 1
+
+Installation:
+1. Download vista-latest.jar
+2. In Burp Suite: Extensions → Add → Java → Select JAR
+3. Configure AI provider in VISTA → Settings
+
+Requirements:
+- Java 17+
+- Burp Suite Professional or Community
