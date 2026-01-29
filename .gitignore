@@ -60,3 +60,22 @@ Thumbs.db
 # Build artifacts (EXCEPT builds directory)
 !builds/*.jar
 !builds/BUILD_INFO.txt
+
+# Documentation files (keep only essential ones)
+*.md
+!README.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!SECURITY.md
+!CHANGELOG.md
+!LICENSE
+
+# Sensitive files
+*.sh
+*.env
+.env.*
+*secret*
+*key*
+*token*
+config.json
+.kiro/
