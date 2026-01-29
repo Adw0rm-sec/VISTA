@@ -477,3 +477,5 @@ VISTA is built on the shoulders of giants:
 *Empowering security professionals with AI-powered intelligence*
 
 </div>
+
+<!-- BUILD_INFO --> **Latest Build:** 20260129-100037 | **Version:** 2.8.0 | **Commit:** f2635f7
