@@ -21,11 +21,12 @@
 
 **VISTA** (Vulnerability Insight & Strategic Test Assistant) is a professional Burp Suite extension that enhances your security testing workflow with AI-powered intelligence. It combines the power of OpenAI and Azure AI with practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.8.0 | **Status:** Production Ready | **Size:** ~370KB
+**Version:** 2.8.1 | **Status:** Production Ready | **Size:** ~370KB
 
 ### Why VISTA?
 
 - 🤖 **AI-Powered Guidance** - Get intelligent testing suggestions from GPT-4
+- 🆓 **FREE AI Option** - Use OpenRouter with no credit card required
 - 📝 **Custom Templates** - 20+ built-in templates for common vulnerabilities
 - 🎯 **Payload Library** - 100+ pre-built payloads with AI integration
 - 📁 **Request Organization** - Group and track your testing systematically
@@ -46,8 +47,9 @@ Get intelligent, context-aware testing guidance powered by leading AI models:
 - **Follow-Up Questions** - Interactive conversation mode for deeper analysis
 
 **Supported AI Providers:**
-- OpenAI (GPT-4, GPT-4o, GPT-4o-mini)
-- Azure OpenAI Service
+- **OpenAI** (GPT-4, GPT-4o, GPT-4o-mini)
+- **Azure OpenAI Service** (Enterprise deployments)
+- **OpenRouter** (500+ models, 2 FREE models available) ⭐ NEW!
 
 ### 📝 Custom AI Prompt Templates
 
@@ -143,7 +145,7 @@ Stay organized during complex testing engagements:
 **Option 1: Download from Releases**
 
 1. Visit [Latest Release](https://github.com/Adw0rm-sec/VISTA/releases/latest)
-2. Download `vista-2.8.0.jar` from Assets
+2. Download `vista-2.8.1.jar` from Assets
 3. In Burp Suite: **Extensions → Add → Java → Select JAR**
 4. VISTA tab appears in Burp
 
@@ -151,7 +153,7 @@ Stay organized during complex testing engagements:
 
 ```bash
 # Download latest release
-curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/v2.8.0/vista-2.8.0.jar
+curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/v2.8.1/vista-2.8.1.jar
 
 # Or download latest auto-build
 curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
@@ -163,7 +165,7 @@ curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o 
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
 mvn clean package
-# JAR will be in target/vista-2.8.0.jar
+# JAR will be in target/vista-2.8.1.jar
 ```
 
 ---
@@ -189,6 +191,22 @@ Endpoint: https://your-resource.openai.azure.com
 Deployment: your-deployment-name
 ```
 
+**For OpenRouter (FREE Option):** ⭐ NEW!
+```
+Provider: OpenRouter
+API Key: sk-or-v1-... (Get free at openrouter.ai/keys)
+Model: meta-llama/llama-3.3-70b-instruct:free (default)
+       or tngtech/deepseek-r1t2-chimera:free (reasoning)
+```
+
+**Why OpenRouter?**
+- ✅ **Completely FREE** - No credit card required
+- ✅ **GPT-4 Level Quality** - Llama 3.3 70B performs at GPT-4 level
+- ✅ **Large Context** - 128K+ tokens (handles complex requests)
+- ✅ **2 Verified Models** - Both tested and working
+- ✅ **Perfect for Students** - Learn security testing without costs
+- ✅ **5-Minute Setup** - Sign up, get key, start testing
+
 ### Step 2: Start Testing
 
 **Method 1: AI Advisor**
@@ -208,6 +226,89 @@ Deployment: your-deployment-name
 2. Group similar endpoints together
 3. Track testing progress
 4. Compare responses side-by-side
+
+---
+
+## 🆓 FREE AI with OpenRouter (NEW!)
+
+VISTA now supports **OpenRouter** - giving you access to powerful AI models **completely free**!
+
+### Why OpenRouter?
+
+| Feature | OpenRouter | OpenAI | Azure AI |
+|---------|:----------:|:------:|:--------:|
+| **Cost** | 🆓 FREE | 💰 Paid | 💰 Paid |
+| **Credit Card** | ❌ Not Required | ✅ Required | ✅ Required |
+| **Setup Time** | ⚡ 5 minutes | ⏱️ 10 minutes | ⏱️ 30+ minutes |
+| **Quality** | ⭐⭐⭐⭐⭐ GPT-4 Level | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Context Window** | 128K+ tokens | 128K tokens | 128K tokens |
+| **Best For** | Students, Learning, Testing | Production, Enterprise | Enterprise Only |
+
+### Quick Setup (5 Minutes)
+
+**Step 1: Get Free API Key**
+1. Go to [openrouter.ai](https://openrouter.ai)
+2. Sign up (no credit card needed)
+3. Visit [openrouter.ai/keys](https://openrouter.ai/keys)
+4. Click "Create Key"
+5. Copy your key (starts with `sk-or-v1-...`)
+
+**Step 2: Configure VISTA**
+1. Open Burp Suite → VISTA → Settings
+2. Select Provider: **OpenRouter**
+3. Paste your API key
+4. Model: `meta-llama/llama-3.3-70b-instruct:free` (default)
+5. Click "Test Connection"
+6. Click "Save Configuration"
+
+**Step 3: Start Testing!**
+- All VISTA features work with OpenRouter
+- Same quality as GPT-4
+- Completely free forever
+
+### Available Free Models
+
+**1. Llama 3.3 70B (Default)** - Recommended
+- Model ID: `meta-llama/llama-3.3-70b-instruct:free`
+- Quality: ⭐⭐⭐⭐⭐ (GPT-4 level)
+- Speed: Fast
+- Context: 131K tokens
+- Best for: General security testing, all VISTA features
+
+**2. DeepSeek R1T2 Chimera (Reasoning)**
+- Model ID: `tngtech/deepseek-r1t2-chimera:free`
+- Quality: ⭐⭐⭐⭐⭐ (Superior reasoning)
+- Speed: Medium
+- Context: 128K+ tokens
+- Best for: Complex WAF bypasses, advanced analysis
+
+### When to Use Each Model
+
+| Task | Recommended Model | Why |
+|------|------------------|-----|
+| General Testing | Llama 3.3 70B | Faster, excellent quality |
+| XSS/SQLi Testing | Llama 3.3 70B | Good payload generation |
+| WAF Bypass | DeepSeek R1T2 | Better reasoning for bypasses |
+| Complex Analysis | DeepSeek R1T2 | Superior logical deduction |
+| Bulk Testing | Llama 3.3 70B | Better throughput |
+
+### Cost Comparison
+
+**Monthly Cost Estimate (100 requests/day):**
+
+| Provider | Model | Monthly Cost |
+|----------|-------|--------------|
+| OpenRouter | Llama 3.3 70B Free | **$0.00** 🎉 |
+| OpenRouter | DeepSeek R1T2 Free | **$0.00** 🎉 |
+| OpenAI | GPT-4o-mini | ~$15-30 |
+| OpenAI | GPT-4o | ~$50-100 |
+| Azure AI | GPT-4 | ~$50-150 |
+
+**Perfect for:**
+- 🎓 Students learning security testing
+- 🔬 Researchers experimenting with AI
+- 💼 Freelancers on a budget
+- 🧪 Testing VISTA before committing to paid providers
 
 ---
 
