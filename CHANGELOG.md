@@ -5,6 +5,21 @@ All notable changes to VISTA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-01-29
+
+### Fixed
+- **OpenAI API Key Field Not Visible** - Fixed issue where OpenAI API key field was not showing when OpenAI provider was selected
+- **Separate API Keys Per Provider** - Each AI provider (OpenAI, Azure AI, OpenRouter) now has its own dedicated API key field
+- **API Key Persistence** - API keys are now stored separately per provider and persist correctly when switching between providers
+- **Backward Compatibility** - Added migration support for legacy config files with single API key field
+- **OpenRouter Support in Bypass Assistant** - Added OpenRouter provider support to Bypass Assistant panel
+
+### Changed
+- Updated AIConfigManager to store separate API keys for each provider
+- Updated SettingsPanel to use provider-specific API key fields
+- Updated all AI engines to use provider-specific API keys
+- Removed deprecated API warnings
+
 ## [2.8.0] - 2026-01-29
 
 ### Added
