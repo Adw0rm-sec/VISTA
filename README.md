@@ -5,8 +5,7 @@
 ### AI-Powered Security Testing Assistant for Burp Suite
 
 [![CI Build](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml/badge.svg)](https://github.com/Adw0rm-sec/VISTA/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/Adw0rm-sec/VISTA)](https://github.com/Adw0rm-sec/VISTA/releases)
-[![Downloads](https://img.shields.io/github/downloads/Adw0rm-sec/VISTA/total)](https://github.com/Adw0rm-sec/VISTA/releases)
+[![Latest Release](https://img.shields.io/github/v/release/Adw0rm-sec/VISTA)](https://github.com/Adw0rm-sec/VISTA/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange)](https://openjdk.org/)
 
