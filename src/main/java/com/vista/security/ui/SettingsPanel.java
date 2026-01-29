@@ -284,8 +284,8 @@ public class SettingsPanel extends JPanel {
 
     private void loadConfig() {
         providerCombo.setSelectedItem(config.getProvider());
-        apiKeyField.setText(config.getApiKey());
-        azureApiKeyField.setText(config.getApiKey());
+        apiKeyField.setText(config.getOpenAIApiKey());
+        azureApiKeyField.setText(config.getAzureApiKey());
         modelField.setText(config.getModel());
         endpointField.setText(config.getEndpoint());
         deploymentField.setText(config.getDeployment());
@@ -312,13 +312,11 @@ public class SettingsPanel extends JPanel {
 
     private void saveConfig() {
         String provider = (String) providerCombo.getSelectedItem();
-        String apiKey = "Azure AI".equals(provider) ? 
-            new String(azureApiKeyField.getPassword()) : 
-            new String(apiKeyField.getPassword());
         
         config.updateConfig(
             provider,
-            apiKey,
+            new String(apiKeyField.getPassword()),
+            new String(azureApiKeyField.getPassword()),
             modelField.getText().trim(),
             endpointField.getText().trim(),
             deploymentField.getText().trim(),
@@ -377,7 +375,7 @@ public class SettingsPanel extends JPanel {
                     AzureAIService.Configuration azureConfig = new AzureAIService.Configuration();
                     azureConfig.setEndpoint(config.getEndpoint());
                     azureConfig.setDeploymentName(config.getDeployment());
-                    azureConfig.setApiKey(config.getApiKey());
+                    azureConfig.setApiKey(config.getAzureApiKey());
                     azureConfig.setTemperature(0.1);
                     response = new AzureAIService(azureConfig).testConnection();
                 } else if ("OpenRouter".equals(provider)) {
@@ -389,7 +387,7 @@ public class SettingsPanel extends JPanel {
                     response = new com.vista.security.service.OpenRouterService(openRouterConfig).testConnection();
                 } else {
                     OpenAIService.Configuration openaiConfig = new OpenAIService.Configuration();
-                    openaiConfig.setApiKey(config.getApiKey());
+                    openaiConfig.setApiKey(config.getOpenAIApiKey());
                     openaiConfig.setModel(config.getModel());
                     openaiConfig.setTemperature(0.1);
                     response = new OpenAIService(openaiConfig).testConnection();

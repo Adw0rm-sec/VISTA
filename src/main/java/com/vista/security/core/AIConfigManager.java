@@ -17,7 +17,8 @@ public class AIConfigManager {
     
     // Configuration
     private String provider = "OpenAI";
-    private String apiKey = "";
+    private String openaiApiKey = "";
+    private String azureApiKey = "";
     private String model = "gpt-4o-mini";
     private String endpoint = "";
     private String deployment = "";
@@ -43,7 +44,8 @@ public class AIConfigManager {
     
     // Getters
     public String getProvider() { return provider; }
-    public String getApiKey() { return apiKey; }
+    public String getOpenAIApiKey() { return openaiApiKey; }
+    public String getAzureApiKey() { return azureApiKey; }
     public String getModel() { return model; }
     public String getEndpoint() { return endpoint; }
     public String getDeployment() { return deployment; }
@@ -53,6 +55,18 @@ public class AIConfigManager {
     public int getMaxTokens() { return maxTokens; }
     public int getTimeout() { return timeout; }
     
+    // Legacy getter for backward compatibility
+    @Deprecated
+    public String getApiKey() { 
+        if ("Azure AI".equalsIgnoreCase(provider)) {
+            return azureApiKey;
+        } else if ("OpenRouter".equalsIgnoreCase(provider)) {
+            return openRouterApiKey;
+        } else {
+            return openaiApiKey;
+        }
+    }
+    
     // Setters with auto-save
     public void setProvider(String provider) { 
         this.provider = provider; 
@@ -60,8 +74,14 @@ public class AIConfigManager {
         notifyListeners();
     }
     
-    public void setApiKey(String apiKey) { 
-        this.apiKey = apiKey; 
+    public void setOpenAIApiKey(String openaiApiKey) { 
+        this.openaiApiKey = openaiApiKey; 
+        save();
+        notifyListeners();
+    }
+    
+    public void setAzureApiKey(String azureApiKey) { 
+        this.azureApiKey = azureApiKey; 
         save();
         notifyListeners();
     }
@@ -108,14 +128,29 @@ public class AIConfigManager {
         notifyListeners();
     }
     
+    // Legacy setter for backward compatibility
+    @Deprecated
+    public void setApiKey(String apiKey) { 
+        if ("Azure AI".equalsIgnoreCase(provider)) {
+            this.azureApiKey = apiKey;
+        } else if ("OpenRouter".equalsIgnoreCase(provider)) {
+            this.openRouterApiKey = apiKey;
+        } else {
+            this.openaiApiKey = apiKey;
+        }
+        save();
+        notifyListeners();
+    }
+    
     /**
      * Bulk update configuration.
      */
-    public void updateConfig(String provider, String apiKey, String model, 
+    public void updateConfig(String provider, String openaiApiKey, String azureApiKey, String model, 
                             String endpoint, String deployment, String openRouterApiKey,
                             String openRouterModel, double temperature) {
         this.provider = provider;
-        this.apiKey = apiKey;
+        this.openaiApiKey = openaiApiKey;
+        this.azureApiKey = azureApiKey;
         this.model = model;
         this.endpoint = endpoint;
         this.deployment = deployment;
@@ -131,14 +166,14 @@ public class AIConfigManager {
      */
     public boolean isConfigured() {
         if ("Azure AI".equalsIgnoreCase(provider)) {
-            return apiKey != null && !apiKey.isBlank()
+            return azureApiKey != null && !azureApiKey.isBlank()
                 && endpoint != null && !endpoint.isBlank() 
                 && deployment != null && !deployment.isBlank();
         } else if ("OpenRouter".equalsIgnoreCase(provider)) {
             return openRouterApiKey != null && !openRouterApiKey.isBlank()
                 && openRouterModel != null && !openRouterModel.isBlank();
         } else {
-            return apiKey != null && !apiKey.isBlank();
+            return openaiApiKey != null && !openaiApiKey.isBlank();
         }
     }
     
@@ -148,14 +183,14 @@ public class AIConfigManager {
     public String getStatusMessage() {
         if (!isConfigured()) {
             if ("Azure AI".equalsIgnoreCase(provider)) {
-                if (apiKey == null || apiKey.isBlank()) return "Azure API key not configured";
+                if (azureApiKey == null || azureApiKey.isBlank()) return "Azure API key not configured";
                 if (endpoint == null || endpoint.isBlank()) return "Azure endpoint not configured";
                 if (deployment == null || deployment.isBlank()) return "Azure deployment not configured";
             } else if ("OpenRouter".equalsIgnoreCase(provider)) {
                 if (openRouterApiKey == null || openRouterApiKey.isBlank()) return "OpenRouter API key not configured";
                 if (openRouterModel == null || openRouterModel.isBlank()) return "OpenRouter model not configured";
             } else {
-                if (apiKey == null || apiKey.isBlank()) return "API key not configured";
+                if (openaiApiKey == null || openaiApiKey.isBlank()) return "OpenAI API key not configured";
             }
             return "Configuration incomplete";
         }
@@ -192,7 +227,8 @@ public class AIConfigManager {
             StringBuilder json = new StringBuilder();
             json.append("{\n");
             json.append("  \"provider\": \"").append(escapeJson(provider)).append("\",\n");
-            json.append("  \"apiKey\": \"").append(escapeJson(apiKey)).append("\",\n");
+            json.append("  \"openaiApiKey\": \"").append(escapeJson(openaiApiKey)).append("\",\n");
+            json.append("  \"azureApiKey\": \"").append(escapeJson(azureApiKey)).append("\",\n");
             json.append("  \"model\": \"").append(escapeJson(model)).append("\",\n");
             json.append("  \"endpoint\": \"").append(escapeJson(endpoint)).append("\",\n");
             json.append("  \"deployment\": \"").append(escapeJson(deployment)).append("\",\n");
@@ -219,7 +255,8 @@ public class AIConfigManager {
             String content = Files.readString(path);
             
             provider = extractJsonString(content, "provider", "OpenAI");
-            apiKey = extractJsonString(content, "apiKey", "");
+            openaiApiKey = extractJsonString(content, "openaiApiKey", "");
+            azureApiKey = extractJsonString(content, "azureApiKey", "");
             model = extractJsonString(content, "model", "gpt-4o-mini");
             endpoint = extractJsonString(content, "endpoint", "");
             deployment = extractJsonString(content, "deployment", "");
@@ -227,6 +264,13 @@ public class AIConfigManager {
             openRouterModel = extractJsonString(content, "openRouterModel", "meta-llama/llama-3.3-70b-instruct:free");
             temperature = extractJsonDouble(content, "temperature", 0.3);
             maxTokens = extractJsonInt(content, "maxTokens", 2000);
+            
+            // Backward compatibility: if old "apiKey" field exists, migrate it
+            String legacyApiKey = extractJsonString(content, "apiKey", null);
+            if (legacyApiKey != null && !legacyApiKey.isBlank()) {
+                if (openaiApiKey.isBlank()) openaiApiKey = legacyApiKey;
+                if (azureApiKey.isBlank()) azureApiKey = legacyApiKey;
+            }
             
         } catch (Exception e) {
             System.err.println("Failed to load AI config: " + e.getMessage());

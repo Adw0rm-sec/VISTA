@@ -1380,7 +1380,7 @@ public class TestingSuggestionsPanel extends JPanel {
             AzureAIService.Configuration c = new AzureAIService.Configuration();
             c.setEndpoint(config.getEndpoint());
             c.setDeploymentName(config.getDeployment());
-            c.setApiKey(config.getApiKey());
+            c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
             return new AzureAIService(c).ask(
                 "You are an expert penetration testing consultant.", prompt);
@@ -1394,7 +1394,7 @@ public class TestingSuggestionsPanel extends JPanel {
                 "You are an expert penetration testing consultant.", prompt);
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
-            c.setApiKey(config.getApiKey());
+            c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
             return new OpenAIService(c).ask(

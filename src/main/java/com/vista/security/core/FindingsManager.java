@@ -392,7 +392,7 @@ public class FindingsManager {
             AzureAIService.Configuration azureConfig = new AzureAIService.Configuration();
             azureConfig.setEndpoint(config.getEndpoint());
             azureConfig.setDeploymentName(config.getDeployment());
-            azureConfig.setApiKey(config.getApiKey());
+            azureConfig.setApiKey(config.getAzureApiKey());
             azureConfig.setTemperature(0.3); // Lower for more consistent output
             return new AzureAIService(azureConfig).ask(
                 "You are a professional security researcher writing vulnerability reports.", prompt);
@@ -406,7 +406,7 @@ public class FindingsManager {
                 "You are a professional security researcher writing vulnerability reports.", prompt);
         } else {
             OpenAIService.Configuration openaiConfig = new OpenAIService.Configuration();
-            openaiConfig.setApiKey(config.getApiKey());
+            openaiConfig.setApiKey(config.getOpenAIApiKey());
             openaiConfig.setModel(config.getModel());
             openaiConfig.setTemperature(0.3); // Lower for more consistent output
             return new OpenAIService(openaiConfig).ask(

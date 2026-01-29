@@ -224,18 +224,25 @@ public class BypassAssistantPanel extends JPanel {
             if ("OpenAI".equals(configManager.getProvider())) {
                 com.vista.security.service.OpenAIService.Configuration config = 
                     new com.vista.security.service.OpenAIService.Configuration();
-                config.setApiKey(configManager.getApiKey());
+                config.setApiKey(configManager.getOpenAIApiKey());
                 config.setModel(configManager.getModel());
                 config.setTemperature(configManager.getTemperature());
                 aiService = new com.vista.security.service.OpenAIService(config);
             } else if ("Azure AI".equals(configManager.getProvider())) {
                 com.vista.security.service.AzureAIService.Configuration config = 
                     new com.vista.security.service.AzureAIService.Configuration();
-                config.setApiKey(configManager.getApiKey());
+                config.setApiKey(configManager.getAzureApiKey());
                 config.setEndpoint(configManager.getEndpoint());
                 config.setDeploymentName(configManager.getDeployment());
                 config.setTemperature(configManager.getTemperature());
                 aiService = new com.vista.security.service.AzureAIService(config);
+            } else if ("OpenRouter".equals(configManager.getProvider())) {
+                com.vista.security.service.OpenRouterService.Configuration config = 
+                    new com.vista.security.service.OpenRouterService.Configuration();
+                config.setApiKey(configManager.getOpenRouterApiKey());
+                config.setModel(configManager.getOpenRouterModel());
+                config.setTemperature(configManager.getTemperature());
+                aiService = new com.vista.security.service.OpenRouterService(config);
             }
             
             if (aiService == null) {
