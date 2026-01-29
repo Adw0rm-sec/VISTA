@@ -58,8 +58,6 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 - Import/Export for team sharing
 - Usage tracking and favorites
 
-[📖 Prompt Templates Guide](PROMPT_TEMPLATES_USER_GUIDE.md)
-
 ### 🎯 Payload Library Manager
 
 **100+ Built-in Payloads** across 8 vulnerability categories:
@@ -80,8 +78,6 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 - Context-aware filtering
 - Export/Import for sharing
 
-[📖 Payload Library Guide](PAYLOAD_LIBRARY_USER_GUIDE.md)
-
 ### 📁 Request Collection Engine
 
 **Organize and Track Your Testing:**
@@ -99,8 +95,6 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 - Multi-step attack chains
 - Team collaboration and handoffs
 
-[📖 Request Collections Guide](REQUEST_COLLECTION_USER_GUIDE.md)
-
 ### 🛡️ Advanced Security Features
 
 **WAF Detection** - Automatically detects 8 major WAFs:
@@ -117,8 +111,6 @@ VISTA (Vulnerability Insight & Strategic Test Assistant) is a comprehensive Burp
 **Reflection Analysis** - Detect where input is reflected in responses
 
 **Repeater Integration** - Seamless integration with Burp Repeater
-
-[📖 Advanced Features Guide](ADVANCED_FEATURES.md)
 
 ### 🎨 Modern User Interface
 
@@ -165,8 +157,6 @@ cd VISTA
 mvn clean package
 # JAR will be in target/vista-1.0.0-MVP.jar
 ```
-
-[📖 Build Pipeline Documentation](BUILD_PIPELINE.md)
 
 ---
 
@@ -215,17 +205,10 @@ Deployment: your-deployment-name
 
 ## 📖 Documentation
 
-### User Guides
-- [Prompt Templates User Guide](PROMPT_TEMPLATES_USER_GUIDE.md) - Custom AI prompts
-- [Payload Library User Guide](PAYLOAD_LIBRARY_USER_GUIDE.md) - Payload management
-- [Request Collections User Guide](REQUEST_COLLECTION_USER_GUIDE.md) - Request organization
-- [Advanced Features Guide](ADVANCED_FEATURES.md) - WAF detection, bypass techniques
-- [Build Pipeline Guide](BUILD_PIPELINE.md) - CI/CD and development
-
-### Technical Documentation
-- [Implementation Status](IMPLEMENTATION_STATUS.md) - Current features and roadmap
-- [Release Notes v2.8.0](RELEASE_v2.8.0_SUMMARY.md) - Latest release details
-- [Contributing Guide](.github/CONTRIBUTING.md) - How to contribute
+All documentation is available in the main README. For additional help:
+- Check the [Issues](https://github.com/Adw0rm-sec/VISTA/issues) page
+- Review the inline code comments
+- Explore the UI tabs for feature descriptions
 
 ---
 
@@ -345,13 +328,11 @@ VISTA uses GitHub Actions for automated builds and testing:
 curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
 ```
 
-[📖 Build Pipeline Documentation](BUILD_PIPELINE.md)
-
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](.github/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
 
