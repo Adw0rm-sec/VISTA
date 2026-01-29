@@ -1384,6 +1384,14 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setTemperature(config.getTemperature());
             return new AzureAIService(c).ask(
                 "You are an expert penetration testing consultant.", prompt);
+        } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
+            com.vista.security.service.OpenRouterService.Configuration c = 
+                new com.vista.security.service.OpenRouterService.Configuration();
+            c.setApiKey(config.getOpenRouterApiKey());
+            c.setModel(config.getOpenRouterModel());
+            c.setTemperature(config.getTemperature());
+            return new com.vista.security.service.OpenRouterService(c).ask(
+                "You are an expert penetration testing consultant.", prompt);
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getApiKey());

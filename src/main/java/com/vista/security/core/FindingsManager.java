@@ -396,6 +396,14 @@ public class FindingsManager {
             azureConfig.setTemperature(0.3); // Lower for more consistent output
             return new AzureAIService(azureConfig).ask(
                 "You are a professional security researcher writing vulnerability reports.", prompt);
+        } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
+            com.vista.security.service.OpenRouterService.Configuration openRouterConfig = 
+                new com.vista.security.service.OpenRouterService.Configuration();
+            openRouterConfig.setApiKey(config.getOpenRouterApiKey());
+            openRouterConfig.setModel(config.getOpenRouterModel());
+            openRouterConfig.setTemperature(0.3); // Lower for more consistent output
+            return new com.vista.security.service.OpenRouterService(openRouterConfig).ask(
+                "You are a professional security researcher writing vulnerability reports.", prompt);
         } else {
             OpenAIService.Configuration openaiConfig = new OpenAIService.Configuration();
             openaiConfig.setApiKey(config.getApiKey());

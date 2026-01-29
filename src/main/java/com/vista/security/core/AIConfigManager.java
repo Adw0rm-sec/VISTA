@@ -21,6 +21,8 @@ public class AIConfigManager {
     private String model = "gpt-4o-mini";
     private String endpoint = "";
     private String deployment = "";
+    private String openRouterApiKey = "";
+    private String openRouterModel = "meta-llama/llama-3.3-70b-instruct:free";
     private double temperature = 0.3; // Lower default for cost efficiency
     private int maxTokens = 2000; // Limit response tokens
     private int timeout = 60000; // Request timeout in milliseconds (60 seconds)
@@ -45,6 +47,8 @@ public class AIConfigManager {
     public String getModel() { return model; }
     public String getEndpoint() { return endpoint; }
     public String getDeployment() { return deployment; }
+    public String getOpenRouterApiKey() { return openRouterApiKey; }
+    public String getOpenRouterModel() { return openRouterModel; }
     public double getTemperature() { return temperature; }
     public int getMaxTokens() { return maxTokens; }
     public int getTimeout() { return timeout; }
@@ -80,6 +84,18 @@ public class AIConfigManager {
         notifyListeners();
     }
     
+    public void setOpenRouterApiKey(String openRouterApiKey) { 
+        this.openRouterApiKey = openRouterApiKey; 
+        save();
+        notifyListeners();
+    }
+    
+    public void setOpenRouterModel(String openRouterModel) { 
+        this.openRouterModel = openRouterModel; 
+        save();
+        notifyListeners();
+    }
+    
     public void setTemperature(double temperature) { 
         this.temperature = temperature; 
         save();
@@ -96,12 +112,15 @@ public class AIConfigManager {
      * Bulk update configuration.
      */
     public void updateConfig(String provider, String apiKey, String model, 
-                            String endpoint, String deployment, double temperature) {
+                            String endpoint, String deployment, String openRouterApiKey,
+                            String openRouterModel, double temperature) {
         this.provider = provider;
         this.apiKey = apiKey;
         this.model = model;
         this.endpoint = endpoint;
         this.deployment = deployment;
+        this.openRouterApiKey = openRouterApiKey;
+        this.openRouterModel = openRouterModel;
         this.temperature = temperature;
         save();
         notifyListeners();
@@ -111,13 +130,16 @@ public class AIConfigManager {
      * Check if AI is properly configured.
      */
     public boolean isConfigured() {
-        if (apiKey == null || apiKey.isBlank()) return false;
-        
         if ("Azure AI".equalsIgnoreCase(provider)) {
-            return endpoint != null && !endpoint.isBlank() 
+            return apiKey != null && !apiKey.isBlank()
+                && endpoint != null && !endpoint.isBlank() 
                 && deployment != null && !deployment.isBlank();
+        } else if ("OpenRouter".equalsIgnoreCase(provider)) {
+            return openRouterApiKey != null && !openRouterApiKey.isBlank()
+                && openRouterModel != null && !openRouterModel.isBlank();
+        } else {
+            return apiKey != null && !apiKey.isBlank();
         }
-        return true;
     }
     
     /**
@@ -125,12 +147,15 @@ public class AIConfigManager {
      */
     public String getStatusMessage() {
         if (!isConfigured()) {
-            if (apiKey == null || apiKey.isBlank()) {
-                return "API key not configured";
-            }
             if ("Azure AI".equalsIgnoreCase(provider)) {
+                if (apiKey == null || apiKey.isBlank()) return "Azure API key not configured";
                 if (endpoint == null || endpoint.isBlank()) return "Azure endpoint not configured";
                 if (deployment == null || deployment.isBlank()) return "Azure deployment not configured";
+            } else if ("OpenRouter".equalsIgnoreCase(provider)) {
+                if (openRouterApiKey == null || openRouterApiKey.isBlank()) return "OpenRouter API key not configured";
+                if (openRouterModel == null || openRouterModel.isBlank()) return "OpenRouter model not configured";
+            } else {
+                if (apiKey == null || apiKey.isBlank()) return "API key not configured";
             }
             return "Configuration incomplete";
         }
@@ -171,6 +196,8 @@ public class AIConfigManager {
             json.append("  \"model\": \"").append(escapeJson(model)).append("\",\n");
             json.append("  \"endpoint\": \"").append(escapeJson(endpoint)).append("\",\n");
             json.append("  \"deployment\": \"").append(escapeJson(deployment)).append("\",\n");
+            json.append("  \"openRouterApiKey\": \"").append(escapeJson(openRouterApiKey)).append("\",\n");
+            json.append("  \"openRouterModel\": \"").append(escapeJson(openRouterModel)).append("\",\n");
             json.append("  \"temperature\": ").append(temperature).append(",\n");
             json.append("  \"maxTokens\": ").append(maxTokens).append("\n");
             json.append("}");
@@ -196,6 +223,8 @@ public class AIConfigManager {
             model = extractJsonString(content, "model", "gpt-4o-mini");
             endpoint = extractJsonString(content, "endpoint", "");
             deployment = extractJsonString(content, "deployment", "");
+            openRouterApiKey = extractJsonString(content, "openRouterApiKey", "");
+            openRouterModel = extractJsonString(content, "openRouterModel", "meta-llama/llama-3.3-70b-instruct:free");
             temperature = extractJsonDouble(content, "temperature", 0.3);
             maxTokens = extractJsonInt(content, "maxTokens", 2000);
             

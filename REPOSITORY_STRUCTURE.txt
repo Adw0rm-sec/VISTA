@@ -1,0 +1,65 @@
+VISTA Repository Structure (Clean & Minimal)
+=============================================
+
+✅ ESSENTIAL FILES ONLY - NO BLOAT
+
+GitHub Workflows (3 files):
+---------------------------
+✅ .github/workflows/build.yml           - CI build on every push
+✅ .github/workflows/release.yml         - Create releases from tags
+✅ .github/workflows/auto-build-commit.yml - Auto-build JAR and commit
+
+Documentation (7 files):
+-----------------------
+✅ README.md                - Main documentation
+✅ CHANGELOG.md             - Version history
+✅ LICENSE                  - MIT License (Adw0rm-sec 2026)
+✅ CONTRIBUTING.md          - How to contribute
+✅ CODE_OF_CONDUCT.md       - Community guidelines
+✅ SECURITY.md              - Security policy
+✅ VERSION                  - Current version (2.8.0)
+
+GitHub Config (1 file):
+----------------------
+✅ .github/RELEASE_TEMPLATE.md - Release checklist
+
+Source Code:
+-----------
+✅ src/main/java/           - All Java source code
+✅ pom.xml                  - Maven build configuration
+
+Build Output:
+------------
+✅ builds/vista-latest.jar  - Auto-built JAR (updated on push)
+✅ builds/BUILD_INFO.txt    - Build information
+
+Config Files:
+------------
+✅ .gitignore              - Git ignore rules
+✅ .gitattributes          - Git attributes
+✅ .editorconfig           - Editor configuration
+
+REMOVED (Not Needed):
+--------------------
+❌ Dockerfile              - Not needed (Burp extension, not container)
+❌ .dockerignore           - Not needed
+❌ docker.yml workflow     - Not needed
+❌ security.yml workflow   - Excessive for this project
+❌ code-quality.yml        - Excessive for this project
+❌ test-coverage.yml       - Excessive for this project
+❌ multi-platform.yml      - Excessive for this project
+❌ nightly.yml             - Excessive for this project
+❌ pr-checks.yml           - Excessive for this project
+❌ CODEOWNERS              - Not needed
+❌ dependabot.yml          - Not needed
+❌ dependency-check-suppressions.xml - Not needed
+❌ Makefile                - Not needed (Maven handles builds)
+❌ 70+ .md documentation files - Removed (kept only essential)
+
+TOTAL FILES IN REPO: ~60 files (down from 150+)
+- Source code: ~50 Java files
+- Documentation: 7 essential files
+- Workflows: 3 GitHub Actions
+- Config: 4 files
+
+RESULT: Clean, minimal, production-ready repository! ✅

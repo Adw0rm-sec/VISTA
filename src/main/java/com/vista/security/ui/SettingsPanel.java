@@ -20,18 +20,23 @@ public class SettingsPanel extends JPanel {
     private final AIConfigManager config;
 
     // AI Provider
-    private final JComboBox<String> providerCombo = new JComboBox<>(new String[]{"OpenAI", "Azure AI"});
+    private final JComboBox<String> providerCombo = new JComboBox<>(new String[]{"OpenAI", "Azure AI", "OpenRouter"});
     private final JPasswordField apiKeyField = new JPasswordField(35);
+    private final JPasswordField azureApiKeyField = new JPasswordField(35);
     private final JTextField modelField = new JTextField("gpt-4o-mini", 20);
     private final JTextField endpointField = new JTextField(35);
     private final JTextField deploymentField = new JTextField(20);
+    private final JPasswordField openRouterApiKeyField = new JPasswordField(35);
+    private final JComboBox<String> openRouterModelCombo = new JComboBox<>();
     private final JSlider temperatureSlider = new JSlider(0, 100, 30);
     private final JLabel tempValueLabel = new JLabel("0.30");
     private final JLabel statusLabel = new JLabel();
     private final JLabel browserStatusLabel = new JLabel();
 
-    // Azure panel reference
+    // Panel references
+    private JPanel openaiPanel;
     private JPanel azurePanel;
+    private JPanel openRouterPanel;
 
     public SettingsPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
@@ -60,18 +65,18 @@ public class SettingsPanel extends JPanel {
         subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Provider selection
-        JPanel providerPanel = createSection("AI Provider");
-        providerPanel.add(createRow("Provider:", providerCombo));
+        JPanel providerPanel = createSection("Select AI Provider");
+        JPanel providerRow = createRow("Provider:", providerCombo);
+        providerPanel.add(providerRow);
         providerCombo.addActionListener(e -> {
             updateProviderVisibility();
             saveConfig();
         });
 
-        // API Key
-        JPanel apiKeyPanel = createSection("Authentication");
-        apiKeyPanel.add(createRow("API Key:", apiKeyField));
-        apiKeyField.addActionListener(e -> saveConfig());
+        // OpenAI Settings
+        openaiPanel = createSection("OpenAI Configuration");
         
+        JPanel openaiKeyRow = createRow("API Key:", apiKeyField);
         JButton showKeyBtn = new JButton("Show");
         showKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
         showKeyBtn.addActionListener(e -> {
@@ -83,21 +88,91 @@ public class SettingsPanel extends JPanel {
                 showKeyBtn.setText("Show");
             }
         });
+        openaiKeyRow.add(showKeyBtn);
+        openaiPanel.add(openaiKeyRow);
+        apiKeyField.addActionListener(e -> saveConfig());
         
-        JPanel keyRow = (JPanel) apiKeyPanel.getComponent(0);
-        keyRow.add(showKeyBtn);
-
-        // OpenAI Settings
-        JPanel openaiPanel = createSection("OpenAI Settings");
         openaiPanel.add(createRow("Model:", modelField));
         modelField.setToolTipText("e.g., gpt-4o-mini, gpt-4o, gpt-3.5-turbo");
+        
+        JLabel openaiInfo = new JLabel("Get API key at platform.openai.com/api-keys");
+        openaiInfo.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        openaiInfo.setForeground(Color.GRAY);
+        JPanel openaiInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        openaiInfoPanel.add(openaiInfo);
+        openaiPanel.add(openaiInfoPanel);
 
         // Azure Settings
-        azurePanel = createSection("Azure AI Settings");
+        azurePanel = createSection("Azure AI Configuration");
+        
+        JPanel azureKeyRow = createRow("API Key:", azureApiKeyField);
+        JButton showAzureKeyBtn = new JButton("Show");
+        showAzureKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        showAzureKeyBtn.addActionListener(e -> {
+            if (azureApiKeyField.getEchoChar() == '•') {
+                azureApiKeyField.setEchoChar((char) 0);
+                showAzureKeyBtn.setText("Hide");
+            } else {
+                azureApiKeyField.setEchoChar('•');
+                showAzureKeyBtn.setText("Show");
+            }
+        });
+        azureKeyRow.add(showAzureKeyBtn);
+        azurePanel.add(azureKeyRow);
+        azureApiKeyField.addActionListener(e -> saveConfig());
+        
         azurePanel.add(createRow("Endpoint:", endpointField));
         azurePanel.add(createRow("Deployment:", deploymentField));
         endpointField.setToolTipText("e.g., https://your-resource.openai.azure.com");
         deploymentField.setToolTipText("Your Azure deployment name");
+        
+        JLabel azureInfo = new JLabel("Configure in Azure Portal > Azure OpenAI Service");
+        azureInfo.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        azureInfo.setForeground(Color.GRAY);
+        JPanel azureInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        azureInfoPanel.add(azureInfo);
+        azurePanel.add(azureInfoPanel);
+
+        // OpenRouter Settings
+        openRouterPanel = createSection("OpenRouter Configuration");
+        
+        JPanel openRouterKeyRow = createRow("API Key:", openRouterApiKeyField);
+        JButton showOpenRouterKeyBtn = new JButton("Show");
+        showOpenRouterKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        showOpenRouterKeyBtn.addActionListener(e -> {
+            if (openRouterApiKeyField.getEchoChar() == '•') {
+                openRouterApiKeyField.setEchoChar((char) 0);
+                showOpenRouterKeyBtn.setText("Hide");
+            } else {
+                openRouterApiKeyField.setEchoChar('•');
+                showOpenRouterKeyBtn.setText("Show");
+            }
+        });
+        openRouterKeyRow.add(showOpenRouterKeyBtn);
+        openRouterPanel.add(openRouterKeyRow);
+        
+        // Populate OpenRouter models - VERIFIED WORKING FREE MODELS
+        // These models have been tested and confirmed working with free API keys
+        openRouterModelCombo.addItem("meta-llama/llama-3.3-70b-instruct:free");
+        openRouterModelCombo.addItem("tngtech/deepseek-r1t2-chimera:free");
+        openRouterModelCombo.setEditable(true);
+        
+        JPanel modelRow = createRow("Model:", openRouterModelCombo);
+        openRouterPanel.add(modelRow);
+        
+        JLabel openRouterInfo1 = new JLabel("2 verified free models: Llama 3.3 70B & DeepSeek R1T2 Chimera");
+        openRouterInfo1.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        openRouterInfo1.setForeground(Color.GRAY);
+        JPanel infoPanel1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        infoPanel1.add(openRouterInfo1);
+        openRouterPanel.add(infoPanel1);
+        
+        JLabel openRouterInfo2 = new JLabel("Get free API key at openrouter.ai/keys (no credit card needed)");
+        openRouterInfo2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        openRouterInfo2.setForeground(Color.GRAY);
+        JPanel infoPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        infoPanel2.add(openRouterInfo2);
+        openRouterPanel.add(infoPanel2);
 
         // Advanced Settings
         JPanel advancedPanel = createSection("Advanced");
@@ -151,13 +226,13 @@ public class SettingsPanel extends JPanel {
         mainPanel.add(subLabel);
         mainPanel.add(Box.createVerticalStrut(20));
         mainPanel.add(providerPanel);
-        mainPanel.add(Box.createVerticalStrut(12));
-        mainPanel.add(apiKeyPanel);
-        mainPanel.add(Box.createVerticalStrut(12));
+        mainPanel.add(Box.createVerticalStrut(15));
         mainPanel.add(openaiPanel);
-        mainPanel.add(Box.createVerticalStrut(12));
+        mainPanel.add(Box.createVerticalStrut(15));
         mainPanel.add(azurePanel);
-        mainPanel.add(Box.createVerticalStrut(12));
+        mainPanel.add(Box.createVerticalStrut(15));
+        mainPanel.add(openRouterPanel);
+        mainPanel.add(Box.createVerticalStrut(15));
         mainPanel.add(advancedPanel);
         mainPanel.add(Box.createVerticalStrut(12));
         mainPanel.add(browserPanel);
@@ -193,9 +268,16 @@ public class SettingsPanel extends JPanel {
     }
 
     private void updateProviderVisibility() {
-        boolean isAzure = "Azure AI".equals(providerCombo.getSelectedItem());
+        String provider = (String) providerCombo.getSelectedItem();
+        boolean isOpenAI = "OpenAI".equals(provider);
+        boolean isAzure = "Azure AI".equals(provider);
+        boolean isOpenRouter = "OpenRouter".equals(provider);
+        
+        // Show only the relevant panel for selected provider
+        openaiPanel.setVisible(isOpenAI);
         azurePanel.setVisible(isAzure);
-        modelField.setEnabled(!isAzure);
+        openRouterPanel.setVisible(isOpenRouter);
+        
         revalidate();
         repaint();
     }
@@ -203,21 +285,45 @@ public class SettingsPanel extends JPanel {
     private void loadConfig() {
         providerCombo.setSelectedItem(config.getProvider());
         apiKeyField.setText(config.getApiKey());
+        azureApiKeyField.setText(config.getApiKey());
         modelField.setText(config.getModel());
         endpointField.setText(config.getEndpoint());
         deploymentField.setText(config.getDeployment());
+        openRouterApiKeyField.setText(config.getOpenRouterApiKey());
+        
+        // Set OpenRouter model (add if not in list)
+        String openRouterModel = config.getOpenRouterModel();
+        boolean found = false;
+        for (int i = 0; i < openRouterModelCombo.getItemCount(); i++) {
+            if (openRouterModelCombo.getItemAt(i).equals(openRouterModel)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found && openRouterModel != null && !openRouterModel.isBlank()) {
+            openRouterModelCombo.addItem(openRouterModel);
+        }
+        openRouterModelCombo.setSelectedItem(openRouterModel);
+        
         temperatureSlider.setValue((int) (config.getTemperature() * 100));
         tempValueLabel.setText(String.format("%.2f", config.getTemperature()));
         updateProviderVisibility();
     }
 
     private void saveConfig() {
+        String provider = (String) providerCombo.getSelectedItem();
+        String apiKey = "Azure AI".equals(provider) ? 
+            new String(azureApiKeyField.getPassword()) : 
+            new String(apiKeyField.getPassword());
+        
         config.updateConfig(
-            (String) providerCombo.getSelectedItem(),
-            new String(apiKeyField.getPassword()),
+            provider,
+            apiKey,
             modelField.getText().trim(),
             endpointField.getText().trim(),
             deploymentField.getText().trim(),
+            new String(openRouterApiKeyField.getPassword()),
+            (String) openRouterModelCombo.getSelectedItem(),
             temperatureSlider.getValue() / 100.0
         );
         updateStatus();
@@ -265,19 +371,28 @@ public class SettingsPanel extends JPanel {
         new Thread(() -> {
             try {
                 String response;
-                if ("Azure AI".equals(config.getProvider())) {
+                String provider = config.getProvider();
+                
+                if ("Azure AI".equals(provider)) {
                     AzureAIService.Configuration azureConfig = new AzureAIService.Configuration();
                     azureConfig.setEndpoint(config.getEndpoint());
                     azureConfig.setDeploymentName(config.getDeployment());
                     azureConfig.setApiKey(config.getApiKey());
                     azureConfig.setTemperature(0.1);
-                    response = new AzureAIService(azureConfig).ask("Say OK", "Say OK");
+                    response = new AzureAIService(azureConfig).testConnection();
+                } else if ("OpenRouter".equals(provider)) {
+                    com.vista.security.service.OpenRouterService.Configuration openRouterConfig = 
+                        new com.vista.security.service.OpenRouterService.Configuration();
+                    openRouterConfig.setApiKey(config.getOpenRouterApiKey());
+                    openRouterConfig.setModel(config.getOpenRouterModel());
+                    openRouterConfig.setTemperature(0.1);
+                    response = new com.vista.security.service.OpenRouterService(openRouterConfig).testConnection();
                 } else {
                     OpenAIService.Configuration openaiConfig = new OpenAIService.Configuration();
                     openaiConfig.setApiKey(config.getApiKey());
                     openaiConfig.setModel(config.getModel());
                     openaiConfig.setTemperature(0.1);
-                    response = new OpenAIService(openaiConfig).ask("Say OK", "Say OK");
+                    response = new OpenAIService(openaiConfig).testConnection();
                 }
 
                 SwingUtilities.invokeLater(() -> {
