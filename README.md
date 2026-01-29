@@ -478,4 +478,4 @@ VISTA is built on the shoulders of giants:
 
 </div>
 
-<!-- BUILD_INFO --> **Latest Build:** 20260129-100037 | **Version:** 2.8.0 | **Commit:** f2635f7
+<!-- BUILD_INFO --> **Latest Build:** 20260129-100618 | **Version:** 2.8.0 | **Commit:** 0e663f9
