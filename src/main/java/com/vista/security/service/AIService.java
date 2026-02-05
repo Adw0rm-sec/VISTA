@@ -1,5 +1,8 @@
 package com.vista.security.service;
 
+import com.vista.security.model.ChatMessage;
+import java.util.List;
+
 /**
  * Common interface for AI service providers.
  * Implementations handle communication with different AI backends.
@@ -21,6 +24,31 @@ public interface AIService {
      * @throws Exception if the request fails
      */
     String ask(String systemPrompt, String userPrompt) throws Exception;
+    
+    /**
+     * Send a message with full conversation history.
+     * This is more efficient as it doesn't repeat the system prompt every time.
+     * @param messages The conversation history (system, user, assistant messages)
+     * @return The AI's response
+     * @throws Exception if the request fails
+     */
+    default String askWithHistory(List<ChatMessage> messages) throws Exception {
+        // Default implementation: extract last system and user message
+        // Implementations should override this for proper conversation support
+        String systemPrompt = messages.stream()
+            .filter(m -> m.getRole() == ChatMessage.Role.SYSTEM)
+            .reduce((first, second) -> second) // Get last system message
+            .map(ChatMessage::getContent)
+            .orElse("");
+        
+        String userPrompt = messages.stream()
+            .filter(m -> m.getRole() == ChatMessage.Role.USER)
+            .reduce((first, second) -> second) // Get last user message
+            .map(ChatMessage::getContent)
+            .orElse("");
+        
+        return ask(systemPrompt, userPrompt);
+    }
     
     /**
      * Configuration holder for AI service settings.

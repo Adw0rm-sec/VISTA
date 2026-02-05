@@ -1,5 +1,6 @@
 package com.vista.security.core;
 
+import com.vista.security.model.ChatSession;
 import com.vista.security.ui.TestingSuggestionsPanel;
 
 import java.io.*;
@@ -151,7 +152,7 @@ public class SessionManager {
     /**
      * Save testing steps to disk.
      */
-    public void saveTestingSteps(List<TestingSuggestionsPanel.TestingStep> steps) {
+    public void saveTestingSteps(List<ChatSession.TestingStep> steps) {
         if (!initialized) initialize();
         
         try {
@@ -159,7 +160,7 @@ public class SessionManager {
             json.append("[\n");
             
             for (int i = 0; i < steps.size(); i++) {
-                TestingSuggestionsPanel.TestingStep step = steps.get(i);
+                ChatSession.TestingStep step = steps.get(i);
                 json.append("  {\n");
                 json.append("    \"stepName\": \"").append(escapeJson(step.stepName)).append("\",\n");
                 json.append("    \"request\": \"").append(escapeJson(step.request)).append("\",\n");
@@ -183,8 +184,8 @@ public class SessionManager {
     /**
      * Load testing steps from disk.
      */
-    public List<TestingSuggestionsPanel.TestingStep> loadTestingSteps() {
-        List<TestingSuggestionsPanel.TestingStep> steps = new ArrayList<>();
+    public List<ChatSession.TestingStep> loadTestingSteps() {
+        List<ChatSession.TestingStep> steps = new ArrayList<>();
         
         File file = new File(testingStepsFile);
         if (!file.exists()) return steps;
@@ -215,7 +216,7 @@ public class SessionManager {
                                 String response = extractString(stepJson, "response");
                                 String observation = extractString(stepJson, "observation");
                                 
-                                steps.add(new TestingSuggestionsPanel.TestingStep(stepName, request, response, observation));
+                                steps.add(new ChatSession.TestingStep(stepName, request, response, observation));
                             } catch (Exception e) {
                                 // Skip malformed step
                             }

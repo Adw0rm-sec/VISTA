@@ -269,6 +269,9 @@ public class PromptTemplateManager {
         // Quick Scan
         templates.add(createQuickVulnScan());
         
+        // Traffic Monitor Template - Unified Bug Bounty Analysis
+        templates.add(createTrafficBugBountyAnalysis());
+        
         // Clean up any built-in templates that were accidentally saved to disk
         cleanupBuiltInDuplicates();
     }
@@ -1000,6 +1003,147 @@ public class PromptTemplateManager {
         template.addTag("quick");
         template.addTag("scan");
         template.addTag("general");
+        return template;
+    }
+    
+    private PromptTemplate createTrafficBugBountyAnalysis() {
+        PromptTemplate template = new PromptTemplate(
+            "Traffic - Bug Bounty Hunter",
+            "Traffic Monitor",
+            "@vista",
+            "Comprehensive analysis for bug bounty hunters - finds hidden parameters, secrets, endpoints, and vulnerabilities in ALL file types",
+            "You are an elite bug bounty hunter and security researcher. Analyze responses for security issues that bug bounty hunters typically miss. Focus on HIGH-CONFIDENCE, EXPLOITABLE findings only.",
+            """
+            Analyze this HTTP response for security issues that bug bounty hunters often overlook.
+            
+            REQUEST DETAILS:
+            URL: {{URL}}
+            Method: {{METHOD}}
+            Status: {{STATUS}}
+            Content-Type: {{CONTENT_TYPE}}
+            Size: {{SIZE}} bytes
+            
+            RESPONSE CONTENT:
+            {{CONTENT}}
+            
+            ═══════════════════════════════════════════════════════════════════════
+            YOUR MISSION: Find REAL, EXPLOITABLE security issues
+            ═══════════════════════════════════════════════════════════════════════
+            
+            WHAT TO LOOK FOR (HIGH-PRIORITY):
+            
+            1. HIDDEN API ENDPOINTS
+               ✓ Undocumented API paths in JavaScript (/api/admin, /internal/debug)
+               ✓ GraphQL endpoints and introspection
+               ✓ WebSocket endpoints
+               ✓ Internal microservice URLs
+               ✓ Admin/debug endpoints
+            
+            2. HARDCODED SECRETS & CREDENTIALS
+               ✓ API keys (AWS, Google, Stripe, etc.)
+               ✓ OAuth tokens and JWT tokens
+               ✓ Database credentials
+               ✓ Private keys and certificates
+               ✓ Webhook secrets
+               ✓ Service account credentials
+            
+            3. HIDDEN PARAMETERS
+               ✓ Undocumented query parameters
+               ✓ Hidden form fields with sensitive data
+               ✓ API parameters in JavaScript code
+               ✓ Debug/admin parameters (debug=true, admin=1)
+               ✓ Rate limit bypass parameters
+            
+            4. SENSITIVE DATA EXPOSURE
+               ✓ Email addresses, phone numbers, SSNs
+               ✓ User IDs, session tokens
+               ✓ Internal IP addresses and hostnames
+               ✓ Version numbers and stack traces
+               ✓ Database schema information
+            
+            5. AUTHENTICATION & AUTHORIZATION ISSUES
+               ✓ Weak session tokens
+               ✓ Predictable IDs (IDOR potential)
+               ✓ Missing authentication checks
+               ✓ Role/permission information
+               ✓ OAuth misconfigurations
+            
+            6. INJECTION POINTS
+               ✓ Unvalidated user input in JavaScript
+               ✓ DOM XSS sinks (innerHTML, eval, etc.)
+               ✓ SQL query construction
+               ✓ Command execution patterns
+               ✓ Template injection patterns
+            
+            7. BUSINESS LOGIC FLAWS
+               ✓ Price manipulation opportunities
+               ✓ Quantity/amount tampering
+               ✓ Discount code patterns
+               ✓ Referral/reward system abuse
+               ✓ Race condition opportunities
+            
+            8. CONFIGURATION ISSUES
+               ✓ Debug mode enabled
+               ✓ Verbose error messages
+               ✓ Source maps exposed
+               ✓ Development endpoints in production
+               ✓ CORS misconfigurations
+            
+            ═══════════════════════════════════════════════════════════════════════
+            CRITICAL RULES TO AVOID FALSE POSITIVES
+            ═══════════════════════════════════════════════════════════════════════
+            
+            DO NOT REPORT:
+            ✗ Variable names without actual values (e.g., "let apiKey;" without value)
+            ✗ Function parameters (e.g., function login(username, password))
+            ✗ Comments about security (unless they contain real secrets)
+            ✗ Example/demo/test URLs (example.com, localhost, test.com)
+            ✗ Empty hidden fields or standard CSRF tokens
+            ✗ TODO comments or documentation
+            ✗ Console.log statements (unless leaking real sensitive data)
+            ✗ Standard library functions
+            ✗ Placeholder values (xxx, 123, test, demo)
+            
+            ONLY REPORT IF:
+            ✓ You can see the ACTUAL secret/key/token value
+            ✓ The endpoint is a REAL URL path (not a comment)
+            ✓ The parameter has a REAL value or is used in actual API calls
+            ✓ The finding is EXPLOITABLE (explain how)
+            ✓ You are 90%+ confident this is a real issue
+            
+            ═══════════════════════════════════════════════════════════════════════
+            OUTPUT FORMAT (USE EXACTLY THIS FORMAT)
+            ═══════════════════════════════════════════════════════════════════════
+            
+            For EACH finding, use this format:
+            
+            - Type: [ENDPOINT|SECRET|PARAMETER|SENSITIVE_DATA|INJECTION|AUTH_ISSUE|BUSINESS_LOGIC|CONFIG_ISSUE]
+            - Severity: [CRITICAL|HIGH|MEDIUM|LOW]
+            - Evidence: [exact code/text snippet, max 150 chars]
+            - Description: [brief explanation of the issue and exploitation potential, max 200 chars]
+            
+            Example:
+            - Type: SECRET
+            - Severity: CRITICAL
+            - Evidence: const apiKey = "sk_live_51H7xYz2eZvKYlo2C..."
+            - Description: Stripe live API key hardcoded in JavaScript. Can be used to access payment data and create charges.
+            
+            ═══════════════════════════════════════════════════════════════════════
+            
+            If NO HIGH-CONFIDENCE findings, respond with:
+            "No high-confidence security issues found."
+            
+            REMEMBER: Quality over quantity. Only report REAL, EXPLOITABLE issues.
+            Be the bug bounty hunter who finds what others miss, but don't cry wolf!
+            """
+        );
+        template.addTag("traffic");
+        template.addTag("bug-bounty");
+        template.addTag("comprehensive");
+        template.addTag("javascript");
+        template.addTag("html");
+        template.addTag("json");
+        template.addTag("api");
         return template;
     }
 }

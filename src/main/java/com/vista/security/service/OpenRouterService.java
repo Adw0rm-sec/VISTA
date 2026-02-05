@@ -1,11 +1,13 @@
 package com.vista.security.service;
 
+import com.vista.security.model.ChatMessage;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * OpenRouter API service implementation.
@@ -90,6 +92,27 @@ public class OpenRouterService implements AIService {
         
         return parseResponse(response);
     }
+    
+    @Override
+    public String askWithHistory(List<ChatMessage> messages) throws Exception {
+        String url = BASE_URL + "/chat/completions";
+        String body = buildRequestBodyWithHistory(messages, config.getTemperature());
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(REQUEST_TIMEOUT)
+                .header("Authorization", "Bearer " + config.getApiKey())
+                .header("Content-Type", "application/json")
+                .header("HTTP-Referer", "https://github.com/Adw0rm-sec/VISTA")
+                .header("X-Title", "VISTA Security Testing")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        
+        HttpResponse<String> response = httpClient.send(request, 
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        
+        return parseResponse(response);
+    }
 
     private String buildRequestBody(String systemPrompt, String userPrompt, double temperature) {
         return """
@@ -106,6 +129,42 @@ public class OpenRouterService implements AIService {
                     temperature,
                     toJsonString(systemPrompt), 
                     toJsonString(userPrompt)
+                );
+    }
+    
+    private String buildRequestBodyWithHistory(List<ChatMessage> messages, double temperature) {
+        StringBuilder messagesJson = new StringBuilder();
+        messagesJson.append("[\n");
+        
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage msg = messages.get(i);
+            String role = switch (msg.getRole()) {
+                case SYSTEM -> "system";
+                case USER -> "user";
+                case ASSISTANT -> "assistant";
+            };
+            
+            messagesJson.append("        {\"role\":\"").append(role).append("\",\"content\":")
+                       .append(toJsonString(msg.getContent())).append("}");
+            
+            if (i < messages.size() - 1) {
+                messagesJson.append(",");
+            }
+            messagesJson.append("\n");
+        }
+        
+        messagesJson.append("    ]");
+        
+        return """
+                {
+                    "model": %s,
+                    "temperature": %.2f,
+                    "messages": %s
+                }
+                """.formatted(
+                    toJsonString(config.getModel()), 
+                    temperature,
+                    messagesJson.toString()
                 );
     }
     

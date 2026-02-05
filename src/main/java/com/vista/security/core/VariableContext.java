@@ -4,6 +4,7 @@ import burp.IExtensionHelpers;
 import burp.IHttpRequestResponse;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
+import com.vista.security.model.ChatSession;
 import com.vista.security.ui.TestingSuggestionsPanel;
 
 import java.util.HashMap;
@@ -22,7 +23,7 @@ public class VariableContext {
     private final ResponseAnalysis deepResponseAnalysis;
     private final ReflectionAnalyzer.ReflectionAnalysis reflectionAnalysis;
     private final List<WAFDetector.WAFInfo> wafDetection;
-    private final List<TestingSuggestionsPanel.TestingStep> testingHistory;
+    private final List<ChatSession.TestingStep> testingHistory;
     private final List<TestingSuggestionsPanel.ConversationMessage> conversationHistory;
     private final Map<String, String> customVariables;
     private String userQuery; // User's current question/prompt
@@ -33,7 +34,7 @@ public class VariableContext {
                           ResponseAnalysis deepResponseAnalysis,
                           ReflectionAnalyzer.ReflectionAnalysis reflectionAnalysis,
                           List<WAFDetector.WAFInfo> wafDetection,
-                          List<TestingSuggestionsPanel.TestingStep> testingHistory,
+                          List<ChatSession.TestingStep> testingHistory,
                           List<TestingSuggestionsPanel.ConversationMessage> conversationHistory) {
         this.helpers = helpers;
         this.request = request;
@@ -302,7 +303,7 @@ public class VariableContext {
         if (testingHistory == null || testingHistory.isEmpty()) return "(No testing history)";
         StringBuilder history = new StringBuilder();
         for (int i = 0; i < testingHistory.size(); i++) {
-            TestingSuggestionsPanel.TestingStep step = testingHistory.get(i);
+            ChatSession.TestingStep step = testingHistory.get(i);
             history.append("Test ").append(i + 1).append(": ").append(step.observation).append("\n");
         }
         return history.toString();

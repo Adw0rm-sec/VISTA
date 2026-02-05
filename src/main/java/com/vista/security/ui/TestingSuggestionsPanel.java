@@ -2,6 +2,8 @@ package com.vista.security.ui;
 
 import burp.*;
 import com.vista.security.core.*;
+import com.vista.security.model.ChatMessage;
+import com.vista.security.model.ChatSession;
 import com.vista.security.model.PromptTemplate;
 import com.vista.security.service.AzureAIService;
 import com.vista.security.service.OpenAIService;
@@ -34,6 +36,7 @@ public class TestingSuggestionsPanel extends JPanel {
     private final ResponseAnalyzer responseAnalyzer;
     private final PromptTemplateManager templateManager;
     private final PayloadLibraryAIIntegration payloadLibraryAI;
+    private final ChatSessionManager chatSessionManager;
 
     // Request/Response display
     private final JTextArea requestArea = new JTextArea();
@@ -71,7 +74,7 @@ public class TestingSuggestionsPanel extends JPanel {
     // Current state
     private IHttpRequestResponse currentRequest;
     private final List<ConversationMessage> conversationHistory = new ArrayList<>();
-    private final List<TestingStep> testingSteps = new ArrayList<>(); // Track testing history
+    // NOTE: testingSteps is now stored per-session in ChatSession, not globally
     private String currentTestingPlan = null; // For interactive mode
     private int currentStep = 0; // Track current step in interactive mode
 
@@ -83,6 +86,7 @@ public class TestingSuggestionsPanel extends JPanel {
         this.responseAnalyzer = new ResponseAnalyzer(helpers);
         this.templateManager = PromptTemplateManager.getInstance();
         this.payloadLibraryAI = new PayloadLibraryAIIntegration();
+        this.chatSessionManager = ChatSessionManager.getInstance();
 
         setLayout(new BorderLayout(0, 0));
         buildUI();
@@ -188,9 +192,9 @@ public class TestingSuggestionsPanel extends JPanel {
         clearBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         clearBtn.addActionListener(e -> clearConversation());
         
-        JButton newSessionBtn = new JButton("🆕 New Session");
+        JButton newSessionBtn = new JButton("🆕 New Chat");
         newSessionBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        newSessionBtn.setToolTipText("Start fresh session (clears conversation but keeps current request)");
+        newSessionBtn.setToolTipText("Start fresh conversation (keeps current request)");
         newSessionBtn.addActionListener(e -> startNewSession());
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
@@ -392,14 +396,25 @@ public class TestingSuggestionsPanel extends JPanel {
      * Shows the multi-request manager dialog
      */
     private void showMultiRequestManager() {
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Manage Attached Requests", true);
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession == null) {
+            JOptionPane.showMessageDialog(this,
+                "No active session.\n\nPlease send a request from Burp Repeater first.",
+                "No Active Session",
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        List<IHttpRequestResponse> sessionAttachedRequests = new ArrayList<>(activeSession.getAttachedRequests());
+        
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Manage Attached Requests (Active Session)", true);
         dialog.setLayout(new BorderLayout(10, 10));
         dialog.setSize(800, 600);
         
         // List of attached requests
         DefaultListModel<String> listModel = new DefaultListModel<>();
-        for (int i = 0; i < attachedRequests.size(); i++) {
-            IHttpRequestResponse req = attachedRequests.get(i);
+        for (int i = 0; i < sessionAttachedRequests.size(); i++) {
+            IHttpRequestResponse req = sessionAttachedRequests.get(i);
             String summary = getRequestSummary(req, i + 1);
             listModel.addElement(summary);
         }
@@ -409,7 +424,7 @@ public class TestingSuggestionsPanel extends JPanel {
         requestList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION); // Allow multi-select
         
         JScrollPane listScroll = new JScrollPane(requestList);
-        listScroll.setBorder(BorderFactory.createTitledBorder("Attached Requests (" + attachedRequests.size() + ")"));
+        listScroll.setBorder(BorderFactory.createTitledBorder("Attached Requests (" + sessionAttachedRequests.size() + ")"));
         
         // Preview area
         JTextArea previewArea = new JTextArea();
@@ -422,8 +437,8 @@ public class TestingSuggestionsPanel extends JPanel {
         requestList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int selectedIndex = requestList.getSelectedIndex();
-                if (selectedIndex >= 0 && selectedIndex < attachedRequests.size()) {
-                    IHttpRequestResponse req = attachedRequests.get(selectedIndex);
+                if (selectedIndex >= 0 && selectedIndex < sessionAttachedRequests.size()) {
+                    IHttpRequestResponse req = sessionAttachedRequests.get(selectedIndex);
                     String reqText = new String(req.getRequest(), java.nio.charset.StandardCharsets.UTF_8);
                     String respText = req.getResponse() != null ? 
                         new String(req.getResponse(), java.nio.charset.StandardCharsets.UTF_8) : "(No response)";
@@ -451,8 +466,18 @@ public class TestingSuggestionsPanel extends JPanel {
             int[] selectedIndices = requestList.getSelectedIndices();
             if (selectedIndices.length > 0) {
                 // Remove in reverse order to maintain indices
+                List<IHttpRequestResponse> toRemove = new ArrayList<>();
                 for (int i = selectedIndices.length - 1; i >= 0; i--) {
-                    attachedRequests.remove(selectedIndices[i]);
+                    toRemove.add(sessionAttachedRequests.get(selectedIndices[i]));
+                }
+                // Remove from session
+                for (IHttpRequestResponse req : toRemove) {
+                    sessionAttachedRequests.remove(req);
+                }
+                // Update session
+                activeSession.clearAttachedRequests();
+                for (IHttpRequestResponse req : sessionAttachedRequests) {
+                    activeSession.addAttachedRequest(req);
                 }
                 updateMultiRequestLabel();
                 dialog.dispose();
@@ -468,9 +493,9 @@ public class TestingSuggestionsPanel extends JPanel {
         JButton clearAllBtn = new JButton("🗑️ Clear All");
         clearAllBtn.addActionListener(e -> {
             if (JOptionPane.showConfirmDialog(dialog, 
-                "Remove all " + attachedRequests.size() + " attached requests?",
+                "Remove all " + sessionAttachedRequests.size() + " attached requests?",
                 "Confirm Clear All", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-                attachedRequests.clear();
+                activeSession.clearAttachedRequests();
                 updateMultiRequestLabel();
                 dialog.dispose();
             }
@@ -514,7 +539,9 @@ public class TestingSuggestionsPanel extends JPanel {
      * Updates the multi-request label
      */
     private void updateMultiRequestLabel() {
-        int count = attachedRequests.size();
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        int count = activeSession != null ? activeSession.getAttachedRequestCount() : 0;
+        
         if (count == 0) {
             multiRequestLabel.setText("No requests attached");
             multiRequestLabel.setForeground(new Color(120, 120, 125));
@@ -544,6 +571,15 @@ public class TestingSuggestionsPanel extends JPanel {
     }
     
     private void attachTestRequest() {
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession == null) {
+            JOptionPane.showMessageDialog(this,
+                "No active session.\n\nPlease send a request from Burp Repeater first.",
+                "No Active Session",
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
         // Show dialog to paste request/response
         JPanel dialogPanel = new JPanel(new BorderLayout(8, 8));
         
@@ -576,7 +612,7 @@ public class TestingSuggestionsPanel extends JPanel {
             String respText = responseArea.getText().trim();
             
             if (!reqText.isEmpty()) {
-                // Create a mock IHttpRequestResponse and add to list
+                // Create a mock IHttpRequestResponse and add to active session
                 IHttpRequestResponse newRequest = new IHttpRequestResponse() {
                     private byte[] request = reqText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
                     private byte[] response = respText.isEmpty() ? null : respText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -586,10 +622,10 @@ public class TestingSuggestionsPanel extends JPanel {
                     @Override public burp.IHttpService getHttpService() { return null; }
                 };
                 
-                attachedRequests.add(newRequest);
+                activeSession.addAttachedRequest(newRequest);
                 updateMultiRequestLabel();
                 
-                appendSuggestion("SYSTEM", "✓ Request attached (" + reqText.length() + " bytes). Total: " + attachedRequests.size());
+                appendSuggestion("SYSTEM", "✓ Request attached (" + reqText.length() + " bytes). Total: " + activeSession.getAttachedRequestCount());
             }
         }
     }
@@ -600,19 +636,30 @@ public class TestingSuggestionsPanel extends JPanel {
         
         interactiveChatField.setText("");
         
+        // Get active session
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession == null) {
+            appendSuggestion("SYSTEM", "⚠️ No active session. Please send a request from Burp Repeater first.");
+            return;
+        }
+        
         callbacks.printOutput("[VISTA] sendInteractiveMessage called with: " + message);
-        callbacks.printOutput("[VISTA] Attached requests count: " + attachedRequests.size());
+        callbacks.printOutput("[VISTA] Active session: " + activeSession.getSessionId());
+        
+        // Get attached requests from ACTIVE SESSION ONLY
+        List<IHttpRequestResponse> sessionAttachedRequests = new ArrayList<>(activeSession.getAttachedRequests());
+        callbacks.printOutput("[VISTA] Attached requests count for active session: " + sessionAttachedRequests.size());
         
         // Add user message to conversation
         appendSuggestion("YOU", message);
         conversationHistory.add(new ConversationMessage("user", message));
         
-        // If requests attached, add them to context
-        if (!attachedRequests.isEmpty()) {
-            callbacks.printOutput("[VISTA] Processing " + attachedRequests.size() + " attached request(s)...");
+        // If requests attached, add them to context AND store in testingSteps
+        if (!sessionAttachedRequests.isEmpty()) {
+            callbacks.printOutput("[VISTA] Processing " + sessionAttachedRequests.size() + " attached request(s)...");
             
-            for (int i = 0; i < attachedRequests.size(); i++) {
-                IHttpRequestResponse req = attachedRequests.get(i);
+            for (int i = 0; i < sessionAttachedRequests.size(); i++) {
+                IHttpRequestResponse req = sessionAttachedRequests.get(i);
                 String reqText = new String(req.getRequest(), java.nio.charset.StandardCharsets.UTF_8);
                 String respText = req.getResponse() != null ? 
                     new String(req.getResponse(), java.nio.charset.StandardCharsets.UTF_8) : "";
@@ -620,43 +667,43 @@ public class TestingSuggestionsPanel extends JPanel {
                 callbacks.printOutput("[VISTA] Request #" + (i+1) + " length: " + reqText.length());
                 callbacks.printOutput("[VISTA] Response #" + (i+1) + " length: " + respText.length());
                 
-                // Store this test step
-                testingSteps.add(new TestingStep(
-                    "Step " + (testingSteps.size() + 1) + (attachedRequests.size() > 1 ? " (Request " + (i+1) + ")" : ""),
+                // Store this test step in ACTIVE SESSION (IMPORTANT: Don't clear these until message is sent!)
+                activeSession.addTestingStep(new ChatSession.TestingStep(
+                    "Step " + (activeSession.getTestingStepCount() + 1) + (sessionAttachedRequests.size() > 1 ? " (Request " + (i+1) + ")" : ""),
                     reqText,
                     respText,
                     message
                 ));
             }
             
-            callbacks.printOutput("[VISTA] Added to testingSteps. Total steps: " + testingSteps.size());
+            callbacks.printOutput("[VISTA] Added to session testingSteps. Total steps: " + activeSession.getTestingStepCount());
             
             // Show clear feedback
-            if (attachedRequests.size() == 1) {
-                String reqText = new String(attachedRequests.get(0).getRequest(), java.nio.charset.StandardCharsets.UTF_8);
-                String respText = attachedRequests.get(0).getResponse() != null ? 
-                    new String(attachedRequests.get(0).getResponse(), java.nio.charset.StandardCharsets.UTF_8) : "";
+            if (sessionAttachedRequests.size() == 1) {
+                String reqText = new String(sessionAttachedRequests.get(0).getRequest(), java.nio.charset.StandardCharsets.UTF_8);
+                String respText = sessionAttachedRequests.get(0).getResponse() != null ? 
+                    new String(sessionAttachedRequests.get(0).getResponse(), java.nio.charset.StandardCharsets.UTF_8) : "";
                 appendSuggestion("SYSTEM", "📎 Request/Response attached and sent to AI for analysis");
                 appendSuggestion("SYSTEM", "   Request: " + truncate(reqText.split("\n")[0], 80));
                 appendSuggestion("SYSTEM", "   Response: " + (respText.isEmpty() ? "(empty)" : respText.length() + " bytes"));
             } else {
-                appendSuggestion("SYSTEM", "📎 " + attachedRequests.size() + " requests/responses sent to AI for analysis");
-                for (int i = 0; i < attachedRequests.size(); i++) {
-                    String reqText = new String(attachedRequests.get(i).getRequest(), java.nio.charset.StandardCharsets.UTF_8);
+                appendSuggestion("SYSTEM", "📎 " + sessionAttachedRequests.size() + " requests/responses sent to AI for analysis");
+                for (int i = 0; i < sessionAttachedRequests.size(); i++) {
+                    String reqText = new String(sessionAttachedRequests.get(i).getRequest(), java.nio.charset.StandardCharsets.UTF_8);
                     appendSuggestion("SYSTEM", "   #" + (i+1) + ": " + truncate(reqText.split("\n")[0], 70));
                 }
             }
             
-            // Clear attachments after sending
-            attachedRequests.clear();
+            // Clear attachments from ACTIVE SESSION ONLY (after storing in testingSteps)
+            activeSession.clearAttachedRequests();
             updateMultiRequestLabel();
             
-            callbacks.printOutput("[VISTA] Attachments cleared");
+            callbacks.printOutput("[VISTA] Attachments cleared from active session");
         } else {
             callbacks.printOutput("[VISTA] No requests attached - sending message only");
         }
         
-        // Process with AI
+        // Process with AI (testingSteps will be used in handleInteractiveAssistant)
         statusLabel.setText("Processing your observation...");
         callbacks.printOutput("[VISTA] Starting AI processing thread");
         new Thread(() -> handleInteractiveAssistant(message), "VISTA-Interactive").start();
@@ -812,23 +859,55 @@ public class TestingSuggestionsPanel extends JPanel {
 
             String summary = extractRequestSummary(reqText);
             
-            // If this is a NEW request, start a NEW session
+            // If this is a NEW request, create a NEW CHAT SESSION (don't clear old one!)
             if (isNewRequest) {
-                // Save current session before clearing
-                if (!conversationHistory.isEmpty()) {
-                    SessionManager.getInstance().saveConversationHistory(conversationHistory);
+                // Get current template's system prompt
+                String systemPrompt = getCurrentSystemPrompt();
+                String requestUrl = extractRequestUrl(reqText);
+                
+                // Create new chat session (old sessions are preserved in ChatSessionManager)
+                ChatSession newSession = chatSessionManager.createSession(requestUrl, systemPrompt);
+                
+                // Store the request/response in the session
+                newSession.setRequestResponse(request);
+                
+                // Save old conversation to the previous session if it exists
+                ChatSession previousSession = chatSessionManager.getActiveSession();
+                if (previousSession != null && !conversationHistory.isEmpty()) {
+                    // Transfer old conversation history to previous session
+                    for (ConversationMessage msg : conversationHistory) {
+                        if ("USER".equals(msg.role)) {
+                            previousSession.addUserMessage(msg.content, null);
+                        } else if ("AI".equals(msg.role)) {
+                            previousSession.addAssistantMessage(msg.content);
+                        }
+                    }
                 }
                 
-                // Clear conversation for new request
-                clearConversation();
+                // Clear UI conversation for new session (but old session is saved in manager!)
+                conversationHistory.clear();
+                
+                // Clear session-specific data from new session
+                newSession.clearTestingSteps();
+                newSession.clearAttachedRequests();
+                
+                attachedRequests.clear();
+                suggestionsArea.setText("");
+                currentTestingPlan = null;
+                currentStep = 0;
+                
+                // Set new session as active
+                chatSessionManager.setActiveSession(newSession.getSessionId());
                 
                 statusLabel.setText("New Session: " + summary);
-                appendSuggestion("SYSTEM", "🆕 NEW SESSION STARTED\n\n" +
-                    "Request loaded: " + summary + "\n\n" +
-                    "Previous conversation cleared. This is a fresh session for this request.\n\n" +
+                
+                appendSuggestion("SYSTEM", "🆕 NEW REQUEST LOADED\n\n" +
+                    "Request: " + summary + "\n" +
+                    "Session ID: " + newSession.getSessionId().substring(0, 12) + "...\n\n" +
+                    "Previous conversation cleared. Starting fresh!\n\n" +
                     "Ask me how to test for vulnerabilities!");
                 
-                callbacks.printOutput("[VISTA] New session started for: " + summary);
+                callbacks.printOutput("[VISTA] New chat session created: " + newSession.getSessionId());
             } else {
                 // Same request, continue existing session
                 statusLabel.setText("Loaded: " + summary);
@@ -947,35 +1026,88 @@ public class TestingSuggestionsPanel extends JPanel {
             String responseText = currentRequest.getResponse() != null ? 
                 new String(currentRequest.getResponse(), java.nio.charset.StandardCharsets.UTF_8) : "";
 
-            // Check if a template is selected
-            String selectedTemplate = (String) templateSelector.getSelectedItem();
-            String prompt;
+            // Get active chat session
+            ChatSession activeSession = chatSessionManager.getActiveSession();
             
-            if (selectedTemplate != null && !selectedTemplate.startsWith("--")) {
-                // Use template
-                PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
-                if (template != null) {
-                    // Build variable context
-                    VariableContext context = buildVariableContext(userQuery, requestText, responseText);
-                    context.setUserQuery(userQuery); // Set the user's actual question
-                    
-                    // Process template with variables
-                    String processedTemplate = templateManager.processTemplate(template, context);
-                    
-                    // IMPORTANT: Append user's query to ensure AI responds to their specific question
-                    prompt = processedTemplate + "\n\n=== USER'S SPECIFIC QUESTION ===\n" + userQuery + 
-                             "\n\nIMPORTANT: Address the user's specific question above while following the template guidance.";
-                } else {
-                    // Fallback to default
-                    prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+            // Build enhanced user message with attached requests if any
+            String enhancedUserQuery = userQuery;
+            List<ChatSession.TestingStep> sessionTestingSteps = activeSession != null ? 
+                activeSession.getTestingSteps() : new ArrayList<>();
+            
+            if (!sessionTestingSteps.isEmpty()) {
+                // Get the most recent testing steps (attached requests)
+                StringBuilder attachedContext = new StringBuilder();
+                attachedContext.append(userQuery).append("\n\n");
+                attachedContext.append("=== ATTACHED REQUEST/RESPONSE FOR ANALYSIS ===\n\n");
+                
+                // Include the most recent attached requests (last 3 max to avoid token overflow)
+                int startIndex = Math.max(0, sessionTestingSteps.size() - 3);
+                for (int i = startIndex; i < sessionTestingSteps.size(); i++) {
+                    ChatSession.TestingStep step = sessionTestingSteps.get(i);
+                    attachedContext.append("--- ").append(step.stepName).append(" ---\n");
+                    attachedContext.append("User's Observation: ").append(step.observation).append("\n\n");
+                    attachedContext.append("REQUEST:\n");
+                    attachedContext.append(truncate(step.request, 2000)).append("\n\n");
+                    if (step.response != null && !step.response.isEmpty()) {
+                        attachedContext.append("RESPONSE:\n");
+                        attachedContext.append(truncate(step.response, 1500)).append("\n\n");
+                    }
                 }
+                
+                enhancedUserQuery = attachedContext.toString();
+                callbacks.printOutput("[VISTA] Enhanced user query with " + (sessionTestingSteps.size() - startIndex) + " attached requests");
+                callbacks.printOutput("[VISTA] Enhanced query length: " + enhancedUserQuery.length());
             } else {
-                // Use default prompt building
-                prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+                callbacks.printOutput("[VISTA] No testingSteps found in session - using plain user query");
             }
             
-            // Call AI
-            String response = callAI(prompt);
+            // Add user message to session
+            if (activeSession != null) {
+                String requestUrl = extractRequestUrl(requestText);
+                activeSession.addUserMessage(enhancedUserQuery, requestUrl);
+            }
+            
+            // Check if a template is selected
+            String selectedTemplate = (String) templateSelector.getSelectedItem();
+            String response;
+            
+            // Use chat session history if available
+            if (activeSession != null && activeSession.getExchangeCount() > 0) {
+                // Continue conversation with full history (token efficient!)
+                response = callAIWithHistory(activeSession.getMessages());
+                callbacks.printOutput("[VISTA] Using chat session history - Token efficient mode!");
+            } else {
+                // First message - build full prompt
+                String prompt;
+                if (selectedTemplate != null && !selectedTemplate.startsWith("--")) {
+                    // Use template
+                    PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
+                    if (template != null) {
+                        // Build variable context
+                        VariableContext context = buildVariableContext(userQuery, requestText, responseText);
+                        context.setUserQuery(userQuery);
+                        
+                        // Process template with variables
+                        String processedTemplate = templateManager.processTemplate(template, context);
+                        
+                        prompt = processedTemplate + "\n\n=== USER'S SPECIFIC QUESTION ===\n" + enhancedUserQuery + 
+                                 "\n\nIMPORTANT: Address the user's specific question above while following the template guidance.";
+                    } else {
+                        prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+                    }
+                } else {
+                    prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+                }
+                
+                response = callAI(prompt);
+            }
+            
+            // Add AI response to session
+            if (activeSession != null) {
+                activeSession.addAssistantMessage(response);
+                callbacks.printOutput("[VISTA] Session " + activeSession.getSessionId() + 
+                    " now has " + activeSession.getExchangeCount() + " exchanges");
+            }
             
             conversationHistory.add(new ConversationMessage("assistant", response));
             
@@ -999,6 +1131,7 @@ public class TestingSuggestionsPanel extends JPanel {
                 
                 appendSuggestion("SYSTEM", "❌ Error: " + e.getMessage());
                 statusLabel.setText("Error");
+                e.printStackTrace();
             });
         }
     }
@@ -1218,10 +1351,14 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Build testing history context
         StringBuilder testingHistory = new StringBuilder();
-        if (!testingSteps.isEmpty()) {
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        List<ChatSession.TestingStep> sessionTestingSteps = activeSession != null ? 
+            activeSession.getTestingSteps() : new ArrayList<>();
+        
+        if (!sessionTestingSteps.isEmpty()) {
             testingHistory.append("\n\nTESTING HISTORY (What user actually tested):\n");
-            for (int i = 0; i < testingSteps.size(); i++) {
-                TestingStep step = testingSteps.get(i);
+            for (int i = 0; i < sessionTestingSteps.size(); i++) {
+                ChatSession.TestingStep step = sessionTestingSteps.get(i);
                 testingHistory.append("\n--- TEST ").append(i + 1).append(" ---\n");
                 testingHistory.append("User's Observation: ").append(step.observation).append("\n");
                 testingHistory.append("Request Tested:\n").append(truncate(step.request, 1000)).append("\n");
@@ -1402,6 +1539,36 @@ public class TestingSuggestionsPanel extends JPanel {
         }
     }
     
+    /**
+     * Call AI with full conversation history (token efficient!).
+     * System prompt is sent only once, not repeated with every message.
+     */
+    private String callAIWithHistory(java.util.List<ChatMessage> messages) throws Exception {
+        AIConfigManager config = AIConfigManager.getInstance();
+        
+        if ("Azure AI".equalsIgnoreCase(config.getProvider())) {
+            AzureAIService.Configuration c = new AzureAIService.Configuration();
+            c.setEndpoint(config.getEndpoint());
+            c.setDeploymentName(config.getDeployment());
+            c.setApiKey(config.getAzureApiKey());
+            c.setTemperature(config.getTemperature());
+            return new AzureAIService(c).askWithHistory(messages);
+        } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
+            com.vista.security.service.OpenRouterService.Configuration c = 
+                new com.vista.security.service.OpenRouterService.Configuration();
+            c.setApiKey(config.getOpenRouterApiKey());
+            c.setModel(config.getOpenRouterModel());
+            c.setTemperature(config.getTemperature());
+            return new com.vista.security.service.OpenRouterService(c).askWithHistory(messages);
+        } else {
+            OpenAIService.Configuration c = new OpenAIService.Configuration();
+            c.setApiKey(config.getOpenAIApiKey());
+            c.setModel(config.getModel());
+            c.setTemperature(config.getTemperature());
+            return new OpenAIService(c).askWithHistory(messages);
+        }
+    }
+    
     private VariableContext buildVariableContext(String userQuery, String requestText, String responseText) {
         // Gather all required data
         ReflectionAnalyzer.ReflectionAnalysis reflectionAnalysis = null;
@@ -1420,6 +1587,11 @@ public class TestingSuggestionsPanel extends JPanel {
         // WAF detection
         List<WAFDetector.WAFInfo> wafList = WAFDetector.detectWAF(responseText, responseText, extractStatusCode(responseText));
         
+        // Get session-specific testing steps
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        List<ChatSession.TestingStep> sessionTestingSteps = activeSession != null ? 
+            activeSession.getTestingSteps() : new ArrayList<>();
+        
         // Create context with all required parameters
         VariableContext context = new VariableContext(
             helpers,
@@ -1428,7 +1600,7 @@ public class TestingSuggestionsPanel extends JPanel {
             respAnalysis,
             reflectionAnalysis,
             wafList,
-            testingSteps,
+            sessionTestingSteps,
             conversationHistory
         );
         
@@ -1444,7 +1616,14 @@ public class TestingSuggestionsPanel extends JPanel {
 
     private void clearConversation() {
         conversationHistory.clear();
-        testingSteps.clear();
+        
+        // Clear session-specific data
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession != null) {
+            activeSession.clearTestingSteps();
+            activeSession.clearAttachedRequests();
+        }
+        
         attachedRequests.clear();
         suggestionsArea.setText("");
         currentTestingPlan = null;
@@ -1471,7 +1650,14 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Clear conversation
         conversationHistory.clear();
-        testingSteps.clear();
+        
+        // Clear session-specific data
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession != null) {
+            activeSession.clearTestingSteps();
+            activeSession.clearAttachedRequests();
+        }
+        
         attachedRequests.clear();
         suggestionsArea.setText("");
         currentTestingPlan = null;
@@ -1555,7 +1741,11 @@ public class TestingSuggestionsPanel extends JPanel {
      * Shows the testing history in a dialog
      */
     private void showTestingHistory() {
-        if (testingSteps.isEmpty()) {
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        List<ChatSession.TestingStep> sessionTestingSteps = activeSession != null ? 
+            activeSession.getTestingSteps() : new ArrayList<>();
+        
+        if (sessionTestingSteps.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                 "No testing history yet.\n\nAttach requests from Repeater and send them to build history.",
                 "Testing History",
@@ -1567,8 +1757,8 @@ public class TestingSuggestionsPanel extends JPanel {
         history.append("TESTING HISTORY\n");
         history.append("=".repeat(80)).append("\n\n");
         
-        for (int i = 0; i < testingSteps.size(); i++) {
-            TestingStep step = testingSteps.get(i);
+        for (int i = 0; i < sessionTestingSteps.size(); i++) {
+            ChatSession.TestingStep step = sessionTestingSteps.get(i);
             history.append("TEST #").append(i + 1).append("\n");
             history.append("-".repeat(80)).append("\n");
             history.append("Observation: ").append(step.observation).append("\n\n");
@@ -1599,7 +1789,7 @@ public class TestingSuggestionsPanel extends JPanel {
         
         JOptionPane.showMessageDialog(this,
             scrollPane,
-            "Testing History (" + testingSteps.size() + " tests)",
+            "Testing History (" + sessionTestingSteps.size() + " tests)",
             JOptionPane.INFORMATION_MESSAGE);
     }
     
@@ -1626,14 +1816,46 @@ public class TestingSuggestionsPanel extends JPanel {
      * Attaches a request from Repeater history by index
      */
     private void attachFromRepeaterHistory(int index) {
+        callbacks.printOutput("[VISTA] attachFromRepeaterHistory called with index: " + index);
+        
+        // Get active session
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession == null) {
+            callbacks.printOutput("[VISTA] No active session - cannot attach request from dropdown");
+            statusLabel.setText("⚠️ No active session. Send a request from Repeater first.");
+            return;
+        }
+        
         com.vista.security.core.RepeaterRequestTracker.RepeaterRequest req = 
             com.vista.security.core.RepeaterRequestTracker.getInstance().getRequest(index);
         
         if (req != null) {
-            attachedRequests.add(req.getRequestResponse());
+            IHttpRequestResponse requestResponse = req.getRequestResponse();
+            
+            // Check if this request is already attached (avoid duplicates)
+            if (isRequestAlreadyAttachedToSession(activeSession, requestResponse)) {
+                callbacks.printOutput("[VISTA] Request already attached to active session, skipping duplicate");
+                statusLabel.setText("⚠️ This request is already attached to this session");
+                JOptionPane.showMessageDialog(this,
+                    "This request is already attached to the active session.\n\nDuplicate attachments are not allowed.",
+                    "Duplicate Request",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            // Add to ACTIVE SESSION ONLY (not global list!)
+            activeSession.addAttachedRequest(requestResponse);
+            callbacks.printOutput("[VISTA] Request added to active session from dropdown: " + activeSession.getSessionId());
+            callbacks.printOutput("[VISTA] Total attached requests in session: " + activeSession.getAttachedRequestCount());
+            
             updateMultiRequestLabel();
+            
             appendSuggestion("SYSTEM", "✓ Request attached from history: " + req.getMethod() + " " + 
                 truncate(req.getUrl(), 60) + " [" + req.getStatusCode() + "]");
+            
+            statusLabel.setText("✓ Request attached - Type your observation and click Send");
+        } else {
+            callbacks.printOutput("[VISTA] Request not found at index: " + index);
         }
     }
     
@@ -1643,10 +1865,18 @@ public class TestingSuggestionsPanel extends JPanel {
     public void attachRepeaterRequest(IHttpRequestResponse requestResponse) {
         callbacks.printOutput("[VISTA] attachRepeaterRequest called");
         
+        // Get active session
+        ChatSession activeSession = chatSessionManager.getActiveSession();
+        if (activeSession == null) {
+            callbacks.printOutput("[VISTA] No active session - cannot attach request");
+            statusLabel.setText("⚠️ No active session. Send a request from Repeater first.");
+            return;
+        }
+        
         // Check if this request is already attached (avoid duplicates)
-        if (isRequestAlreadyAttached(requestResponse)) {
-            callbacks.printOutput("[VISTA] Request already attached, skipping duplicate");
-            statusLabel.setText("⚠️ This request is already attached");
+        if (isRequestAlreadyAttachedToSession(activeSession, requestResponse)) {
+            callbacks.printOutput("[VISTA] Request already attached to active session, skipping duplicate");
+            statusLabel.setText("⚠️ This request is already attached to this session");
             return;
         }
         
@@ -1656,9 +1886,10 @@ public class TestingSuggestionsPanel extends JPanel {
             callbacks.printOutput("[VISTA] Interactive chat panel set to visible");
         }
         
-        // Add the request to the list
-        attachedRequests.add(requestResponse);
-        callbacks.printOutput("[VISTA] Request added to list. Total: " + attachedRequests.size());
+        // Add the request to the ACTIVE SESSION ONLY
+        activeSession.addAttachedRequest(requestResponse);
+        callbacks.printOutput("[VISTA] Request added to active session: " + activeSession.getSessionId());
+        callbacks.printOutput("[VISTA] Total attached requests in session: " + activeSession.getAttachedRequestCount());
         
         // Update multi-request label
         updateMultiRequestLabel();
@@ -1670,12 +1901,12 @@ public class TestingSuggestionsPanel extends JPanel {
         }
         
         // Show success message
-        statusLabel.setText("✓ Request attached from Repeater - Type your observation and click Send");
+        statusLabel.setText("✓ Request attached to active session - Type your observation and click Send");
         
         // Add a helpful message to the conversation if it's empty
         if (conversationHistory.isEmpty()) {
             SwingUtilities.invokeLater(() -> {
-                suggestionsArea.append("📎 Request attached from Repeater!\n\n");
+                suggestionsArea.append("📎 Request attached to this session!\n\n");
                 suggestionsArea.append("💡 Quick Start:\n");
                 suggestionsArea.append("1. Type what you observed (e.g., 'I see HTML encoding' or 'WAF blocked my payload')\n");
                 suggestionsArea.append("2. Click Send\n");
@@ -1703,14 +1934,14 @@ public class TestingSuggestionsPanel extends JPanel {
     }
 
     /**
-     * Check if a request is already attached (to avoid duplicates).
+     * Check if a request is already attached to a specific session (to avoid duplicates).
      */
-    private boolean isRequestAlreadyAttached(IHttpRequestResponse newRequest) {
+    private boolean isRequestAlreadyAttachedToSession(ChatSession session, IHttpRequestResponse newRequest) {
         if (newRequest == null || newRequest.getRequest() == null) return false;
         
         String newFirstLine = extractFirstLine(newRequest.getRequest());
         
-        for (IHttpRequestResponse attached : attachedRequests) {
+        for (IHttpRequestResponse attached : session.getAttachedRequests()) {
             if (attached != null && attached.getRequest() != null) {
                 String attachedFirstLine = extractFirstLine(attached.getRequest());
                 if (newFirstLine.equals(attachedFirstLine)) {
@@ -1733,17 +1964,197 @@ public class TestingSuggestionsPanel extends JPanel {
         }
     }
     
-    public static class TestingStep {
-        public final String stepName;
-        public final String request;
-        public final String response;
-        public final String observation;
-        
-        public TestingStep(String stepName, String request, String response, String observation) {
-            this.stepName = stepName;
-            this.request = request;
-            this.response = response;
-            this.observation = observation;
+    // ═══════════════════════════════════════════════════════════════
+    // Chat Session Helper Methods
+    // ═══════════════════════════════════════════════════════════════
+    
+    /**
+     * Get current system prompt from selected template.
+     */
+    private String getCurrentSystemPrompt() {
+        if (templateSelector != null) {
+            String selectedTemplate = (String) templateSelector.getSelectedItem();
+            if (selectedTemplate != null && !selectedTemplate.equals("Default")) {
+                PromptTemplate template = templateManager.getTemplate(selectedTemplate);
+                if (template != null) {
+                    return template.getSystemPrompt();
+                }
+            }
         }
+        
+        // Default system prompt
+        return "You are an expert security testing assistant. " +
+               "Analyze HTTP requests and responses for vulnerabilities. " +
+               "Provide step-by-step testing methodologies and exploitation guidance.";
+    }
+    
+    /**
+     * Extract request URL from request text.
+     */
+    private String extractRequestUrl(String reqText) {
+        String[] lines = reqText.split("\r?\n");
+        if (lines.length > 0) {
+            String firstLine = lines[0];
+            String[] parts = firstLine.split(" ");
+            if (parts.length >= 2) {
+                return parts[0] + " " + parts[1]; // Method + URL
+            }
+            return firstLine;
+        }
+        return "Unknown Request";
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // Session Switcher UI Methods (DISABLED - UI removed for simplicity)
+    // ═══════════════════════════════════════════════════════════════
+    
+    /*
+    // These methods are commented out since session switcher UI was removed
+    
+    private void updateSessionSelector() {
+        // Session selector UI removed for simplicity
+    }
+    
+    private String buildSessionDisplayText(ChatSession session) {
+        // Session selector UI removed for simplicity
+        return "";
+    }
+    
+    private void switchToSelectedSession() {
+        // Session selector UI removed for simplicity
+    }
+    */
+    
+    /**
+     * Load a session's conversation into the UI.
+     */
+    private void loadSessionIntoUI(ChatSession session) {
+        // Clear current UI
+        suggestionsArea.setText("");
+        conversationHistory.clear();
+        
+        // NOTE: We DON'T clear testingSteps here anymore - they're stored per-session!
+        // Each session maintains its own testingSteps, so switching sessions preserves them.
+        
+        // Load the request/response for this session
+        IHttpRequestResponse sessionRequest = session.getRequestResponse();
+        if (sessionRequest != null) {
+            this.currentRequest = sessionRequest;
+            
+            // Display request
+            String reqText = HttpMessageParser.requestToText(helpers, sessionRequest.getRequest());
+            requestArea.setText(reqText);
+            requestArea.setCaretPosition(0);
+            
+            // Display response
+            if (sessionRequest.getResponse() != null) {
+                String respText = HttpMessageParser.responseToText(helpers, sessionRequest.getResponse());
+                responseArea.setText(respText);
+                responseArea.setCaretPosition(0);
+            } else {
+                responseArea.setText("(No response captured)");
+            }
+        }
+        
+        // Load session messages into UI
+        for (ChatMessage msg : session.getMessages()) {
+            if (msg.getRole() == ChatMessage.Role.USER) {
+                appendSuggestion("YOU", msg.getContent());
+                conversationHistory.add(new ConversationMessage("user", msg.getContent()));
+            } else if (msg.getRole() == ChatMessage.Role.ASSISTANT) {
+                appendSuggestion("VISTA", msg.getContent());
+                conversationHistory.add(new ConversationMessage("assistant", msg.getContent()));
+            }
+            // Skip SYSTEM messages (they're not shown in UI)
+        }
+        
+        // Update multi-request label to show session's attached requests
+        updateMultiRequestLabel();
+        
+        // Update status
+        statusLabel.setText("Loaded session: " + session.getSessionTitle());
+        
+        // Show interactive chat panel
+        if (interactiveChatPanel != null) {
+            interactiveChatPanel.setVisible(true);
+        }
+        
+        callbacks.printOutput("[VISTA] Loaded session: " + session.getSessionId());
+        callbacks.printOutput("[VISTA] Session has " + session.getAttachedRequestCount() + " attached requests");
+        callbacks.printOutput("[VISTA] Session has " + session.getTestingStepCount() + " testing steps");
+    }
+    
+    /*
+    // Session management dialog - commented out since UI was simplified
+    private void showAllSessions() {
+        // Session switcher UI removed for simplicity
+    }
+    */
+    
+    /**
+     * Build a summary string for a session in the list.
+     */
+    private String getSessionSummary(ChatSession session, int index) {
+        String activeMarker = session.isActive() ? "🟢" : "⚪";
+        String title = session.getSessionTitle();
+        if (title.length() > 60) {
+            title = title.substring(0, 57) + "...";
+        }
+        return String.format("%s #%d: %s (%d messages)", 
+            activeMarker, index, title, session.getMessages().size());
+    }
+    
+    /**
+     * Build a detailed summary for session list.
+     */
+    private String buildSessionSummary(ChatSession session, int index) {
+        String activeMarker = session.isActive() ? "🟢 ACTIVE" : "⚪ Inactive";
+        String title = session.getSessionTitle();
+        int messageCount = session.getMessages().size();
+        int exchangeCount = session.getExchangeCount();
+        
+        return String.format("#%d [%s] %s - %d messages (%d exchanges)", 
+            index, activeMarker, title, messageCount, exchangeCount);
+    }
+    
+    /**
+     * Build a preview of session conversation.
+     */
+    private String buildSessionPreview(ChatSession session) {
+        StringBuilder preview = new StringBuilder();
+        
+        preview.append("SESSION DETAILS\n");
+        preview.append("═".repeat(80)).append("\n\n");
+        preview.append("Session ID: ").append(session.getSessionId()).append("\n");
+        preview.append("Created: ").append(session.getCreatedAt()).append("\n");
+        preview.append("Last Activity: ").append(session.getLastActivityAt()).append("\n");
+        preview.append("Request: ").append(session.getInitialRequestUrl()).append("\n");
+        preview.append("Status: ").append(session.isActive() ? "Active" : "Inactive").append("\n");
+        preview.append("Messages: ").append(session.getMessages().size()).append("\n");
+        preview.append("Exchanges: ").append(session.getExchangeCount()).append("\n\n");
+        
+        preview.append("CONVERSATION\n");
+        preview.append("═".repeat(80)).append("\n\n");
+        
+        List<ChatMessage> messages = session.getMessages();
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage msg = messages.get(i);
+            
+            if (msg.getRole() == ChatMessage.Role.SYSTEM) {
+                continue; // Skip system messages in preview
+            }
+            
+            String roleLabel = msg.getRole() == ChatMessage.Role.USER ? "👤 YOU" : "🤖 VISTA";
+            preview.append(roleLabel).append(":\n");
+            
+            String content = msg.getContent();
+            if (content.length() > 500) {
+                content = content.substring(0, 497) + "...";
+            }
+            preview.append(content).append("\n\n");
+            preview.append("─".repeat(80)).append("\n\n");
+        }
+        
+        return preview.toString();
     }
 }

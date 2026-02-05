@@ -6,6 +6,7 @@ import com.vista.security.ui.SettingsPanel;
 import com.vista.security.ui.PromptTemplatePanel;
 import com.vista.security.ui.PayloadLibraryPanel;
 import com.vista.security.ui.RequestCollectionPanel;
+// Using TrafficMonitorPanelSimple instead of TrafficMonitorPanel
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,7 +23,7 @@ import java.util.List;
 public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     
     private static final String EXTENSION_NAME = "VISTA";
-    private static final String VERSION = "2.8.4";
+    private static final String VERSION = "2.9.0";
     
     private IBurpExtenderCallbacks callbacks;
     private DashboardPanel dashboardPanel;
@@ -30,6 +31,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     private PromptTemplatePanel promptTemplatePanel;
     private PayloadLibraryPanel payloadLibraryPanel;
     private RequestCollectionPanel requestCollectionPanel;
+    private JPanel trafficMonitorPanel; // Can be either TrafficMonitorPanel or TrafficMonitorPanelSimple
     private SettingsPanel settingsPanel;
     private JTabbedPane tabbedPane;
 
@@ -53,63 +55,111 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
         callbacks.printOutput("║                                                            ║");
         callbacks.printOutput("╚════════════════════════════════════════════════════════════╝");
         callbacks.printOutput("");
-        callbacks.printOutput("✓ Initializing panels...");
+        callbacks.printOutput("✓ Initializing VISTA extension...");
+        callbacks.printOutput("✓ Extension name set to: " + EXTENSION_NAME);
         
-        SwingUtilities.invokeLater(() -> {
-            callbacks.printOutput("[VISTA] Starting panel initialization");
-            
-            // Initialize panels with modern design
-            this.settingsPanel = new SettingsPanel(callbacks);
-            callbacks.printOutput("[VISTA] SettingsPanel initialized");
-            
-            this.dashboardPanel = new DashboardPanel(callbacks);
-            callbacks.printOutput("[VISTA] DashboardPanel initialized");
-            
-            this.testingSuggestionsPanel = new TestingSuggestionsPanel(callbacks);
-            callbacks.printOutput("[VISTA] TestingSuggestionsPanel initialized");
-            
-            this.promptTemplatePanel = new PromptTemplatePanel(callbacks);
-            callbacks.printOutput("[VISTA] PromptTemplatePanel initialized");
-            
-            this.payloadLibraryPanel = new PayloadLibraryPanel(callbacks);
-            callbacks.printOutput("[VISTA] PayloadLibraryPanel initialized");
-            
-            this.requestCollectionPanel = new RequestCollectionPanel(callbacks);
-            callbacks.printOutput("[VISTA] RequestCollectionPanel initialized");
-            
-            // Create modern tabbed interface
-            this.tabbedPane = new JTabbedPane();
-            tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-            // Don't set background - let Burp handle it
-            
-            // Add tabs with icons (using Unicode symbols)
-            tabbedPane.addTab("  🏠 Dashboard  ", dashboardPanel);
-            tabbedPane.addTab("  💡 AI Advisor  ", testingSuggestionsPanel);
-            tabbedPane.addTab("  📝 Prompt Templates  ", promptTemplatePanel);
-            tabbedPane.addTab("  🎯 Payload Library  ", payloadLibraryPanel);
-            tabbedPane.addTab("  📁 Collections  ", requestCollectionPanel);
-            tabbedPane.addTab("  ⚙️ Settings  ", settingsPanel);
-            
-            // Connect dashboard to AI Advisor
-            dashboardPanel.setTestingSuggestionsPanel(testingSuggestionsPanel);
-            
-            callbacks.addSuiteTab(this);
-            callbacks.printOutput("[VISTA] All panels initialized successfully");
-            
-            // NOW register context menu factory AFTER panels are initialized
-            callbacks.registerContextMenuFactory(BurpExtender.this);
-            callbacks.printOutput("[VISTA] Context menu factory registered");
-        });
-        
-        callbacks.printOutput("→ Right-click any request → 'Send to VISTA AI Advisor'");
-        callbacks.printOutput("→ Right-click any request → 'Add to Collection'");
-        callbacks.printOutput("→ Configure your AI provider in Settings tab");
-        callbacks.printOutput("→ Get testing suggestions and methodologies");
-        callbacks.printOutput("→ Use Prompt Templates for specialized testing");
-        callbacks.printOutput("→ Use Payload Library for quick payload access");
-        callbacks.printOutput("→ Use Collections to organize similar requests");
-        callbacks.printOutput("→ View Dashboard for quick stats and actions");
-        callbacks.printOutput("");
+        try {
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    callbacks.printOutput("[VISTA] Starting panel initialization in EDT");
+                    
+                    // Initialize panels with modern design
+                    callbacks.printOutput("[VISTA] Initializing SettingsPanel...");
+                    this.settingsPanel = new SettingsPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ SettingsPanel initialized");
+                    
+                    callbacks.printOutput("[VISTA] Initializing DashboardPanel...");
+                    this.dashboardPanel = new DashboardPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ DashboardPanel initialized");
+                    
+                    callbacks.printOutput("[VISTA] Initializing TestingSuggestionsPanel...");
+                    this.testingSuggestionsPanel = new TestingSuggestionsPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ TestingSuggestionsPanel initialized");
+                    
+                    callbacks.printOutput("[VISTA] Initializing PromptTemplatePanel...");
+                    this.promptTemplatePanel = new PromptTemplatePanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ PromptTemplatePanel initialized");
+                    
+                    callbacks.printOutput("[VISTA] Initializing PayloadLibraryPanel...");
+                    this.payloadLibraryPanel = new PayloadLibraryPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ PayloadLibraryPanel initialized");
+                    
+                    callbacks.printOutput("[VISTA] Initializing RequestCollectionPanel...");
+                    this.requestCollectionPanel = new RequestCollectionPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ RequestCollectionPanel initialized");
+                    
+                    // Initialize Traffic Monitor (Simplified version - just traffic capture and scope filtering)
+                    callbacks.printOutput("[VISTA] Initializing TrafficMonitorPanel (Simple)...");
+                    this.trafficMonitorPanel = new com.vista.security.ui.TrafficMonitorPanelSimple(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ TrafficMonitorPanel (Simple) initialized");
+                    
+                    // Create modern tabbed interface
+                    callbacks.printOutput("[VISTA] Creating tabbed pane...");
+                    this.tabbedPane = new JTabbedPane();
+                    tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                    
+                    // Add tabs with icons (using Unicode symbols)
+                    callbacks.printOutput("[VISTA] Adding tabs...");
+                    tabbedPane.addTab("  🏠 Dashboard  ", dashboardPanel);
+                    tabbedPane.addTab("  💡 AI Advisor  ", testingSuggestionsPanel);
+                    tabbedPane.addTab("  🌐 Traffic Monitor  ", trafficMonitorPanel);
+                    tabbedPane.addTab("  📝 Prompt Templates  ", promptTemplatePanel);
+                    tabbedPane.addTab("  🎯 Payload Library  ", payloadLibraryPanel);
+                    tabbedPane.addTab("  📁 Collections  ", requestCollectionPanel);
+                    tabbedPane.addTab("  ⚙️ Settings  ", settingsPanel);
+                    callbacks.printOutput("[VISTA] ✓ All tabs added to tabbed pane");
+                    
+                    // Connect dashboard to AI Advisor
+                    dashboardPanel.setTestingSuggestionsPanel(testingSuggestionsPanel);
+                    
+                    // Add the tab to Burp Suite
+                    callbacks.printOutput("[VISTA] Registering VISTA tab with Burp Suite...");
+                    callbacks.addSuiteTab(BurpExtender.this);
+                    callbacks.printOutput("[VISTA] ✓ VISTA tab registered successfully!");
+                    callbacks.printOutput("[VISTA] ✓ Look for 'VISTA' tab in the top bar next to other extensions");
+                    
+                    // NOW register context menu factory AFTER panels are initialized
+                    callbacks.printOutput("[VISTA] Registering context menu factory...");
+                    callbacks.registerContextMenuFactory(BurpExtender.this);
+                    callbacks.printOutput("[VISTA] ✓ Context menu factory registered");
+                    
+                    callbacks.printOutput("");
+                    callbacks.printOutput("═══════════════════════════════════════════════════════════");
+                    callbacks.printOutput("  VISTA SUCCESSFULLY LOADED!");
+                    callbacks.printOutput("═══════════════════════════════════════════════════════════");
+                    callbacks.printOutput("");
+                    callbacks.printOutput("→ Look for 'VISTA' tab in the top bar");
+                    callbacks.printOutput("→ Right-click any request → 'Send to VISTA AI Advisor'");
+                    callbacks.printOutput("→ Right-click any request → 'Add to Collection'");
+                    callbacks.printOutput("→ Configure your AI provider in Settings tab");
+                    callbacks.printOutput("→ Get testing suggestions and methodologies");
+                    callbacks.printOutput("→ Use Prompt Templates for specialized testing");
+                    callbacks.printOutput("→ Use Payload Library for quick payload access");
+                    callbacks.printOutput("→ Use Collections to organize similar requests");
+                    callbacks.printOutput("→ View Dashboard for quick stats and actions");
+                    callbacks.printOutput("");
+                    
+                } catch (Exception e) {
+                    callbacks.printError("[VISTA] ERROR during panel initialization:");
+                    callbacks.printError("[VISTA] " + e.getClass().getName() + ": " + e.getMessage());
+                    e.printStackTrace(new java.io.PrintWriter(new java.io.StringWriter()) {
+                        @Override
+                        public void println(String x) {
+                            callbacks.printError("[VISTA] " + x);
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            callbacks.printError("[VISTA] FATAL ERROR during extension initialization:");
+            callbacks.printError("[VISTA] " + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace(new java.io.PrintWriter(new java.io.StringWriter()) {
+                @Override
+                public void println(String x) {
+                    callbacks.printError("[VISTA] " + x);
+                }
+            });
+        }
     }
 
     @Override
@@ -144,12 +194,12 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
         });
         menuItems.add(sendToAI);
         
-        // Special option for Interactive Assistant with auto-attach
-        JMenuItem sendToInteractive = new JMenuItem("🔄 Send to Interactive Assistant (Auto-Attach)");
+        // Special option for Interactive Assistant - ONLY attach, don't replace display
+        JMenuItem sendToInteractive = new JMenuItem("📎 Attach to Interactive Assistant");
         sendToInteractive.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         sendToInteractive.setForeground(new Color(0, 120, 215)); // Blue color
         sendToInteractive.addActionListener(e -> {
-            callbacks.printOutput("[VISTA] Context menu: Send to Interactive Assistant clicked");
+            callbacks.printOutput("[VISTA] Context menu: Attach to Interactive Assistant clicked");
             
             if (testingSuggestionsPanel != null) {
                 // Track this request
@@ -158,11 +208,8 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                 com.vista.security.core.RepeaterRequestTracker.getInstance()
                     .addRequest(messages[0], url);
                 
-                // Send to Interactive Assistant and auto-attach
-                callbacks.printOutput("[VISTA] Setting request in panel");
-                testingSuggestionsPanel.setRequest(messages[0]);
-                
-                callbacks.printOutput("[VISTA] Calling attachRepeaterRequest");
+                // ONLY attach - do NOT call setRequest() to preserve original display
+                callbacks.printOutput("[VISTA] Calling attachRepeaterRequest (without setRequest)");
                 testingSuggestionsPanel.attachRepeaterRequest(messages[0]);
                 
                 if (tabbedPane != null) {
@@ -187,11 +234,14 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
             if (requestCollectionPanel != null) {
                 requestCollectionPanel.addRequestToCollection(messages[0]);
                 if (tabbedPane != null) {
-                    tabbedPane.setSelectedIndex(4); // Collections tab
+                    tabbedPane.setSelectedIndex(5); // Collections tab (index 5 now)
                 }
             }
         });
         menuItems.add(addToCollection);
+        
+        // Note: Traffic Monitor (Simple) automatically captures all traffic
+        // No need for manual "Send to Traffic Monitor" option
         
         return menuItems;
     }
