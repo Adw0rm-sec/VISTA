@@ -32,6 +32,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private IntelligentTrafficAnalyzer analyzer; // NOT final - can be updated when AI config changes
     private final ScopeManager scopeManager; // NEW: Scope management
     
+    // Preserved custom template (survives analyzer recreation on AI config change)
+    private String savedCustomTemplate = null;
+    
     // UI Components - Findings View (now using hierarchical tree)
     // Old table components removed - using TrafficFindingsTreePanel and FindingDetailsPanel
     private JLabel statsLabel;
@@ -48,6 +51,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private JButton clearButton;
     private JButton exportButton;
     private JButton manageScopeButton; // Manage scope button
+    private JTabbedPane contentTabbedPane; // Inner tabbed pane for Traffic/Findings
     
     // Data
     private final List<TrafficFinding> allFindings;
@@ -90,10 +94,18 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         // Listen for AI configuration changes and update analyzer
         AIConfigManager.getInstance().addListener(config -> {
             callbacks.printOutput("[Traffic Monitor] AI configuration changed, updating analyzer...");
+            // Preserve custom template before recreating analyzer
+            savedCustomTemplate = this.analyzer.getCustomTemplate();
+            
             this.cachedAIService = createAIService();
             this.analyzer = new IntelligentTrafficAnalyzer(cachedAIService, findingsManager);
             this.analyzer.setScopeManager(this.scopeManager);
-            callbacks.printOutput("[Traffic Monitor] Analyzer updated with new AI configuration");
+            
+            // Restore custom template on the new analyzer
+            if (savedCustomTemplate != null) {
+                this.analyzer.setCustomTemplate(savedCustomTemplate);
+            }
+            callbacks.printOutput("[Traffic Monitor] Analyzer updated with new AI configuration (custom template preserved)");
         });
         
         // Initialize UI
@@ -108,20 +120,20 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     private void initializeUI() {
-        // Create tabbed pane for Findings and Traffic views
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        // Create tabbed pane for Traffic and Findings views
+        contentTabbedPane = new JTabbedPane();
+        contentTabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         
-        // Findings tab (primary view)
-        JPanel findingsPanel = createFindingsPanel();
-        tabbedPane.addTab("  🔍 Findings  ", findingsPanel);
-        
-        // Traffic tab (secondary view)
+        // Traffic tab (primary view - selected by default)
         JPanel trafficPanel = createTrafficPanel();
-        tabbedPane.addTab("  📊 Traffic  ", trafficPanel);
+        contentTabbedPane.addTab("  📊 Traffic  ", trafficPanel);
+        
+        // Findings tab (shows count when findings exist)
+        JPanel findingsPanel = createFindingsPanel();
+        contentTabbedPane.addTab("  🔍 Findings  ", findingsPanel);
         
         // Add to main panel
-        add(tabbedPane, BorderLayout.CENTER);
+        add(contentTabbedPane, BorderLayout.CENTER);
         
         // Add controls at top
         add(createControlsPanel(), BorderLayout.NORTH);
@@ -226,11 +238,11 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         sep3.setPreferredSize(new Dimension(2, 25));
         mainPanel.add(sep3, gbc);
         
-        // Customize Prompts button
+        // Customize Template button
         gbc.gridx = 8;
-        JButton customizePromptsButton = new JButton("✏️ Customize Prompts");
+        JButton customizePromptsButton = new JButton("✏️ Edit Template");
         customizePromptsButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        customizePromptsButton.setToolTipText("Customize AI system and user prompts");
+        customizePromptsButton.setToolTipText("Customize the AI analysis template for HTTP traffic monitoring");
         customizePromptsButton.addActionListener(e -> showPromptCustomizationDialog());
         mainPanel.add(customizePromptsButton, gbc);
         
@@ -591,23 +603,18 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             return;
         }
         
-        // Get the HttpMessageViewer from the Traffic panel
-        Component[] components = getComponents();
-        for (Component comp : components) {
-            if (comp instanceof JTabbedPane) {
-                JTabbedPane tabbedPane = (JTabbedPane) comp;
-                Component trafficTab = tabbedPane.getComponentAt(1); // Second tab is Traffic
+        // Get the HttpMessageViewer from the Traffic panel (index 0)
+        if (contentTabbedPane != null) {
+            Component trafficTab = contentTabbedPane.getComponentAt(0); // First tab is Traffic
+            
+            if (trafficTab instanceof JPanel) {
+                JPanel trafficPanel = (JPanel) trafficTab;
+                HttpMessageViewer httpViewer = 
+                    (HttpMessageViewer) trafficPanel.getClientProperty("httpViewer");
                 
-                if (trafficTab instanceof JPanel) {
-                    JPanel trafficPanel = (JPanel) trafficTab;
-                    HttpMessageViewer httpViewer = 
-                        (HttpMessageViewer) trafficPanel.getClientProperty("httpViewer");
-                    
-                    if (httpViewer != null) {
-                        httpViewer.setHttpMessage(transaction.getRequest(), transaction.getResponse());
-                    }
+                if (httpViewer != null) {
+                    httpViewer.setHttpMessage(transaction.getRequest(), transaction.getResponse());
                 }
-                break;
             }
         }
     }
@@ -768,12 +775,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     private void updateFindingsTree() {
         SwingUtilities.invokeLater(() -> {
-            // Get the findings panel
-            Component[] components = getComponents();
-            for (Component comp : components) {
-                if (comp instanceof JTabbedPane) {
-                    JTabbedPane tabbedPane = (JTabbedPane) comp;
-                    Component findingsTab = tabbedPane.getComponentAt(0); // First tab is Findings
+            // Get the findings panel from contentTabbedPane directly
+            if (contentTabbedPane != null && contentTabbedPane.getTabCount() > 1) {
+                    Component findingsTab = contentTabbedPane.getComponentAt(1); // Second tab is Findings
                     
                     if (findingsTab instanceof JPanel) {
                         JPanel findingsPanel = (JPanel) findingsTab;
@@ -801,6 +805,14 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                                 }
                             }
                             
+                            // Update Findings tab title with count
+                            int count = filteredFindings.size();
+                            if (count > 0) {
+                                contentTabbedPane.setTitleAt(1, "  🔍 Findings (" + count + ")  ");
+                            } else {
+                                contentTabbedPane.setTitleAt(1, "  🔍 Findings  ");
+                            }
+                            
                             // Only update tree if findings count changed (avoid unnecessary rebuilds)
                             if (filteredFindings.size() != lastFindingsCount) {
                                 lastFindingsCount = filteredFindings.size();
@@ -808,8 +820,6 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                             }
                         }
                     }
-                    break;
-                }
             }
         });
     }
@@ -1662,31 +1672,28 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
      * Show dialog to customize AI prompts for traffic analysis
      */
     private void showPromptCustomizationDialog() {
-        // Get current prompts from analyzer (if any)
-        String currentJsPrompt = null;
-        String currentHtmlPrompt = null;
+        // Get current template from analyzer (preserves user edits)
+        String currentTemplate = analyzer.getCustomTemplate();
         
-        // Create and show dialog
+        // Create and show dialog with single unified template
         PromptCustomizationDialog dialog = new PromptCustomizationDialog(
             (Frame) SwingUtilities.getWindowAncestor(this),
-            currentJsPrompt,
-            currentHtmlPrompt
+            currentTemplate
         );
         dialog.setVisible(true);
         
-        // If user saved, apply the prompts
+        // If user saved, apply the template
         if (dialog.isSaved()) {
-            String jsPrompt = dialog.getJsPrompt();
-            String htmlPrompt = dialog.getHtmlPrompt();
+            String template = dialog.getTemplate();
             
-            // Set custom prompts in analyzer
-            // Note: We're using the same template for both JS and HTML for now
-            // The analyzer will use the appropriate one based on content type
-            analyzer.setCustomUserPromptTemplate(jsPrompt);
+            // Set the unified template in the analyzer (used as system prompt)
+            analyzer.setCustomTemplate(template);
             
-            System.out.println("[Traffic Monitor] ✅ Custom prompts applied");
-            System.out.println("[Traffic Monitor] 📝 JS Prompt length: " + jsPrompt.length() + " chars");
-            System.out.println("[Traffic Monitor] 📝 HTML Prompt length: " + htmlPrompt.length() + " chars");
+            // Also update saved copy for config change preservation
+            savedCustomTemplate = template;
+            
+            System.out.println("[Traffic Monitor] ✅ Analysis template updated");
+            System.out.println("[Traffic Monitor] 📝 Template length: " + template.length() + " chars (~" + (template.length() / 4) + " tokens)");
         }
     }
     

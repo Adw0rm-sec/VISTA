@@ -31,9 +31,64 @@ public class IntelligentTrafficAnalyzer {
     private final Set<String> analyzedUrls = Collections.synchronizedSet(new HashSet<>()); // Track analyzed URLs for deduplication
     
     
-    // Customizable prompts (can be modified by user)
-    private String customSystemPrompt = null;
-    private String customUserPromptTemplate = null;
+    // Default unified template - sent as system prompt for ALL HTTP traffic analysis (JS, HTML, etc.)
+    // Users can customize this via the UI. This single template defines:
+    //   - AI's role and expertise
+    //   - What to look for and what to skip
+    //   - Response format rules
+    private static final String DEFAULT_TEMPLATE = 
+        "You are an expert application security analyst specializing in web vulnerability assessment. " +
+        "Your role is to analyze HTTP traffic (HTML pages, JavaScript files, API responses) for real security vulnerabilities.\n\n" +
+        "EXPERTISE:\n" +
+        "- OWASP Top 10 vulnerabilities\n" +
+        "- Client-side security issues (XSS, DOM manipulation, prototype pollution)\n" +
+        "- Sensitive data exposure (API keys, credentials, tokens, PII)\n" +
+        "- Security misconfigurations (missing headers, debug info, verbose errors)\n" +
+        "- Information disclosure (internal IPs, stack traces, server details)\n\n" +
+        "WHAT TO LOOK FOR:\n" +
+        "1. API_KEY: Actual API keys (AKIA*, AIza*, sk_live_*, api_key=\"xxx\")\n" +
+        "   ✅ Report: const API_KEY = \"AIzaSyC_YU1YQKR4YoafqU...\"\n" +
+        "   ❌ Skip: const apiUrl = \"https://api.example.com\"\n" +
+        "2. CREDENTIAL: Hardcoded passwords, database credentials\n" +
+        "   ✅ Report: password: \"admin123\" or <!-- password: secret -->\n" +
+        "   ❌ Skip: passwordField.value (no actual password)\n" +
+        "3. PRIVATE_IP: Internal IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n" +
+        "   ✅ Report: const server = \"192.168.1.100\"\n" +
+        "   ❌ Skip: public IP like \"8.8.8.8\"\n" +
+        "4. TOKEN: JWT tokens (eyJ...), session tokens, auth tokens with actual values\n" +
+        "   ✅ Report: const jwt = \"eyJhbGciOiJIUzI1NiIs...\"\n" +
+        "   ❌ Skip: getToken() (function call, no actual token)\n" +
+        "5. HIDDEN_FIELD: Hidden form inputs with sensitive values\n" +
+        "   ✅ Report: <input type=\"hidden\" name=\"isAdmin\" value=\"true\">\n" +
+        "   ❌ Skip: CSRF tokens, generic form IDs\n" +
+        "6. DEBUG_CODE: Debug/dev code leaking sensitive data\n" +
+        "   ✅ Report: console.log(\"Password:\", userPassword)\n" +
+        "   ❌ Skip: console.log(\"Loading...\")\n" +
+        "7. SENSITIVE_DATA: PII, credit cards, SSN, connection strings\n" +
+        "   ✅ Report: const dbUrl = \"mongodb://admin:pass@localhost\"\n" +
+        "   ❌ Skip: const appName = \"MyApp\"\n\n" +
+        "DO NOT REPORT:\n" +
+        "- Public URLs, CDN links, or public API endpoints\n" +
+        "- CSRF tokens in hidden fields (these are expected)\n" +
+        "- Security headers (CSP, HSTS, X-Frame-Options) - these are GOOD\n" +
+        "- Minified library code (jQuery, React, etc.)\n" +
+        "- Theoretical/potential issues without concrete proof\n\n" +
+        "RULES:\n" +
+        "1. ONLY report findings with CONCRETE evidence - exact code/text snippets from the content\n" +
+        "2. NO theoretical, potential, or speculative issues\n" +
+        "3. NO false positives - if uncertain, do NOT report\n" +
+        "4. NO summary statements or concluding paragraphs\n" +
+        "5. If NOTHING found, return EMPTY response (no text at all)\n" +
+        "6. Quality over quantity - fewer accurate findings beat many false positives\n\n" +
+        "RESPONSE FORMAT (for each finding):\n" +
+        "Type: [API_KEY|CREDENTIAL|PRIVATE_IP|TOKEN|DEBUG_CODE|SENSITIVE_DATA|HIDDEN_FIELD|XSS|MISC]\n" +
+        "Severity: [CRITICAL|HIGH|MEDIUM|LOW]\n" +
+        "Evidence: [exact snippet from the analyzed content]\n" +
+        "Description: [one sentence explaining the security impact]";
+    
+    // Single customizable template (can be modified by user via UI)
+    // When set, this replaces DEFAULT_TEMPLATE as the system prompt
+    private String customTemplate = null;
     private static final String[] AI_EXCLUDED_EXTENSIONS = {
         ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
         ".css", ".woff", ".woff2", ".ttf", ".eot",
@@ -215,29 +270,25 @@ public class IntelligentTrafficAnalyzer {
                 truncatedContent = jsContent.substring(0, 2000) + "\n... [truncated]";
             }
             
-            String prompt = buildJavaScriptAnalysisPrompt(transaction, truncatedContent);
+            String prompt = buildUserDataPrompt("JavaScript", transaction, truncatedContent);
             
-            // Log AI request
-            String provider = getAIProvider();
-            String model = getAIModel();
-            AIRequestLogger.logRequest(
-                provider,
-                model,
-                "Traffic Monitor - JavaScript Analysis",
-                prompt,
+            // Use custom template if set by user, otherwise use default template
+            String systemPrompt = (customTemplate != null && !customTemplate.isBlank()) 
+                ? customTemplate 
+                : DEFAULT_TEMPLATE;
+            
+            long startTime = System.currentTimeMillis();
+            // Call the full ask() method with template name and HTTP data for proper logging
+            String aiResponse = aiService.ask(
+                systemPrompt, 
+                prompt, 
                 "Traffic Monitor JavaScript",
                 new String(transaction.getRequest()),
                 truncatedContent
             );
-            
-            long startTime = System.currentTimeMillis();
-            String aiResponse = aiService.ask("", prompt);
             long duration = System.currentTimeMillis() - startTime;
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
-                // Log AI response
-                AIRequestLogger.logResponse(provider, aiResponse, duration);
-                
                 findings.addAll(parseAIFindings(transaction, aiResponse));
                 System.out.println("[Traffic Monitor] 🤖 AI found " + findings.size() + " issues");
             }
@@ -301,29 +352,25 @@ public class IntelligentTrafficAnalyzer {
                 truncatedContent = htmlContent.substring(0, 2000) + "\n... [truncated]";
             }
             
-            String prompt = buildHtmlAnalysisPrompt(transaction, truncatedContent);
+            String prompt = buildUserDataPrompt("HTML", transaction, truncatedContent);
             
-            // Log AI request
-            String provider = getAIProvider();
-            String model = getAIModel();
-            AIRequestLogger.logRequest(
-                provider,
-                model,
-                "Traffic Monitor - HTML Analysis",
-                prompt,
+            // Use custom template if set by user, otherwise use default template
+            String systemPrompt = (customTemplate != null && !customTemplate.isBlank()) 
+                ? customTemplate 
+                : DEFAULT_TEMPLATE;
+            
+            long startTime = System.currentTimeMillis();
+            // Call the full ask() method with template name and HTTP data for proper logging
+            String aiResponse = aiService.ask(
+                systemPrompt, 
+                prompt, 
                 "Traffic Monitor HTML",
                 new String(transaction.getRequest()),
                 truncatedContent
             );
-            
-            long startTime = System.currentTimeMillis();
-            String aiResponse = aiService.ask("", prompt);
             long duration = System.currentTimeMillis() - startTime;
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
-                // Log AI response
-                AIRequestLogger.logResponse(provider, aiResponse, duration);
-                
                 findings.addAll(parseAIFindings(transaction, aiResponse));
                 System.out.println("[Traffic Monitor] 🤖 AI found " + findings.size() + " issues");
             }
@@ -335,85 +382,23 @@ public class IntelligentTrafficAnalyzer {
         return findings;
     }
     
-    private String buildHtmlAnalysisPrompt(HttpTransaction transaction, String htmlContent) {
+    /**
+     * Build the user data prompt for AI analysis.
+     * This simply passes the HTTP traffic data to analyze.
+     * All instructions, rules, and expertise are in the system prompt (the template).
+     */
+    private String buildUserDataPrompt(String contentLabel, HttpTransaction transaction, String content) {
         return String.format(
-            "Analyze this HTML/Response for security vulnerabilities.\n\n" +
+            "Analyze this %s for security vulnerabilities.\n\n" +
             "URL: %s\n" +
             "Content-Type: %s\n" +
             "Size: %d bytes\n\n" +
-            "Content:\n%s\n\n" +
-            "IMPORTANT INSTRUCTIONS:\n" +
-            "- ONLY report issues where you find ACTUAL sensitive data\n" +
-            "- Each finding MUST have concrete evidence (exact code/text snippet)\n" +
-            "- If you find NOTHING, respond with just: NO_FINDINGS\n" +
-            "- Do NOT report potential/theoretical issues\n" +
-            "- Do NOT report if evidence is missing or uncertain\n\n" +
-            "LOOK FOR:\n" +
-            "1. API_KEY: Actual API keys in HTML/JS (AKIA*, AIza*, sk_*, api_key=\"xxx\")\n" +
-            "2. CREDENTIAL: Hardcoded passwords, usernames with passwords\n" +
-            "3. PRIVATE_IP: Internal IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x, 127.0.0.1)\n" +
-            "4. TOKEN: JWT tokens (eyJ...), session IDs, auth tokens with actual values\n" +
-            "5. HIDDEN_FIELD: Hidden inputs with sensitive values (not CSRF tokens)\n" +
-            "6. SENSITIVE_DATA: PII, credit cards, SSN, internal paths with secrets\n\n" +
-            "DO NOT REPORT:\n" +
-            "- Public URLs, CDN links, or public API endpoints\n" +
-            "- CSRF tokens in hidden fields (these are expected)\n" +
-            "- Empty hidden fields or generic form fields\n" +
-            "- Security headers (CSP, HSTS, X-Frame-Options) - these are GOOD\n" +
-            "- Theoretical/potential issues without proof\n\n" +
-            "OUTPUT FORMAT (only if findings exist):\n" +
-            "For EACH finding, output EXACTLY:\n" +
-            "---\n" +
-            "Type: CREDENTIAL\n" +
-            "Severity: CRITICAL\n" +
-            "Evidence: <input type=\"hidden\" name=\"admin_pass\" value=\"secret123\">\n" +
-            "Description: Admin password exposed in hidden form field\n" +
-            "---\n\n" +
-            "Remember: NO_FINDINGS if nothing found. Quality over quantity.",
+            "Content:\n%s",
+            contentLabel,
             transaction.getUrl(),
             transaction.getContentType(),
-            htmlContent.length(),
-            htmlContent
-        );
-    }
-    
-    private String buildJavaScriptAnalysisPrompt(HttpTransaction transaction, String jsContent) {
-        return String.format(
-            "Analyze this JavaScript for security vulnerabilities.\n\n" +
-            "URL: %s\n" +
-            "Content-Type: %s\n" +
-            "Size: %d bytes\n\n" +
-            "JavaScript:\n%s\n\n" +
-            "IMPORTANT INSTRUCTIONS:\n" +
-            "- ONLY report issues where you find ACTUAL sensitive data in the code\n" +
-            "- Each finding MUST have concrete evidence (exact code snippet)\n" +
-            "- If you find NOTHING, respond with just: NO_FINDINGS\n" +
-            "- Do NOT report potential/theoretical issues\n" +
-            "- Do NOT report if evidence is missing or uncertain\n\n" +
-            "LOOK FOR:\n" +
-            "1. API_KEY: Actual API keys like AKIA*, AIza*, sk_*, api_key=\"xxx\"\n" +
-            "2. CREDENTIAL: Hardcoded passwords, database credentials\n" +
-            "3. PRIVATE_IP: Internal IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n" +
-            "4. TOKEN: JWT tokens (eyJ...), session tokens, auth tokens\n" +
-            "5. SENSITIVE_DATA: PII, credit card numbers, SSN, encryption keys\n\n" +
-            "DO NOT REPORT:\n" +
-            "- Public URLs, CDN links, or public endpoints\n" +
-            "- Variable names without actual sensitive values\n" +
-            "- Generic patterns without concrete data\n" +
-            "- Minified library code (jQuery, React, etc.)\n\n" +
-            "OUTPUT FORMAT (only if findings exist):\n" +
-            "For EACH finding, output EXACTLY:\n" +
-            "---\n" +
-            "Type: API_KEY\n" +
-            "Severity: HIGH\n" +
-            "Evidence: const apiKey = \"AIzaSyD-xxxxxxxxxxxx\"\n" +
-            "Description: Google API key exposed in client-side JavaScript\n" +
-            "---\n\n" +
-            "Remember: NO_FINDINGS if nothing found. Quality over quantity.",
-            transaction.getUrl(),
-            transaction.getContentType(),
-            jsContent.length(),
-            jsContent
+            content.length(),
+            content
         );
     }
     
@@ -805,35 +790,42 @@ public class IntelligentTrafficAnalyzer {
     }
     
     /**
-     * Set custom system prompt for AI analysis
-     * @param systemPrompt Custom system prompt (null to use default)
+     * Set custom template for AI analysis.
+     * This single template replaces the default and is used as the system prompt
+     * for ALL HTTP traffic analysis (JavaScript, HTML, etc.).
+     * @param template Custom template text (null to revert to default)
      */
-    public void setCustomSystemPrompt(String systemPrompt) {
-        this.customSystemPrompt = systemPrompt;
-        System.out.println("[Traffic Monitor] Custom system prompt " + (systemPrompt == null ? "cleared" : "set"));
+    public void setCustomTemplate(String template) {
+        this.customTemplate = template;
+        System.out.println("[Traffic Monitor] Analysis template " + 
+            (template == null ? "reset to default" : "updated (" + template.length() + " chars)"));
     }
     
     /**
-     * Set custom user prompt template for AI analysis
-     * Must contain 4 format placeholders: %s (URL), %s (Content-Type), %d (Size), %s (Content)
-     * @param promptTemplate Custom prompt template (null to use default)
+     * Get the current custom template (null if using default).
      */
-    public void setCustomUserPromptTemplate(String promptTemplate) {
-        this.customUserPromptTemplate = promptTemplate;
-        System.out.println("[Traffic Monitor] Custom user prompt template " + (promptTemplate == null ? "cleared" : "set"));
+    public String getCustomTemplate() {
+        return customTemplate;
     }
     
     /**
-     * Get current system prompt (custom or default indicator)
+     * Get the current effective template (custom if set, otherwise default).
      */
-    public String getSystemPromptInfo() {
-        return customSystemPrompt == null ? "Default" : "Custom";
+    public String getEffectiveTemplate() {
+        return (customTemplate != null && !customTemplate.isBlank()) ? customTemplate : DEFAULT_TEMPLATE;
     }
     
     /**
-     * Get current user prompt template info
+     * Get whether a custom template is active.
      */
-    public String getUserPromptInfo() {
-        return customUserPromptTemplate == null ? "Default" : "Custom";
+    public String getTemplateInfo() {
+        return customTemplate == null ? "Default" : "Custom";
+    }
+    
+    /**
+     * Get the default template constant.
+     */
+    public static String getDefaultTemplate() {
+        return DEFAULT_TEMPLATE;
     }
 }

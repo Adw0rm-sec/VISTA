@@ -53,15 +53,15 @@ public class SettingsPanel extends JPanel {
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
 
-        // Header
+        // Header - centered
         JLabel headerLabel = new JLabel("AI Configuration");
         headerLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
-        headerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        headerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         JLabel subLabel = new JLabel("Configure your AI provider. Settings are shared across all VISTA features.");
         subLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         subLabel.setForeground(Color.GRAY);
-        subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         // Provider selection
         JPanel providerPanel = createSection("Select AI Provider");
@@ -189,7 +189,7 @@ public class SettingsPanel extends JPanel {
 
         // Buttons - centered alignment
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         JButton saveBtn = new JButton("Save Configuration");
         saveBtn.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
@@ -223,8 +223,12 @@ public class SettingsPanel extends JPanel {
         mainPanel.add(Box.createVerticalStrut(20));
         mainPanel.add(buttonPanel);
 
+        // Create a centered wrapper panel to center content horizontally
+        JPanel centeredWrapper = new JPanel(new GridBagLayout());
+        centeredWrapper.add(mainPanel);
+
         // Wrap in scroll pane
-        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        JScrollPane scrollPane = new JScrollPane(centeredWrapper);
         scrollPane.setBorder(null);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         
@@ -237,7 +241,7 @@ public class SettingsPanel extends JPanel {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createTitledBorder(title));
-        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.setMaximumSize(new Dimension(600, 200));
         return panel;
     }

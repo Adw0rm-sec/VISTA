@@ -1,264 +1,396 @@
 package com.vista.security.ui;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
+import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 
 /**
- * Dialog for customizing Traffic Monitor AI analysis prompts.
- * Allows users to customize JavaScript and HTML analysis prompts with template variables.
+ * Professional dialog for customizing the Traffic Monitor AI analysis template.
+ * Provides a polished editor for the unified system prompt with live stats,
+ * section navigation, and preview of the auto-generated user prompt.
  */
 public class PromptCustomizationDialog extends JDialog {
-    
-    private JTextArea jsPromptArea;
-    private JTextArea htmlPromptArea;
-    private JTabbedPane tabbedPane;
-    
-    private String jsPrompt;
-    private String htmlPrompt;
+
+    // ── Design tokens (matching VISTA's Tailwind-inspired palette) ──
+    private static final Color ACCENT_PURPLE  = new Color(139, 92, 246);
+    private static final Color ACCENT_BLUE    = new Color(59, 130, 246);
+    private static final Color ACCENT_GREEN   = new Color(16, 185, 129);
+    private static final Color BG_CARD        = Color.WHITE;
+    private static final Color BG_SUBTLE      = new Color(248, 250, 252);
+    private static final Color BG_EDITOR      = new Color(253, 253, 255);
+    private static final Color BORDER_COLOR   = new Color(220, 225, 232);
+    private static final Color TEXT_TITLE      = new Color(30, 30, 35);
+    private static final Color TEXT_MUTED      = new Color(100, 100, 110);
+    private static final Color TEXT_HINT       = new Color(140, 145, 155);
+    private static final Font FONT_TITLE       = new Font("Segoe UI", Font.BOLD, 18);
+    private static final Font FONT_SUBTITLE    = new Font("Segoe UI", Font.PLAIN, 12);
+    private static final Font FONT_SECTION     = new Font("Segoe UI", Font.BOLD, 13);
+    private static final Font FONT_LABEL       = new Font("Segoe UI", Font.PLAIN, 11);
+    private static final Font FONT_EDITOR      = new Font("Monospaced", Font.PLAIN, 13);
+    private static final Font FONT_PREVIEW     = new Font("Monospaced", Font.PLAIN, 11);
+    private static final Font FONT_BTN         = new Font("Segoe UI", Font.PLAIN, 12);
+    private static final Font FONT_BTN_PRIMARY = new Font("Segoe UI", Font.BOLD, 12);
+    private static final Font FONT_STATS       = new Font("Segoe UI", Font.PLAIN, 11);
+
+    // ── State ──
+    private JTextArea systemPromptArea;
+    private JTextArea userPromptPreview;
+    private JLabel charLabel;
+    private JLabel tokenLabel;
+    private JLabel lineLabel;
+    private String template;
     private boolean saved = false;
-    
-    // Default prompts (same as in IntelligentTrafficAnalyzer)
-    private static final String DEFAULT_JS_PROMPT = 
-        "You are a security analyzer. Analyze this JavaScript for security issues.\n\n" +
-        "URL: {{URL}}\n" +
-        "Content-Type: {{CONTENT_TYPE}}\n" +
-        "Size: {{SIZE}} bytes\n\n" +
-        "JavaScript Code:\n{{CONTENT}}\n\n" +
-        "CRITICAL INSTRUCTIONS:\n" +
-        "1. ONLY report ACTUAL findings with CONCRETE evidence\n" +
-        "2. DO NOT add summary statements like \"No issues found\" or \"Nothing detected\"\n" +
-        "3. DO NOT add concluding paragraphs\n" +
-        "4. If no issues found, return EMPTY response (no text at all)\n" +
-        "5. Each finding MUST have exact code snippet as evidence\n\n" +
-        "WHAT TO FIND:\n\n" +
-        "1. EXPOSED API KEYS (Type: API_KEY):\n" +
-        "   ✅ Report: const API_KEY = \"AIzaSyC_YU1YQKR4YoafqU...\"\n" +
-        "   ✅ Report: apiKey: \"sk_live_51H...\"\n" +
-        "   ❌ Skip: const apiUrl = \"https://api.example.com\"\n\n" +
-        "2. HARDCODED CREDENTIALS (Type: CREDENTIAL):\n" +
-        "   ✅ Report: password: \"admin123\"\n" +
-        "   ✅ Report: const dbPassword = \"P@ssw0rd\"\n" +
-        "   ❌ Skip: passwordField.value (no actual password)\n\n" +
-        "3. PRIVATE IP ADDRESSES (Type: PRIVATE_IP):\n" +
-        "   ✅ Report: const server = \"192.168.1.100\"\n" +
-        "   ✅ Report: apiUrl: \"http://10.0.0.5:8080\"\n" +
-        "   ❌ Skip: const publicIP = \"8.8.8.8\"\n\n" +
-        "4. AUTHENTICATION TOKENS (Type: TOKEN):\n" +
-        "   ✅ Report: const jwt = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n" +
-        "   ✅ Report: Authorization: \"Bearer abc123xyz789\"\n" +
-        "   ❌ Skip: getToken() (function call, no actual token)\n\n" +
-        "5. DEBUG CODE (Type: DEBUG_CODE):\n" +
-        "   ✅ Report: console.log(\"Password:\", userPassword)\n" +
-        "   ✅ Report: const DEBUG = true\n" +
-        "   ❌ Skip: console.log(\"Loading...\") (no sensitive data)\n\n" +
-        "6. SENSITIVE CONFIGURATION (Type: SENSITIVE_DATA):\n" +
-        "   ✅ Report: const dbUrl = \"mongodb://admin:pass@localhost\"\n" +
-        "   ✅ Report: const secret = \"my-secret-key-123\"\n" +
-        "   ❌ Skip: const appName = \"MyApp\"\n\n" +
-        "RESPONSE FORMAT (STRICT):\n\n" +
-        "For EACH finding, use EXACTLY this format:\n" +
-        "- Type: [API_KEY|CREDENTIAL|PRIVATE_IP|TOKEN|DEBUG_CODE|SENSITIVE_DATA]\n" +
-        "- Severity: [CRITICAL|HIGH|MEDIUM|LOW]\n" +
-        "- Evidence: [exact code snippet from the JavaScript]\n" +
-        "- Description: [one sentence explaining the issue]\n\n" +
-        "REMEMBER:\n" +
-        "- NO summary statements\n" +
-        "- NO concluding paragraphs\n" +
-        "- ONLY report actual findings\n" +
-        "- If nothing found, return EMPTY response";
-    
-    private static final String DEFAULT_HTML_PROMPT = 
-        "You are a security analyzer. Analyze this HTML for security issues.\n\n" +
-        "URL: {{URL}}\n" +
-        "Content-Type: {{CONTENT_TYPE}}\n" +
-        "Size: {{SIZE}} bytes\n\n" +
-        "HTML Content:\n{{CONTENT}}\n\n" +
-        "CRITICAL INSTRUCTIONS:\n" +
-        "1. ONLY report ACTUAL findings with CONCRETE evidence\n" +
-        "2. DO NOT add summary statements like \"No issues found\" or \"Nothing detected\"\n" +
-        "3. DO NOT add concluding paragraphs\n" +
-        "4. If no issues found, return EMPTY response (no text at all)\n" +
-        "5. Each finding MUST have exact HTML snippet as evidence\n\n" +
-        "WHAT TO FIND:\n\n" +
-        "1. EXPOSED API KEYS (Type: API_KEY):\n" +
-        "   ✅ Report: <script src=\"...?key=AIzaSyC_YU1YQKR4YoafqU...\"></script>\n" +
-        "   ✅ Report: data-api-key=\"sk_live_51H...\"\n" +
-        "   ❌ Skip: <a href=\"https://api.example.com\">API</a>\n\n" +
-        "2. HARDCODED CREDENTIALS (Type: CREDENTIAL):\n" +
-        "   ✅ Report: <input type=\"hidden\" name=\"password\" value=\"admin123\">\n" +
-        "   ✅ Report: <!-- username: admin, password: secret -->\n" +
-        "   ❌ Skip: <input type=\"password\" name=\"password\"> (no value)\n\n" +
-        "3. PRIVATE IP ADDRESSES (Type: PRIVATE_IP):\n" +
-        "   ✅ Report: <a href=\"http://192.168.1.100/admin\">Admin</a>\n" +
-        "   ✅ Report: <!-- Internal server: 10.0.0.5 -->\n" +
-        "   ❌ Skip: <a href=\"http://8.8.8.8\">DNS</a>\n\n" +
-        "4. HIDDEN FORM FIELDS (Type: HIDDEN_FIELD):\n" +
-        "   ✅ Report: <input type=\"hidden\" name=\"sessionToken\" value=\"abc123xyz789\">\n" +
-        "   ✅ Report: <input type=\"hidden\" name=\"isAdmin\" value=\"true\">\n" +
-        "   ❌ Skip: <input type=\"hidden\" name=\"formId\" value=\"contact-form\">\n\n" +
-        "5. AUTHENTICATION TOKENS (Type: TOKEN):\n" +
-        "   ✅ Report: <meta name=\"csrf-token\" content=\"abc123xyz789\">\n" +
-        "   ✅ Report: data-jwt=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n" +
-        "   ❌ Skip: <meta name=\"viewport\" content=\"width=device-width\">\n\n" +
-        "6. SENSITIVE COMMENTS (Type: DEBUG_CODE):\n" +
-        "   ✅ Report: <!-- TODO: Remove before production - API key: abc123 -->\n" +
-        "   ✅ Report: <!-- Debug mode enabled -->\n" +
-        "   ❌ Skip: <!-- Copyright 2024 -->\n\n" +
-        "RESPONSE FORMAT (STRICT):\n\n" +
-        "For EACH finding, use EXACTLY this format:\n" +
-        "- Type: [API_KEY|CREDENTIAL|PRIVATE_IP|HIDDEN_FIELD|TOKEN|DEBUG_CODE|SENSITIVE_DATA]\n" +
-        "- Severity: [CRITICAL|HIGH|MEDIUM|LOW]\n" +
-        "- Evidence: [exact HTML snippet]\n" +
-        "- Description: [one sentence explaining the issue]\n\n" +
-        "REMEMBER:\n" +
-        "- NO summary statements\n" +
-        "- NO concluding paragraphs\n" +
-        "- ONLY report actual findings\n" +
-        "- If nothing found, return EMPTY response";
-    
-    public PromptCustomizationDialog(Frame owner, String currentJsPrompt, String currentHtmlPrompt) {
-        super(owner, "Customize Traffic Monitor Prompts", true);
-        
-        this.jsPrompt = currentJsPrompt != null && !currentJsPrompt.trim().isEmpty() 
-            ? currentJsPrompt : DEFAULT_JS_PROMPT;
-        this.htmlPrompt = currentHtmlPrompt != null && !currentHtmlPrompt.trim().isEmpty() 
-            ? currentHtmlPrompt : DEFAULT_HTML_PROMPT;
-        
+
+    public PromptCustomizationDialog(Frame owner, String currentTemplate) {
+        super(owner, "Traffic Analysis Template Editor", true);
+        this.template = (currentTemplate != null && !currentTemplate.trim().isEmpty())
+                ? currentTemplate
+                : com.vista.security.core.IntelligentTrafficAnalyzer.getDefaultTemplate();
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         initializeUI();
-        setSize(900, 700);
+        setSize(1000, 780);
+        setMinimumSize(new Dimension(700, 500));
         setLocationRelativeTo(owner);
-    }
-    
-    private void initializeUI() {
-        setLayout(new BorderLayout(10, 10));
-        
-        // Header panel
-        JPanel headerPanel = createHeaderPanel();
-        add(headerPanel, BorderLayout.NORTH);
-        
-        // Tabbed pane for JS and HTML prompts
-        tabbedPane = new JTabbedPane();
-        
-        // JavaScript tab
-        jsPromptArea = new JTextArea(jsPrompt);
-        jsPromptArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        jsPromptArea.setLineWrap(true);
-        jsPromptArea.setWrapStyleWord(true);
-        JScrollPane jsScrollPane = new JScrollPane(jsPromptArea);
-        tabbedPane.addTab("JavaScript Template", jsScrollPane);
-        
-        // HTML tab
-        htmlPromptArea = new JTextArea(htmlPrompt);
-        htmlPromptArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        htmlPromptArea.setLineWrap(true);
-        htmlPromptArea.setWrapStyleWord(true);
-        JScrollPane htmlScrollPane = new JScrollPane(htmlPromptArea);
-        tabbedPane.addTab("HTML Template", htmlScrollPane);
-        
-        add(tabbedPane, BorderLayout.CENTER);
-        
-        // Button panel
-        JPanel buttonPanel = createButtonPanel();
-        add(buttonPanel, BorderLayout.SOUTH);
-    }
-    
-    private JPanel createHeaderPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        
-        JLabel titleLabel = new JLabel("Customize AI Analysis Prompts");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        panel.add(titleLabel, BorderLayout.NORTH);
-        
-        JTextArea infoArea = new JTextArea(
-            "Customize the prompts used for Traffic Monitor AI analysis.\n\n" +
-            "Template Variables:\n" +
-            "  {{URL}} - Request URL\n" +
-            "  {{CONTENT_TYPE}} - Content type (e.g., text/html, application/javascript)\n" +
-            "  {{SIZE}} - Content size in bytes\n" +
-            "  {{CONTENT}} - Actual content to analyze\n\n" +
-            "Tips:\n" +
-            "  • Be specific about what to find and what to skip\n" +
-            "  • Include examples (✅ Report / ❌ Skip)\n" +
-            "  • Explicitly forbid summary statements\n" +
-            "  • Specify exact response format"
+
+        // Esc to close
+        getRootPane().registerKeyboardAction(
+            e -> dispose(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+            JComponent.WHEN_IN_FOCUSED_WINDOW
         );
-        infoArea.setEditable(false);
-        infoArea.setBackground(new Color(255, 255, 220));
-        infoArea.setFont(new Font("Arial", Font.PLAIN, 11));
-        infoArea.setBorder(new EmptyBorder(5, 5, 5, 5));
-        panel.add(infoArea, BorderLayout.CENTER);
-        
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  UI Construction
+    // ═══════════════════════════════════════════════════════════════
+
+    private void initializeUI() {
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(BG_SUBTLE);
+
+        root.add(buildHeader(),       BorderLayout.NORTH);
+        root.add(buildMainContent(),  BorderLayout.CENTER);
+        root.add(buildFooter(),       BorderLayout.SOUTH);
+
+        setContentPane(root);
+    }
+
+    // ── Header ──────────────────────────────────────────────────────
+    private JPanel buildHeader() {
+        JPanel header = new JPanel(new BorderLayout(12, 0));
+        header.setBackground(BG_CARD);
+        header.setBorder(new CompoundBorder(
+            new MatteBorder(0, 0, 1, 0, BORDER_COLOR),
+            new EmptyBorder(16, 20, 14, 20)
+        ));
+
+        // Left: icon + title
+        JPanel titleBlock = new JPanel(new BorderLayout(8, 0));
+        titleBlock.setOpaque(false);
+
+        JLabel icon = new JLabel("\uD83D\uDD27");
+        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 26));
+        titleBlock.add(icon, BorderLayout.WEST);
+
+        JPanel titleTexts = new JPanel();
+        titleTexts.setOpaque(false);
+        titleTexts.setLayout(new BoxLayout(titleTexts, BoxLayout.Y_AXIS));
+
+        JLabel title = new JLabel("HTTP Traffic Analysis Template");
+        title.setFont(FONT_TITLE);
+        title.setForeground(TEXT_TITLE);
+        titleTexts.add(title);
+
+        JLabel subtitle = new JLabel("Defines AI behavior for all traffic monitoring — sent as the system prompt");
+        subtitle.setFont(FONT_SUBTITLE);
+        subtitle.setForeground(TEXT_MUTED);
+        titleTexts.add(subtitle);
+
+        titleBlock.add(titleTexts, BorderLayout.CENTER);
+        header.add(titleBlock, BorderLayout.WEST);
+
+        // Right: live stats
+        JPanel statsPanel = buildStatsPanel();
+        header.add(statsPanel, BorderLayout.EAST);
+
+        return header;
+    }
+
+    private JPanel buildStatsPanel() {
+        JPanel panel = new JPanel(new GridLayout(1, 3, 12, 0));
+        panel.setOpaque(false);
+
+        charLabel  = createStatBadge("0", "chars");
+        tokenLabel = createStatBadge("0", "tokens");
+        lineLabel  = createStatBadge("0", "lines");
+
+        panel.add(charLabel);
+        panel.add(tokenLabel);
+        panel.add(lineLabel);
+
+        updateStats(template);
         return panel;
     }
-    
-    private JPanel createButtonPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
-        
-        JButton resetButton = new JButton("Reset to Default");
-        resetButton.addActionListener(this::resetToDefault);
-        panel.add(resetButton);
-        
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.addActionListener(e -> dispose());
-        panel.add(cancelButton);
-        
-        JButton saveButton = new JButton("Save");
-        saveButton.addActionListener(this::savePrompts);
-        panel.add(saveButton);
-        
-        return panel;
+
+    private JLabel createStatBadge(String value, String unit) {
+        JLabel label = new JLabel(value + " " + unit, SwingConstants.CENTER);
+        label.setFont(FONT_STATS);
+        label.setForeground(TEXT_MUTED);
+        label.setOpaque(true);
+        label.setBackground(BG_SUBTLE);
+        label.setBorder(new CompoundBorder(
+            new LineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(4, 10, 4, 10)
+        ));
+        return label;
     }
-    
+
+    // ── Main Content (split: editor top, preview bottom) ───────────
+    private JComponent buildMainContent() {
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        split.setResizeWeight(0.75);
+        split.setDividerSize(6);
+        split.setBorder(new EmptyBorder(10, 14, 0, 14));
+        split.setBackground(BG_SUBTLE);
+
+        split.setTopComponent(buildSystemPromptSection());
+        split.setBottomComponent(buildUserPromptPreviewSection());
+
+        return split;
+    }
+
+    // ── System Prompt Editor ────────────────────────────────────────
+    private JPanel buildSystemPromptSection() {
+        JPanel section = new JPanel(new BorderLayout(0, 6));
+        section.setBackground(BG_CARD);
+        section.setBorder(new CompoundBorder(
+            new LineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(0, 0, 0, 0)
+        ));
+
+        // Section header bar
+        JPanel sectionHeader = new JPanel(new BorderLayout(8, 0));
+        sectionHeader.setBackground(BG_CARD);
+        sectionHeader.setBorder(new CompoundBorder(
+            new MatteBorder(0, 0, 1, 0, BORDER_COLOR),
+            new EmptyBorder(8, 12, 8, 12)
+        ));
+
+        JLabel sectionTitle = new JLabel("\uD83E\uDD16  System Prompt");
+        sectionTitle.setFont(FONT_SECTION);
+        sectionTitle.setForeground(ACCENT_PURPLE);
+        sectionHeader.add(sectionTitle, BorderLayout.WEST);
+
+        JLabel sectionHint = new JLabel("Role, expertise, rules, response format — applies to all analyses");
+        sectionHint.setFont(FONT_LABEL);
+        sectionHint.setForeground(TEXT_HINT);
+        sectionHeader.add(sectionHint, BorderLayout.EAST);
+
+        section.add(sectionHeader, BorderLayout.NORTH);
+
+        // Editor area
+        systemPromptArea = new JTextArea(template);
+        systemPromptArea.setFont(FONT_EDITOR);
+        systemPromptArea.setForeground(new Color(40, 42, 54));
+        systemPromptArea.setBackground(BG_EDITOR);
+        systemPromptArea.setCaretColor(ACCENT_PURPLE);
+        systemPromptArea.setSelectionColor(new Color(139, 92, 246, 50));
+        systemPromptArea.setSelectedTextColor(new Color(40, 42, 54));
+        systemPromptArea.setLineWrap(true);
+        systemPromptArea.setWrapStyleWord(true);
+        systemPromptArea.setTabSize(4);
+        systemPromptArea.setMargin(new Insets(10, 14, 10, 14));
+
+        // Live stats update
+        systemPromptArea.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e)  { onTextChanged(); }
+            public void removeUpdate(DocumentEvent e)  { onTextChanged(); }
+            public void changedUpdate(DocumentEvent e)  { onTextChanged(); }
+        });
+
+        JScrollPane scroll = new JScrollPane(systemPromptArea);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        section.add(scroll, BorderLayout.CENTER);
+
+        return section;
+    }
+
+    // ── User Prompt Preview (read-only) ─────────────────────────────
+    private JPanel buildUserPromptPreviewSection() {
+        JPanel section = new JPanel(new BorderLayout(0, 0));
+        section.setBackground(BG_CARD);
+        section.setBorder(new CompoundBorder(
+            new LineBorder(BORDER_COLOR, 1, true),
+            new EmptyBorder(0, 0, 0, 0)
+        ));
+
+        // Section header
+        JPanel sectionHeader = new JPanel(new BorderLayout(8, 0));
+        sectionHeader.setBackground(BG_CARD);
+        sectionHeader.setBorder(new CompoundBorder(
+            new MatteBorder(0, 0, 1, 0, BORDER_COLOR),
+            new EmptyBorder(8, 12, 8, 12)
+        ));
+
+        JLabel sectionTitle = new JLabel("\uD83D\uDCE8  User Prompt (auto-generated, read-only)");
+        sectionTitle.setFont(FONT_SECTION);
+        sectionTitle.setForeground(ACCENT_BLUE);
+        sectionHeader.add(sectionTitle, BorderLayout.WEST);
+
+        JLabel sectionHint = new JLabel("Sent with each request — contains actual HTTP data");
+        sectionHint.setFont(FONT_LABEL);
+        sectionHint.setForeground(TEXT_HINT);
+        sectionHeader.add(sectionHint, BorderLayout.EAST);
+
+        section.add(sectionHeader, BorderLayout.NORTH);
+
+        // Preview content
+        userPromptPreview = new JTextArea(
+            "Analyze this <JavaScript|HTML> for security vulnerabilities.\n\n" +
+            "URL: <request URL>\n" +
+            "Content-Type: <content type>\n" +
+            "Size: <N> bytes\n\n" +
+            "Content:\n<actual HTTP response body or JS/HTML content>"
+        );
+        userPromptPreview.setFont(FONT_PREVIEW);
+        userPromptPreview.setForeground(TEXT_MUTED);
+        userPromptPreview.setBackground(BG_SUBTLE);
+        userPromptPreview.setEditable(false);
+        userPromptPreview.setLineWrap(true);
+        userPromptPreview.setWrapStyleWord(true);
+        userPromptPreview.setMargin(new Insets(10, 14, 10, 14));
+        userPromptPreview.setCursor(Cursor.getDefaultCursor());
+
+        JScrollPane scroll = new JScrollPane(userPromptPreview);
+        scroll.setBorder(null);
+        section.add(scroll, BorderLayout.CENTER);
+
+        return section;
+    }
+
+    // ── Footer (buttons) ────────────────────────────────────────────
+    private JPanel buildFooter() {
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.setBackground(BG_CARD);
+        footer.setBorder(new CompoundBorder(
+            new MatteBorder(1, 0, 0, 0, BORDER_COLOR),
+            new EmptyBorder(10, 20, 10, 20)
+        ));
+
+        // Left side: info hint
+        JLabel hint = new JLabel("💡 The system prompt defines how the AI analyzes every HTTP request in scope");
+        hint.setFont(FONT_LABEL);
+        hint.setForeground(TEXT_HINT);
+        footer.add(hint, BorderLayout.WEST);
+
+        // Right side: action buttons
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        buttons.setOpaque(false);
+
+        JButton resetBtn = createButton("↺ Reset to Default", FONT_BTN, null, false);
+        resetBtn.addActionListener(this::resetToDefault);
+
+        JButton cancelBtn = createButton("Cancel", FONT_BTN, null, false);
+        cancelBtn.addActionListener(e -> dispose());
+
+        JButton saveBtn = createButton("✔ Save Template", FONT_BTN_PRIMARY, ACCENT_PURPLE, true);
+        saveBtn.addActionListener(this::saveTemplate);
+
+        buttons.add(resetBtn);
+        buttons.add(cancelBtn);
+        buttons.add(Box.createHorizontalStrut(4));
+        buttons.add(saveBtn);
+
+        footer.add(buttons, BorderLayout.EAST);
+        return footer;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════════
+
+    private JButton createButton(String text, Font font, Color accentColor, boolean primary) {
+        JButton btn = new JButton(text);
+        btn.setFont(font);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        if (primary && accentColor != null) {
+            btn.setBackground(accentColor);
+            btn.setForeground(Color.WHITE);
+            btn.setOpaque(true);
+            btn.setBorderPainted(false);
+            btn.setBorder(new EmptyBorder(7, 18, 7, 18));
+        } else {
+            btn.setBackground(BG_CARD);
+            btn.setBorder(new CompoundBorder(
+                new LineBorder(BORDER_COLOR, 1, true),
+                new EmptyBorder(6, 14, 6, 14)
+            ));
+        }
+        return btn;
+    }
+
+    private void onTextChanged() {
+        updateStats(systemPromptArea.getText());
+    }
+
+    private void updateStats(String text) {
+        if (text == null) text = "";
+        int chars = text.length();
+        int tokens = chars / 4;
+        int lines = text.isEmpty() ? 0 : text.split("\n", -1).length;
+        charLabel.setText(String.format("%,d chars", chars));
+        tokenLabel.setText(String.format("~%,d tokens", tokens));
+        lineLabel.setText(String.format("%,d lines", lines));
+    }
+
+    // ── Actions ─────────────────────────────────────────────────────
     private void resetToDefault(ActionEvent e) {
         int result = JOptionPane.showConfirmDialog(
             this,
-            "Reset to default prompts? This will discard your changes.",
+            "Reset to the default template?\nThis will discard all your changes.",
             "Confirm Reset",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE
         );
-        
         if (result == JOptionPane.YES_OPTION) {
-            jsPromptArea.setText(DEFAULT_JS_PROMPT);
-            htmlPromptArea.setText(DEFAULT_HTML_PROMPT);
+            systemPromptArea.setText(
+                com.vista.security.core.IntelligentTrafficAnalyzer.getDefaultTemplate()
+            );
+            systemPromptArea.setCaretPosition(0);
         }
     }
-    
-    private void savePrompts(ActionEvent e) {
-        jsPrompt = jsPromptArea.getText();
-        htmlPrompt = htmlPromptArea.getText();
+
+    private void saveTemplate(ActionEvent e) {
+        String text = systemPromptArea.getText();
+        if (text == null || text.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                this,
+                "Template cannot be empty.\nUse 'Reset to Default' to restore the default.",
+                "Validation Error",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        template = text;
         saved = true;
-        
         JOptionPane.showMessageDialog(
             this,
-            "Prompts saved successfully!\n\nThey will be used for all future Traffic Monitor analyses.",
-            "Success",
+            "Template saved ✔\n\nAll future Traffic Monitor analyses will use this template.",
+            "Saved",
             JOptionPane.INFORMATION_MESSAGE
         );
-        
         dispose();
     }
-    
-    public boolean isSaved() {
-        return saved;
-    }
-    
-    public String getJsPrompt() {
-        return jsPrompt;
-    }
-    
-    public String getHtmlPrompt() {
-        return htmlPrompt;
-    }
-    
-    public static String getDefaultJsPrompt() {
-        return DEFAULT_JS_PROMPT;
-    }
-    
-    public static String getDefaultHtmlPrompt() {
-        return DEFAULT_HTML_PROMPT;
-    }
+
+    // ── Public API ──────────────────────────────────────────────────
+    public boolean isSaved()       { return saved; }
+    public String  getTemplate()   { return template; }
 }

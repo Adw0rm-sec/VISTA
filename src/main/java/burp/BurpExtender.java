@@ -1,14 +1,13 @@
 package burp;
 
-import com.vista.security.ui.DashboardPanel;
 import com.vista.security.ui.TestingSuggestionsPanel;
 import com.vista.security.ui.SettingsPanel;
 import com.vista.security.ui.PromptTemplatePanel;
 import com.vista.security.ui.PayloadLibraryPanel;
-import com.vista.security.ui.RequestCollectionPanel;
-// Using TrafficMonitorPanel with NEW hierarchical tree UI
+import com.vista.security.core.AIConfigManager;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,23 +16,25 @@ import java.util.List;
  * VISTA - AI-Powered Security Testing Assistant
  * Professional-grade Burp Suite extension for intelligent vulnerability exploitation.
  * 
- * @version 2.8.4
+ * @version 2.10.23
  * @author VISTA Security Team
  */
 public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     
     private static final String EXTENSION_NAME = "VISTA";
-    private static final String VERSION = "2.9.0";
+    private static final String VERSION = "2.10.23";
     
     private IBurpExtenderCallbacks callbacks;
-    private DashboardPanel dashboardPanel;
     private TestingSuggestionsPanel testingSuggestionsPanel;
     private PromptTemplatePanel promptTemplatePanel;
     private PayloadLibraryPanel payloadLibraryPanel;
-    private RequestCollectionPanel requestCollectionPanel;
-    private JPanel trafficMonitorPanel; // Can be either TrafficMonitorPanel or TrafficMonitorPanelSimple
+    private JPanel trafficMonitorPanel;
     private SettingsPanel settingsPanel;
     private JTabbedPane tabbedPane;
+    private JPanel rootPanel;       // wrapper: statusBar + tabbedPane
+    private JLabel aiStatusDot;
+    private JLabel aiStatusText;
+    private JLabel aiModelText;
 
     @Override
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
@@ -53,7 +54,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
         callbacks.printOutput("║    ╚████╔╝ ██║███████║   ██║   ██║  ██║                   ║");
         callbacks.printOutput("║     ╚═══╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝                   ║");
         callbacks.printOutput("║                                                            ║");
-        callbacks.printOutput("║   AI-Powered Security Testing Assistant v" + VERSION + "          ║");
+        callbacks.printOutput("║   AI-Powered Security Testing Assistant v" + VERSION + "       ║");
         callbacks.printOutput("║   Professional Vulnerability Exploitation Tool            ║");
         callbacks.printOutput("║                                                            ║");
         callbacks.printOutput("╚════════════════════════════════════════════════════════════╝");
@@ -71,10 +72,6 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     this.settingsPanel = new SettingsPanel(callbacks);
                     callbacks.printOutput("[VISTA] ✓ SettingsPanel initialized");
                     
-                    callbacks.printOutput("[VISTA] Initializing DashboardPanel...");
-                    this.dashboardPanel = new DashboardPanel(callbacks);
-                    callbacks.printOutput("[VISTA] ✓ DashboardPanel initialized");
-                    
                     callbacks.printOutput("[VISTA] Initializing TestingSuggestionsPanel...");
                     this.testingSuggestionsPanel = new TestingSuggestionsPanel(callbacks);
                     callbacks.printOutput("[VISTA] ✓ TestingSuggestionsPanel initialized");
@@ -87,10 +84,6 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     this.payloadLibraryPanel = new PayloadLibraryPanel(callbacks);
                     callbacks.printOutput("[VISTA] ✓ PayloadLibraryPanel initialized");
                     
-                    callbacks.printOutput("[VISTA] Initializing RequestCollectionPanel...");
-                    this.requestCollectionPanel = new RequestCollectionPanel(callbacks);
-                    callbacks.printOutput("[VISTA] ✓ RequestCollectionPanel initialized");
-                    
                     // Initialize Traffic Monitor with NEW hierarchical UI
                     callbacks.printOutput("[VISTA] Initializing TrafficMonitorPanel (Hierarchical UI)...");
                     this.trafficMonitorPanel = new com.vista.security.ui.TrafficMonitorPanel(callbacks);
@@ -101,19 +94,24 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     this.tabbedPane = new JTabbedPane();
                     tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
                     
-                    // Add tabs with icons (using Unicode symbols)
+                    // Add tabs with icons
                     callbacks.printOutput("[VISTA] Adding tabs...");
-                    tabbedPane.addTab("  🏠 Dashboard  ", dashboardPanel);
                     tabbedPane.addTab("  💡 AI Advisor  ", testingSuggestionsPanel);
                     tabbedPane.addTab("  🌐 Traffic Monitor  ", trafficMonitorPanel);
                     tabbedPane.addTab("  📝 Prompt Templates  ", promptTemplatePanel);
                     tabbedPane.addTab("  🎯 Payload Library  ", payloadLibraryPanel);
-                    tabbedPane.addTab("  📁 Collections  ", requestCollectionPanel);
                     tabbedPane.addTab("  ⚙️ Settings  ", settingsPanel);
                     callbacks.printOutput("[VISTA] ✓ All tabs added to tabbed pane");
                     
-                    // Connect dashboard to AI Advisor
-                    dashboardPanel.setTestingSuggestionsPanel(testingSuggestionsPanel);
+                    // Build root panel: status bar + tabs
+                    this.rootPanel = new JPanel(new BorderLayout());
+                    rootPanel.add(createStatusBar(), BorderLayout.NORTH);
+                    rootPanel.add(tabbedPane, BorderLayout.CENTER);
+                    
+                    // Start AI status polling
+                    Timer statusTimer = new Timer(2000, ev -> refreshAIStatus());
+                    statusTimer.start();
+                    refreshAIStatus(); // initial
                     
                     // Add the tab to Burp Suite
                     callbacks.printOutput("[VISTA] Registering VISTA tab with Burp Suite...");
@@ -133,13 +131,10 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     callbacks.printOutput("");
                     callbacks.printOutput("→ Look for 'VISTA' tab in the top bar");
                     callbacks.printOutput("→ Right-click any request → 'Send to VISTA AI Advisor'");
-                    callbacks.printOutput("→ Right-click any request → 'Add to Collection'");
                     callbacks.printOutput("→ Configure your AI provider in Settings tab");
                     callbacks.printOutput("→ Get testing suggestions and methodologies");
                     callbacks.printOutput("→ Use Prompt Templates for specialized testing");
                     callbacks.printOutput("→ Use Payload Library for quick payload access");
-                    callbacks.printOutput("→ Use Collections to organize similar requests");
-                    callbacks.printOutput("→ View Dashboard for quick stats and actions");
                     callbacks.printOutput("");
                     
                 } catch (Exception e) {
@@ -172,7 +167,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
 
     @Override
     public Component getUiComponent() {
-        return tabbedPane != null ? tabbedPane : new JPanel();
+        return rootPanel != null ? rootPanel : new JPanel();
     }
 
     @Override
@@ -191,7 +186,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
             if (testingSuggestionsPanel != null) {
                 testingSuggestionsPanel.setRequest(messages[0]);
                 if (tabbedPane != null) {
-                    tabbedPane.setSelectedIndex(1); // AI Advisor tab
+                    tabbedPane.setSelectedIndex(0); // AI Advisor tab
                 }
             }
         });
@@ -217,7 +212,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                 
                 if (tabbedPane != null) {
                     callbacks.printOutput("[VISTA] Switching to AI Advisor tab");
-                    tabbedPane.setSelectedIndex(1); // AI Advisor tab
+                    tabbedPane.setSelectedIndex(0); // AI Advisor tab
                 }
                 
                 callbacks.printOutput("[VISTA] Context menu action completed");
@@ -226,22 +221,6 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
             }
         });
         menuItems.add(sendToInteractive);
-        
-        // Add separator
-        menuItems.add(null);
-        
-        // Add to Collection
-        JMenuItem addToCollection = new JMenuItem("📁 Add to Collection");
-        addToCollection.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        addToCollection.addActionListener(e -> {
-            if (requestCollectionPanel != null) {
-                requestCollectionPanel.addRequestToCollection(messages[0]);
-                if (tabbedPane != null) {
-                    tabbedPane.setSelectedIndex(5); // Collections tab (index 5 now)
-                }
-            }
-        });
-        menuItems.add(addToCollection);
         
         // Note: Traffic Monitor (Simple) automatically captures all traffic
         // No need for manual "Send to Traffic Monitor" option
@@ -290,5 +269,119 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
             // Ignore
         }
         return "Unknown";
+    }
+
+    /**
+     * Creates a sleek status bar showing VISTA branding + live AI configuration status.
+     * Sits above the tabbed pane for always-visible status.
+     */
+    private JPanel createStatusBar() {
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.setBackground(new Color(15, 23, 42));  // slate-900
+        bar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(51, 65, 85)),  // slate-700 bottom border
+            new EmptyBorder(8, 16, 8, 16)
+        ));
+        bar.setPreferredSize(new Dimension(0, 42));
+
+        // Left: VISTA branding
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        leftPanel.setOpaque(false);
+
+        JLabel logo = new JLabel("VISTA");
+        logo.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        logo.setForeground(new Color(96, 165, 250));  // blue-400
+        leftPanel.add(logo);
+
+        JLabel version = new JLabel("  v" + VERSION);
+        version.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        version.setForeground(new Color(148, 163, 184)); // slate-400
+        leftPanel.add(version);
+
+        JLabel separator = new JLabel("   │   ");
+        separator.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        separator.setForeground(new Color(51, 65, 85));   // slate-700
+        leftPanel.add(separator);
+
+        JLabel tagline = new JLabel("AI-Powered Security Testing");
+        tagline.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        tagline.setForeground(new Color(148, 163, 184)); // slate-400
+        leftPanel.add(tagline);
+
+        bar.add(leftPanel, BorderLayout.WEST);
+
+        // Right: AI status indicator
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        rightPanel.setOpaque(false);
+
+        aiStatusDot = new JLabel("●");
+        aiStatusDot.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        aiStatusDot.setForeground(new Color(239, 68, 68)); // red initially
+
+        aiStatusText = new JLabel("AI: Not Configured");
+        aiStatusText.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        aiStatusText.setForeground(new Color(148, 163, 184));
+
+        aiModelText = new JLabel("");
+        aiModelText.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        aiModelText.setForeground(new Color(148, 163, 184));
+
+        // Clickable → jump to Settings
+        JLabel settingsLink = new JLabel("  ⚙");
+        settingsLink.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        settingsLink.setForeground(new Color(148, 163, 184));
+        settingsLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        settingsLink.setToolTipText("Open Settings");
+        settingsLink.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (tabbedPane != null) {
+                    tabbedPane.setSelectedIndex(4); // Settings tab
+                }
+            }
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                settingsLink.setForeground(new Color(96, 165, 250)); // blue-400
+            }
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                settingsLink.setForeground(new Color(148, 163, 184));
+            }
+        });
+
+        rightPanel.add(aiStatusDot);
+        rightPanel.add(aiStatusText);
+        rightPanel.add(aiModelText);
+        rightPanel.add(settingsLink);
+
+        bar.add(rightPanel, BorderLayout.EAST);
+
+        return bar;
+    }
+
+    /**
+     * Refreshes the AI status indicator in the status bar.
+     */
+    private void refreshAIStatus() {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                AIConfigManager config = AIConfigManager.getInstance();
+                if (config.isConfigured()) {
+                    aiStatusDot.setForeground(new Color(34, 197, 94));     // green-500
+                    aiStatusText.setText("AI: Ready");
+                    aiStatusText.setForeground(new Color(34, 197, 94));
+                    String model = config.getModel();
+                    String provider = config.getProvider();
+                    aiModelText.setText("(" + provider + (model != null && !model.isEmpty() ? " / " + model : "") + ")");
+                } else {
+                    aiStatusDot.setForeground(new Color(239, 68, 68));     // red-500
+                    aiStatusText.setText("AI: Not Configured");
+                    aiStatusText.setForeground(new Color(250, 204, 21));   // yellow-400
+                    aiModelText.setText("— click ⚙ to set up");
+                }
+            } catch (Exception ignored) {
+                // Safely ignore during init
+            }
+        });
     }
 }
