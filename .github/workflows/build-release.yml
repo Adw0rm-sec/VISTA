@@ -1,0 +1,95 @@
+name: Auto Build Latest
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-release-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+        
+    - name: Build with Maven
+      run: mvn clean package -DskipTests -B -q
+      
+    - name: Get version from pom.xml
+      id: get_version
+      run: |
+        VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+        
+    - name: Get short SHA
+      id: sha
+      run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+      
+    - name: Get commit message
+      id: commit
+      run: echo "message=$(git log -1 --pretty=%B | head -1)" >> $GITHUB_OUTPUT
+        
+    - name: Delete existing latest release
+      continue-on-error: true
+      run: |
+        gh release delete latest --yes 2>/dev/null || true
+        git push origin :refs/tags/latest 2>/dev/null || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Create Latest Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: latest
+        name: 🚀 Latest Build (v${{ steps.get_version.outputs.version }})
+        body: |
+          ## Latest Development Build
+          
+          **Version:** ${{ steps.get_version.outputs.version }}
+          **Commit:** [${{ steps.sha.outputs.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          **Built:** ${{ steps.date.outputs.date }}
+          **Change:** ${{ steps.commit.outputs.message }}
+          
+          ---
+          
+          ### 📦 Quick Install
+          1. Download `vista-${{ steps.get_version.outputs.version }}.jar` below
+          2. Open Burp Suite → Extender → Extensions
+          3. Click "Add" and select the downloaded JAR
+          4. Configure your AI provider in the Settings tab
+          
+          ### ⚙️ Requirements
+          - Burp Suite Professional or Community Edition
+          - Java 17+
+          - OpenAI / Azure OpenAI / OpenRouter API key
+          
+          ---
+          
+          ⚠️ **Note:** This is an automated build from the latest commit.
+          For stable releases, use [versioned releases](https://github.com/${{ github.repository }}/releases).
+          
+        draft: false
+        prerelease: true
+        files: |
+          target/vista-${{ steps.get_version.outputs.version }}.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

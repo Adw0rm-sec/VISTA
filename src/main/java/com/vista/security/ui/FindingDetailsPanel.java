@@ -86,6 +86,9 @@ public class FindingDetailsPanel extends JPanel {
         System.out.println("[Finding Details]    Severity: " + finding.getSeverity());
         System.out.println("[Finding Details]    URL: " + finding.getSourceTransaction().getUrl());
         System.out.println("[Finding Details]    Has parameter: " + (finding.getAffectedParameter() != null && !finding.getAffectedParameter().isEmpty()));
+        System.out.println("[Finding Details]    Has description: " + (finding.getDescription() != null && !finding.getDescription().isEmpty()));
+        System.out.println("[Finding Details]    Has detailedDescription: " + (finding.getDetailedDescription() != null && !finding.getDetailedDescription().isEmpty()));
+        System.out.println("[Finding Details]    Description value: " + (finding.getDescription() != null ? finding.getDescription().substring(0, Math.min(50, finding.getDescription().length())) + "..." : "null"));
         System.out.println("[Finding Details]    Has impact: " + (finding.getImpact() != null && !finding.getImpact().isEmpty()));
         System.out.println("[Finding Details]    Has remediation: " + (finding.getRemediation() != null && !finding.getRemediation().isEmpty()));
         System.out.println("[Finding Details]    Has decoded data: " + finding.hasDecodedData());
@@ -127,10 +130,20 @@ public class FindingDetailsPanel extends JPanel {
         details.append("───────────────────────────────────────────────────────────\n");
         details.append("DESCRIPTION\n");
         details.append("───────────────────────────────────────────────────────────\n");
+        
+        // Get description from AI response (try detailedDescription first, then description)
+        String descriptionText = null;
         if (finding.getDetailedDescription() != null && !finding.getDetailedDescription().isEmpty()) {
-            details.append(finding.getDetailedDescription()).append("\n\n");
+            descriptionText = finding.getDetailedDescription();
+        } else if (finding.getDescription() != null && !finding.getDescription().isEmpty()) {
+            descriptionText = finding.getDescription();
+        }
+        
+        if (descriptionText != null && !descriptionText.isEmpty()) {
+            // Format the description for better readability
+            details.append(formatDescription(descriptionText)).append("\n\n");
         } else {
-            details.append(finding.getDescription()).append("\n\n");
+            details.append("No description provided by AI.\n\n");
         }
         
         // Impact (if available)
@@ -187,6 +200,44 @@ public class FindingDetailsPanel extends JPanel {
             case "INFO" -> "⚪ INFO";
             default -> severity;
         };
+    }
+    
+    /**
+     * Format description text for better readability.
+     * - Removes markdown formatting (**, `, etc.)
+     * - Adds line breaks at sentence ends
+     * - Formats sections like "Summary:" on new lines
+     * - Breaks at separators like "---"
+     */
+    private String formatDescription(String description) {
+        if (description == null || description.isEmpty()) {
+            return description;
+        }
+        
+        String formatted = description;
+        
+        // Remove markdown bold markers **text** -> text
+        formatted = formatted.replaceAll("\\*\\*([^*]+)\\*\\*", "$1");
+        
+        // Remove markdown backticks `text` -> text
+        formatted = formatted.replaceAll("`([^`]+)`", "$1");
+        
+        // Replace "---" separator with proper line break
+        formatted = formatted.replaceAll("\\s*---\\s*", "\n\n");
+        
+        // Add line break before common section headers
+        formatted = formatted.replaceAll("(?i)(Summary:|Note:|Warning:|Important:|Recommendation:|Impact:|Risk:)", "\n\n• $1");
+        
+        // Add line breaks after sentences (. followed by space and uppercase letter)
+        formatted = formatted.replaceAll("\\.\\s+([A-Z])", ".\n$1");
+        
+        // Clean up multiple consecutive newlines (max 2)
+        formatted = formatted.replaceAll("\n{3,}", "\n\n");
+        
+        // Trim leading/trailing whitespace
+        formatted = formatted.trim();
+        
+        return formatted;
     }
     
     /**

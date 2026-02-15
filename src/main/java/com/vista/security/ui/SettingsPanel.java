@@ -2,9 +2,6 @@ package com.vista.security.ui;
 
 import burp.IBurpExtenderCallbacks;
 import com.vista.security.core.AIConfigManager;
-import com.vista.security.core.HeadlessBrowserVerifier;
-import com.vista.security.core.MCPConfigManager;
-import com.vista.security.mcp.MCPTool;
 import com.vista.security.service.AzureAIService;
 import com.vista.security.service.OpenAIService;
 
@@ -21,7 +18,6 @@ public class SettingsPanel extends JPanel {
 
     private final IBurpExtenderCallbacks callbacks;
     private final AIConfigManager config;
-    private final MCPConfigManager mcpConfig;
 
     // AI Provider
     private final JComboBox<String> providerCombo = new JComboBox<>(new String[]{"OpenAI", "Azure AI", "OpenRouter"});
@@ -35,13 +31,6 @@ public class SettingsPanel extends JPanel {
     private final JSlider temperatureSlider = new JSlider(0, 100, 30);
     private final JLabel tempValueLabel = new JLabel("0.30");
     private final JLabel statusLabel = new JLabel();
-    private final JLabel browserStatusLabel = new JLabel();
-
-    // MCP Integration
-    private final JCheckBox mcpEnabledCheckbox = new JCheckBox("Enable Burp MCP Integration");
-    private final JTextField mcpUrlField = new JTextField("http://127.0.0.1:9876", 30);
-    private final JLabel mcpStatusLabel = new JLabel();
-    private final JTextArea mcpToolsArea = new JTextArea(5, 40);
 
     // Panel references
     private JPanel openaiPanel;
@@ -51,7 +40,6 @@ public class SettingsPanel extends JPanel {
     public SettingsPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
         this.config = AIConfigManager.getInstance();
-        this.mcpConfig = new MCPConfigManager();
         
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(20, 20, 20, 20));
@@ -199,8 +187,9 @@ public class SettingsPanel extends JPanel {
         tempRow.add(new JLabel("(Lower = more focused, Higher = more creative)"));
         advancedPanel.add(tempRow);
 
-        // Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        // Buttons - centered alignment
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         
         JButton saveBtn = new JButton("Save Configuration");
         saveBtn.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
@@ -217,83 +206,6 @@ public class SettingsPanel extends JPanel {
         buttonPanel.add(Box.createHorizontalStrut(20));
         buttonPanel.add(statusLabel);
 
-        // Browser Verification Status
-        JPanel browserPanel = createSection("Client-Side Verification");
-        JPanel browserRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        browserRow.add(new JLabel("Headless Browser:"));
-        browserRow.add(browserStatusLabel);
-        browserPanel.add(browserRow);
-        
-        JLabel browserInfo = new JLabel("<html><small>Uses Chrome/Chromium to verify XSS payloads actually execute in browser.</small></html>");
-        browserInfo.setForeground(Color.GRAY);
-        browserPanel.add(browserInfo);
-        
-        // Check browser availability
-        updateBrowserStatus();
-
-        // MCP Integration Panel
-        JPanel mcpPanel = createSection("Burp MCP Integration (Experimental)");
-        
-        JPanel mcpEnabledRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        mcpEnabledCheckbox.addActionListener(e -> {
-            boolean enabled = mcpEnabledCheckbox.isSelected();
-            mcpUrlField.setEnabled(enabled);
-            if (enabled) {
-                testMCPConnection();
-            } else {
-                mcpConfig.disable();
-                updateMCPStatus();
-            }
-        });
-        mcpEnabledRow.add(mcpEnabledCheckbox);
-        mcpPanel.add(mcpEnabledRow);
-        
-        JPanel mcpUrlRow = createRow("MCP Server URL:", mcpUrlField);
-        mcpPanel.add(mcpUrlRow);
-        mcpUrlField.setEnabled(false);
-        
-        JPanel mcpButtonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 4));
-        JButton testMCPBtn = new JButton("Test Connection");
-        testMCPBtn.addActionListener(e -> testMCPConnection());
-        mcpButtonRow.add(testMCPBtn);
-        mcpButtonRow.add(mcpStatusLabel);
-        mcpPanel.add(mcpButtonRow);
-        
-        JLabel mcpInfo1 = new JLabel("Allows VISTA AI to query Burp's HTTP history, repeater, and site map");
-        mcpInfo1.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        mcpInfo1.setForeground(Color.GRAY);
-        JPanel mcpInfoPanel1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
-        mcpInfoPanel1.add(mcpInfo1);
-        mcpPanel.add(mcpInfoPanel1);
-        
-        JLabel mcpInfo2 = new JLabel("Requires PortSwigger's Burp MCP Server extension to be installed");
-        mcpInfo2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        mcpInfo2.setForeground(Color.GRAY);
-        JPanel mcpInfoPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
-        mcpInfoPanel2.add(mcpInfo2);
-        mcpPanel.add(mcpInfoPanel2);
-        
-        JPanel mcpToolsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 4));
-        JLabel toolsLabel = new JLabel("Available Tools:");
-        toolsLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
-        mcpToolsPanel.add(toolsLabel);
-        mcpPanel.add(mcpToolsPanel);
-        
-        mcpToolsArea.setEditable(false);
-        mcpToolsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        mcpToolsArea.setBackground(new Color(245, 245, 245));
-        JScrollPane mcpToolsScroll = new JScrollPane(mcpToolsArea);
-        mcpToolsScroll.setPreferredSize(new Dimension(500, 100));
-        JPanel mcpToolsScrollPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
-        mcpToolsScrollPanel.add(mcpToolsScroll);
-        mcpPanel.add(mcpToolsScrollPanel);
-        
-        // Load MCP config
-        mcpEnabledCheckbox.setSelected(mcpConfig.isEnabled());
-        mcpUrlField.setText(mcpConfig.getServerUrl());
-        mcpUrlField.setEnabled(mcpConfig.isEnabled());
-        updateMCPStatus();
-
         // Add all sections
         mainPanel.add(headerLabel);
         mainPanel.add(Box.createVerticalStrut(4));
@@ -308,10 +220,6 @@ public class SettingsPanel extends JPanel {
         mainPanel.add(openRouterPanel);
         mainPanel.add(Box.createVerticalStrut(15));
         mainPanel.add(advancedPanel);
-        mainPanel.add(Box.createVerticalStrut(12));
-        mainPanel.add(browserPanel);
-        mainPanel.add(Box.createVerticalStrut(15));
-        mainPanel.add(mcpPanel);
         mainPanel.add(Box.createVerticalStrut(20));
         mainPanel.add(buttonPanel);
 
@@ -413,22 +321,6 @@ public class SettingsPanel extends JPanel {
         }
     }
 
-    private void updateBrowserStatus() {
-        try {
-            HeadlessBrowserVerifier verifier = new HeadlessBrowserVerifier();
-            if (verifier.isAvailable()) {
-                browserStatusLabel.setText(verifier.getStatusMessage());
-                browserStatusLabel.setForeground(new Color(0, 150, 0));
-            } else {
-                browserStatusLabel.setText(verifier.getStatusMessage());
-                browserStatusLabel.setForeground(new Color(200, 100, 0));
-            }
-        } catch (Exception e) {
-            browserStatusLabel.setText("✗ Error checking browser: " + e.getMessage());
-            browserStatusLabel.setForeground(Color.RED);
-        }
-    }
-
     private void testConnection() {
         saveConfig();
         
@@ -478,138 +370,122 @@ public class SettingsPanel extends JPanel {
                 });
 
             } catch (Exception e) {
+                final String errorMessage = e.getMessage();
                 SwingUtilities.invokeLater(() -> {
                     statusLabel.setText("✗ Connection failed");
                     statusLabel.setForeground(Color.RED);
+                    
+                    // Create a detailed error panel with scrollable text
+                    String errorDetails = parseConnectionError(errorMessage, config.getProvider());
+                    
+                    JTextArea errorArea = new JTextArea(errorDetails);
+                    errorArea.setEditable(false);
+                    errorArea.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+                    errorArea.setLineWrap(true);
+                    errorArea.setWrapStyleWord(true);
+                    errorArea.setBackground(new Color(255, 250, 250));
+                    errorArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+                    
+                    JScrollPane scrollPane = new JScrollPane(errorArea);
+                    scrollPane.setPreferredSize(new Dimension(450, 200));
+                    scrollPane.setBorder(BorderFactory.createLineBorder(new Color(220, 100, 100)));
+                    
                     JOptionPane.showMessageDialog(this, 
-                        "Connection failed:\n\n" + e.getMessage(),
-                        "Error", JOptionPane.ERROR_MESSAGE);
+                        scrollPane,
+                        "Connection Failed", JOptionPane.ERROR_MESSAGE);
                 });
             }
         }).start();
+    }
+    
+    /**
+     * Parse connection error and provide helpful suggestions.
+     */
+    private String parseConnectionError(String errorMessage, String provider) {
+        StringBuilder details = new StringBuilder();
+        details.append("❌ Connection Error\n\n");
+        
+        if (errorMessage == null) {
+            errorMessage = "Unknown error occurred";
+        }
+        
+        // Determine error type and provide helpful message
+        if (errorMessage.contains("401") || errorMessage.toLowerCase().contains("unauthorized") || 
+            errorMessage.toLowerCase().contains("invalid") && errorMessage.toLowerCase().contains("key")) {
+            details.append("🔑 Authentication Failed\n\n");
+            details.append("Your API key appears to be invalid or expired.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Check if the API key is correctly entered\n");
+            details.append("• Verify the API key hasn't expired\n");
+            details.append("• Generate a new API key if needed\n\n");
+            
+            if ("OpenAI".equals(provider)) {
+                details.append("Get a new key at: platform.openai.com/api-keys");
+            } else if ("Azure AI".equals(provider)) {
+                details.append("Check Azure Portal → Azure OpenAI Service → Keys");
+            } else if ("OpenRouter".equals(provider)) {
+                details.append("Get a new key at: openrouter.ai/keys");
+            }
+            
+        } else if (errorMessage.contains("429") || errorMessage.toLowerCase().contains("rate limit") ||
+                   errorMessage.toLowerCase().contains("quota")) {
+            details.append("⏱️ Rate Limit / Quota Exceeded\n\n");
+            details.append("You've hit the API rate limit or quota.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Wait a few minutes and try again\n");
+            details.append("• Check your API usage/billing\n");
+            details.append("• Consider upgrading your plan\n");
+            
+        } else if (errorMessage.contains("404") || errorMessage.toLowerCase().contains("not found") ||
+                   errorMessage.toLowerCase().contains("model")) {
+            details.append("🔍 Model/Endpoint Not Found\n\n");
+            details.append("The specified model or endpoint wasn't found.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Verify the model name is correct\n");
+            
+            if ("Azure AI".equals(provider)) {
+                details.append("• Check your deployment name in Azure Portal\n");
+                details.append("• Verify the endpoint URL is correct\n");
+            } else {
+                details.append("• Try a different model (e.g., gpt-4o-mini)\n");
+            }
+            
+        } else if (errorMessage.toLowerCase().contains("connection") || 
+                   errorMessage.toLowerCase().contains("timeout") ||
+                   errorMessage.toLowerCase().contains("network")) {
+            details.append("🌐 Network Error\n\n");
+            details.append("Could not connect to the AI service.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Check your internet connection\n");
+            details.append("• Verify firewall/proxy settings\n");
+            details.append("• Try again in a few moments\n");
+            
+            if ("Azure AI".equals(provider)) {
+                details.append("• Verify the endpoint URL is accessible\n");
+            }
+            
+        } else if (errorMessage.contains("500") || errorMessage.contains("502") || 
+                   errorMessage.contains("503")) {
+            details.append("🔧 Server Error\n\n");
+            details.append("The AI service is experiencing issues.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Wait a few minutes and retry\n");
+            details.append("• Check the provider's status page\n");
+            
+        } else {
+            details.append("Error Details:\n");
+            details.append(errorMessage).append("\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Verify all configuration fields are correct\n");
+            details.append("• Check the API key is valid\n");
+            details.append("• Try again in a few moments\n");
+        }
+        
+        return details.toString();
     }
 
     private String truncate(String s, int max) {
         if (s == null) return "";
         return s.length() > max ? s.substring(0, max) + "..." : s;
-    }
-
-    private void testMCPConnection() {
-        String url = mcpUrlField.getText().trim();
-        
-        if (url.isEmpty()) {
-            mcpStatusLabel.setText("✗ Please enter MCP server URL");
-            mcpStatusLabel.setForeground(Color.RED);
-            return;
-        }
-        
-        mcpStatusLabel.setText("Testing...");
-        mcpStatusLabel.setForeground(Color.BLUE);
-        mcpToolsArea.setText("Connecting...");
-        
-        new Thread(() -> {
-            try {
-                // First, run diagnostics
-                String diagnostics = com.vista.security.mcp.MCPDiagnostics.runDiagnostics(url);
-                System.out.println(diagnostics); // Print to Burp's extension output
-                
-                if (mcpConfig.testConnection(url)) {
-                    // Enable and initialize
-                    mcpConfig.enable(url);
-                    
-                    // Get available tools
-                    List<MCPTool> tools = mcpConfig.getAvailableTools();
-                    
-                    SwingUtilities.invokeLater(() -> {
-                        mcpStatusLabel.setText("✓ Connected (" + tools.size() + " tools available)");
-                        mcpStatusLabel.setForeground(new Color(0, 150, 0));
-                        
-                        if (tools.isEmpty()) {
-                            mcpToolsArea.setText("No tools available yet. Tools will appear after initialization.");
-                        } else {
-                            StringBuilder toolsList = new StringBuilder();
-                            for (MCPTool tool : tools) {
-                                toolsList.append("• ").append(tool.getName());
-                                if (tool.getDescription() != null && !tool.getDescription().isEmpty()) {
-                                    toolsList.append(" - ").append(tool.getDescription());
-                                }
-                                toolsList.append("\n");
-                            }
-                            mcpToolsArea.setText(toolsList.toString());
-                        }
-                        
-                        JOptionPane.showMessageDialog(this,
-                            "Successfully connected to Burp MCP Server!\n\n" +
-                            "VISTA AI can now query Burp's HTTP history, repeater, and site map.\n" +
-                            "Available tools: " + tools.size(),
-                            "MCP Connection Successful",
-                            JOptionPane.INFORMATION_MESSAGE);
-                    });
-                } else {
-                    SwingUtilities.invokeLater(() -> {
-                        mcpStatusLabel.setText("✗ Cannot connect to MCP server");
-                        mcpStatusLabel.setForeground(Color.RED);
-                        
-                        // Show diagnostics in tools area
-                        mcpToolsArea.setText(diagnostics);
-                        
-                        // Show detailed error dialog
-                        JTextArea diagArea = new JTextArea(diagnostics);
-                        diagArea.setEditable(false);
-                        diagArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-                        diagArea.setRows(20);
-                        diagArea.setColumns(60);
-                        JScrollPane scrollPane = new JScrollPane(diagArea);
-                        
-                        JOptionPane.showMessageDialog(this,
-                            scrollPane,
-                            "MCP Connection Failed - Diagnostics",
-                            JOptionPane.ERROR_MESSAGE);
-                    });
-                }
-            } catch (Exception e) {
-                SwingUtilities.invokeLater(() -> {
-                    mcpStatusLabel.setText("✗ Error: " + e.getMessage());
-                    mcpStatusLabel.setForeground(Color.RED);
-                    mcpToolsArea.setText("Error: " + e.getMessage() + "\n\nCheck Burp's extension output for details.");
-                    
-                    JOptionPane.showMessageDialog(this,
-                        "MCP connection error:\n\n" + e.getMessage() + "\n\nCheck Burp's Extensions → Extension output for details.",
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE);
-                });
-                e.printStackTrace(); // Print to Burp's extension output
-            }
-        }).start();
-    }
-
-    private void updateMCPStatus() {
-        if (mcpConfig.isEnabled()) {
-            List<MCPTool> tools = mcpConfig.getAvailableTools();
-            mcpStatusLabel.setText("✓ Enabled (" + tools.size() + " tools)");
-            mcpStatusLabel.setForeground(new Color(0, 150, 0));
-            
-            if (!tools.isEmpty()) {
-                StringBuilder toolsList = new StringBuilder();
-                for (MCPTool tool : tools) {
-                    toolsList.append("• ").append(tool.getName());
-                    if (tool.getDescription() != null && !tool.getDescription().isEmpty()) {
-                        toolsList.append(" - ").append(tool.getDescription());
-                    }
-                    toolsList.append("\n");
-                }
-                mcpToolsArea.setText(toolsList.toString());
-            } else {
-                mcpToolsArea.setText("MCP enabled but no tools loaded yet.");
-            }
-        } else {
-            mcpStatusLabel.setText("Disabled");
-            mcpStatusLabel.setForeground(Color.GRAY);
-            mcpToolsArea.setText("MCP integration is disabled.");
-        }
-    }
-
-    public MCPConfigManager getMCPConfig() {
-        return mcpConfig;
     }
 }

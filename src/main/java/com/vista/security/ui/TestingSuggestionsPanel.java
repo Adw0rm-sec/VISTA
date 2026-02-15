@@ -632,7 +632,8 @@ public class TestingSuggestionsPanel extends JPanel {
     
     private void sendInteractiveMessage() {
         String message = interactiveChatField.getText().trim();
-        if (message.isEmpty() || message.startsWith("Report what")) return;
+        // Check for empty message or placeholder text (starts with hint text)
+        if (message.isEmpty() || message.startsWith("Report what") || message.equals("Report what you observed or ask for bypass suggestions...")) return;
         
         interactiveChatField.setText("");
         
@@ -865,24 +866,27 @@ public class TestingSuggestionsPanel extends JPanel {
                 String systemPrompt = getCurrentSystemPrompt();
                 String requestUrl = extractRequestUrl(reqText);
                 
+                // IMPORTANT: Get the previous session BEFORE creating a new one
+                // (createSession() will change the active session)
+                ChatSession previousSession = chatSessionManager.getActiveSession();
+                
+                // Save old conversation to the previous session if it exists
+                if (previousSession != null && !conversationHistory.isEmpty()) {
+                    // Transfer old conversation history to previous session
+                    for (ConversationMessage msg : conversationHistory) {
+                        if ("USER".equals(msg.role) || "user".equals(msg.role)) {
+                            previousSession.addUserMessage(msg.content, null);
+                        } else if ("AI".equals(msg.role) || "assistant".equals(msg.role)) {
+                            previousSession.addAssistantMessage(msg.content);
+                        }
+                    }
+                }
+                
                 // Create new chat session (old sessions are preserved in ChatSessionManager)
                 ChatSession newSession = chatSessionManager.createSession(requestUrl, systemPrompt);
                 
                 // Store the request/response in the session
                 newSession.setRequestResponse(request);
-                
-                // Save old conversation to the previous session if it exists
-                ChatSession previousSession = chatSessionManager.getActiveSession();
-                if (previousSession != null && !conversationHistory.isEmpty()) {
-                    // Transfer old conversation history to previous session
-                    for (ConversationMessage msg : conversationHistory) {
-                        if ("USER".equals(msg.role)) {
-                            previousSession.addUserMessage(msg.content, null);
-                        } else if ("AI".equals(msg.role)) {
-                            previousSession.addAssistantMessage(msg.content);
-                        }
-                    }
-                }
                 
                 // Clear UI conversation for new session (but old session is saved in manager!)
                 conversationHistory.clear();
@@ -1150,6 +1154,12 @@ public class TestingSuggestionsPanel extends JPanel {
     private void showLoadingIndicator(boolean show) {
         SwingUtilities.invokeLater(() -> {
             if (show) {
+                // Stop any existing animation timer first to prevent duplicates
+                Timer existingTimer = (Timer) loadingLabel.getClientProperty("animationTimer");
+                if (existingTimer != null) {
+                    existingTimer.stop();
+                }
+                
                 loadingLabel.setText("🤖 AI is thinking...");
                 loadingLabel.setVisible(true);
                 
@@ -1170,6 +1180,7 @@ public class TestingSuggestionsPanel extends JPanel {
                 Timer animationTimer = (Timer) loadingLabel.getClientProperty("animationTimer");
                 if (animationTimer != null) {
                     animationTimer.stop();
+                    loadingLabel.putClientProperty("animationTimer", null);
                 }
                 loadingLabel.setVisible(false);
             }
@@ -1301,11 +1312,14 @@ public class TestingSuggestionsPanel extends JPanel {
             ReflectionAnalyzer.ReflectionAnalysis analysis = reflectionAnalyzer.analyze(currentRequest);
             reflectionAnalysis = analysis.getSummary();
             
-            // Extract reflection context for payload library
-            if (!analysis.getReflections().isEmpty()) {
-                List<ReflectionAnalyzer.ReflectionContext> contexts = analysis.getReflections().get(0).getContexts();
-                if (!contexts.isEmpty()) {
-                    reflectionContext = contexts.get(0).getContextType();
+            // Extract reflection context for payload library - with null safety
+            if (analysis.getReflections() != null && !analysis.getReflections().isEmpty()) {
+                var firstReflection = analysis.getReflections().get(0);
+                if (firstReflection != null) {
+                    List<ReflectionAnalyzer.ReflectionContext> contexts = firstReflection.getContexts();
+                    if (contexts != null && !contexts.isEmpty() && contexts.get(0) != null) {
+                        reflectionContext = contexts.get(0).getContextType();
+                    }
                 }
             }
         }
@@ -1987,8 +2001,9 @@ public class TestingSuggestionsPanel extends JPanel {
     private String getCurrentSystemPrompt() {
         if (templateSelector != null) {
             String selectedTemplate = (String) templateSelector.getSelectedItem();
-            if (selectedTemplate != null && !selectedTemplate.equals("Default")) {
-                PromptTemplate template = templateManager.getTemplate(selectedTemplate);
+            // Check for actual default placeholder text, not just "Default"
+            if (selectedTemplate != null && !selectedTemplate.startsWith("--") && !selectedTemplate.equals("Default")) {
+                PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
                 if (template != null) {
                     return template.getSystemPrompt();
                 }

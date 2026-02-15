@@ -35,6 +35,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     // UI Components - Findings View (now using hierarchical tree)
     // Old table components removed - using TrafficFindingsTreePanel and FindingDetailsPanel
     private JLabel statsLabel;
+    private FindingDetailsPanel findingDetailsPanel; // Reference for clearing on scope change
     
     // UI Components - Traffic View
     private JTable trafficTable;
@@ -162,6 +163,11 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             boolean enabled = scopeEnabledCheckbox.isSelected();
             scopeManager.setScopeEnabled(enabled);
             
+            // Clear cache when scope is enabled to allow re-analysis with scope
+            if (enabled && scopeManager.size() > 0) {
+                clearAnalyzedUrlsCache();
+            }
+            
             // Show helpful message when enabling scope
             if (enabled && scopeManager.size() == 0) {
                 SwingUtilities.invokeLater(() -> {
@@ -239,6 +245,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Create details panel (right side)
         FindingDetailsPanel detailsPanel = new FindingDetailsPanel();
+        this.findingDetailsPanel = detailsPanel; // Store reference for clearing on scope change
         
         // Connect tree selection to details panel
         treePanel.setSelectionListener(detailsPanel::showFinding);
@@ -607,7 +614,6 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     @Override
     public void onTransactionAdded(HttpTransaction transaction) {
-        // ALWAYS analyze new transactions (Auto-Analyze removed)
         // CRITICAL: Check scope FIRST - don't analyze out-of-scope traffic at all
         boolean scopeEnabled = scopeManager.isScopeEnabled();
         boolean hasScopeDomains = scopeManager.size() > 0;
@@ -618,109 +624,133 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             callbacks.printOutput("[Traffic Monitor] ⏭️ SKIPPING out-of-scope: " + transaction.getUrl());
             return; // EARLY RETURN - no analysis at all
         }
-            
-            // If we reach here, either:
-            // 1. Scope is not enabled (analyze everything)
-            // 2. Scope is enabled but no domains defined (analyze everything)
-            // 3. Scope is enabled and URL is IN SCOPE (analyze this)
-            
-            // Determine detection engines
-            boolean aiConfigured = isAIConfigured();
-            
-            // AI-ONLY MODE: No pattern detection anymore
-            String detectionMode;
-            if (!aiConfigured) {
-                detectionMode = "⚠️ AI Not Configured (No Analysis)";
-            } else {
-                detectionMode = "🤖 AI Only";
+        
+        // Check if AI is configured
+        boolean aiConfigured = isAIConfigured();
+        if (!aiConfigured) {
+            callbacks.printOutput("[Traffic Monitor] ⚠️ AI not configured, skipping: " + transaction.getUrl());
+            return;
+        }
+        
+        // Get the queue manager and submit for async analysis
+        AnalysisQueueManager queueManager = AnalysisQueueManager.getInstance();
+        
+        // Configure queue manager if not already done
+        if (queueManager.getAnalyzedCount() == 0 || analyzer != null) {
+            queueManager.setAnalyzer(analyzer);
+            queueManager.setLogCallback(msg -> callbacks.printOutput(msg));
+            queueManager.setResultCallback(result -> handleAnalysisResult(result));
+        }
+        
+        // Submit to queue (non-blocking, handles deduplication)
+        boolean queued = queueManager.submitForAnalysis(transaction);
+        
+        // Update status
+        if (queued) {
+            SwingUtilities.invokeLater(() -> {
+                statsLabel.setText("📥 Queued for analysis [" + queueManager.getStatus() + "] " + 
+                    truncateUrl(transaction.getUrl(), 60));
+            });
+        }
+    }
+    
+    /**
+     * Handle analysis result from the queue manager
+     */
+    private void handleAnalysisResult(AnalysisQueueManager.AnalysisResult result) {
+        if (!result.success) {
+            callbacks.printError("[Traffic Monitor] Analysis error: " + result.error);
+            SwingUtilities.invokeLater(this::updateStats);
+            return;
+        }
+        
+        List<TrafficFinding> findings = result.findings;
+        HttpTransaction transaction = result.transaction;
+        
+        if (findings != null && !findings.isEmpty()) {
+            int addedCount = 0;
+            synchronized (allFindings) {
+                for (TrafficFinding finding : findings) {
+                    // Check for duplicates before adding
+                    if (!isDuplicateFinding(finding)) {
+                        allFindings.add(finding);
+                        addedCount++;
+                        callbacks.printOutput("[Traffic Monitor] ➕ ADDED: " + finding.getType() + 
+                            " (" + finding.getSeverity() + ") - " + truncateUrl(finding.getSourceTransaction().getUrl(), 50));
+                    } else {
+                        callbacks.printOutput("[Traffic Monitor] ⏭️ SKIPPED DUPLICATE: " + finding.getType() + 
+                            " - " + truncateUrl(finding.getSourceTransaction().getUrl(), 50));
+                    }
+                }
+                
+                if (addedCount > 0) {
+                    callbacks.printOutput("[Traffic Monitor] 📊 Added " + addedCount + " new findings (Total: " + allFindings.size() + ")");
+                }
             }
             
-            // Show analyzing indicator
-            SwingUtilities.invokeLater(() -> {
-                statsLabel.setText("🔄 Analyzing [" + detectionMode + "] " + transaction.getUrl() + "...");
-            });
-            
-            // Analyze in background thread to avoid blocking UI
-            new Thread(() -> {
-                try {
-                    callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
-                    callbacks.printOutput("[Traffic Monitor] 🔍 Starting Analysis (IN-SCOPE)");
-                    callbacks.printOutput("[Traffic Monitor] URL: " + transaction.getUrl());
-                    callbacks.printOutput("[Traffic Monitor] Content-Type: " + transaction.getContentType());
-                    callbacks.printOutput("[Traffic Monitor] Detection Mode: " + detectionMode);
-                    callbacks.printOutput("[Traffic Monitor] AI Configured: " + (aiConfigured ? "✅ YES" : "❌ NO"));
-                    callbacks.printOutput("[Traffic Monitor] Scope Enabled: " + (scopeEnabled ? "✅ YES" : "❌ NO"));
-                    callbacks.printOutput("[Traffic Monitor] Domains in Scope: " + scopeManager.size());
-                    
-                    // Log content-type filtering decision
-                    String contentType = transaction.getContentType();
-                    boolean isHtmlOrJs = contentType != null && 
-                        (contentType.toLowerCase().contains("text/html") ||
-                         contentType.toLowerCase().contains("javascript"));
-                    if (!isHtmlOrJs) {
-                        callbacks.printOutput("[Traffic Monitor] ⏭️ Content-Type '" + contentType + "' → Skipped (AI only analyzes HTML/JavaScript)");
-                    } else if (aiConfigured) {
-                        callbacks.printOutput("[Traffic Monitor] 🤖 Content-Type '" + contentType + "' → AI analysis ENABLED");
+            if (addedCount > 0) {
+                callbacks.printOutput("[Traffic Monitor] ✅ Found " + addedCount + " new issues in " + truncateUrl(transaction.getUrl(), 60));
+                
+                // Update findings tree UI only if new findings were added
+                updateFindingsTree();
+                
+                // Log critical/high findings to console
+                for (TrafficFinding finding : findings) {
+                    if ("CRITICAL".equals(finding.getSeverity()) || "HIGH".equals(finding.getSeverity())) {
+                        callbacks.printOutput("[Traffic Monitor] ⚠️ " + finding.getSeverity() + ": " + 
+                            finding.getTitle() + " - " + truncateUrl(transaction.getUrl(), 60));
                     }
-                    callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
-                    
-                    List<HttpTransaction> batch = new ArrayList<>();
-                    batch.add(transaction);
-                    List<TrafficFinding> findings = analyzer.analyzeBatch(batch);
-                    
-                    synchronized (allFindings) {
-                        allFindings.addAll(findings);
-                        callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
-                        callbacks.printOutput("[Traffic Monitor] 📊 FINDINGS UPDATE:");
-                        callbacks.printOutput("[Traffic Monitor] New findings from AI: " + findings.size());
-                        callbacks.printOutput("[Traffic Monitor] Total findings in memory: " + allFindings.size());
-                        callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
-                        
-                        // Log each finding being added
-                        for (TrafficFinding finding : findings) {
-                            callbacks.printOutput("[Traffic Monitor] ➕ ADDING FINDING TO UI:");
-                            callbacks.printOutput("[Traffic Monitor]    Type: " + finding.getType());
-                            callbacks.printOutput("[Traffic Monitor]    Severity: " + finding.getSeverity());
-                            callbacks.printOutput("[Traffic Monitor]    Title: " + finding.getTitle());
-                            callbacks.printOutput("[Traffic Monitor]    URL: " + finding.getSourceTransaction().getUrl());
-                            callbacks.printOutput("[Traffic Monitor]    Evidence: " + (finding.getEvidence() != null ? finding.getEvidence().substring(0, Math.min(50, finding.getEvidence().length())) + "..." : "N/A"));
-                        }
-                    }
-                    
-                    if (!findings.isEmpty()) {
-                        callbacks.printOutput("[Traffic Monitor] ✅ Found " + findings.size() + " issues in " + transaction.getUrl());
-                        callbacks.printOutput("[Traffic Monitor] 🔄 Calling updateFindingsTree() to refresh UI...");
-                        
-                        // Update findings tree UI
-                        updateFindingsTree();
-                        
-                        callbacks.printOutput("[Traffic Monitor] ✅ updateFindingsTree() completed");
-                        
-                        // Show notification for critical/high findings
-                        for (TrafficFinding finding : findings) {
-                            if ("CRITICAL".equals(finding.getSeverity()) || "HIGH".equals(finding.getSeverity())) {
-                                SwingUtilities.invokeLater(() -> {
-                                    JOptionPane.showMessageDialog(
-                                        TrafficMonitorPanel.this,
-                                        finding.getSeverity() + " finding: " + finding.getTitle() + "\n\n" +
-                                        "URL: " + transaction.getUrl(),
-                                        "Security Finding Detected",
-                                        JOptionPane.WARNING_MESSAGE
-                                    );
-                                });
-                                break; // Only show one notification per transaction
-                            }
-                        }
-                    } else {
-                        callbacks.printOutput("[Traffic Monitor] ℹ️ No issues found in " + transaction.getUrl());
-                    }
-                } catch (Exception e) {
-                    callbacks.printError("[Traffic Monitor] Error analyzing transaction: " + e.getMessage());
-                } finally {
-                    // Update stats to clear analyzing message
-                    SwingUtilities.invokeLater(this::updateStats);
                 }
-            }).start();
+            }
+        } else {
+            // Only log "no issues" for non-trivial URLs (avoid spam)
+            String url = transaction.getUrl();
+            if (!url.contains(".css") && !url.contains(".png") && !url.contains(".svg") && !url.contains(".woff")) {
+                callbacks.printOutput("[Traffic Monitor] ℹ️ No issues found in " + truncateUrl(url, 60));
+            }
+        }
+        
+        // Update stats
+        SwingUtilities.invokeLater(this::updateStats);
+    }
+    
+    /**
+     * Check if a finding is a duplicate of an existing one.
+     * Duplicate = same type + same URL + similar evidence
+     */
+    private boolean isDuplicateFinding(TrafficFinding newFinding) {
+        String newType = newFinding.getType();
+        String newUrl = newFinding.getSourceTransaction() != null ? newFinding.getSourceTransaction().getUrl() : "";
+        String newEvidence = newFinding.getEvidence() != null ? newFinding.getEvidence() : "";
+        
+        for (TrafficFinding existing : allFindings) {
+            String existingType = existing.getType();
+            String existingUrl = existing.getSourceTransaction() != null ? existing.getSourceTransaction().getUrl() : "";
+            String existingEvidence = existing.getEvidence() != null ? existing.getEvidence() : "";
+            
+            // Same type and URL
+            if (newType.equals(existingType) && newUrl.equals(existingUrl)) {
+                return true; // Duplicate - same type on same URL
+            }
+            
+            // Same type and very similar evidence (first 100 chars match)
+            if (newType.equals(existingType)) {
+                String newEvidencePrefix = newEvidence.length() > 100 ? newEvidence.substring(0, 100) : newEvidence;
+                String existingEvidencePrefix = existingEvidence.length() > 100 ? existingEvidence.substring(0, 100) : existingEvidence;
+                if (newEvidencePrefix.equals(existingEvidencePrefix) && !newEvidencePrefix.isEmpty()) {
+                    return true; // Duplicate - same evidence
+                }
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Truncate URL for display
+     */
+    private String truncateUrl(String url, int maxLen) {
+        if (url == null) return "";
+        return url.length() > maxLen ? url.substring(0, maxLen) + "..." : url;
     }
     
     @Override
@@ -738,9 +768,6 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     private void updateFindingsTree() {
         SwingUtilities.invokeLater(() -> {
-            callbacks.printOutput("[Traffic Monitor] 🔄 updateFindingsTree() called");
-            callbacks.printOutput("[Traffic Monitor] Total findings in allFindings list: " + allFindings.size());
-            
             // Get the findings panel
             Component[] components = getComponents();
             for (Component comp : components) {
@@ -754,47 +781,31 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                             (TrafficFindingsTreePanel) findingsPanel.getClientProperty("treePanel");
                         
                         if (treePanel != null) {
-                            callbacks.printOutput("[Traffic Monitor] ✅ Found TrafficFindingsTreePanel");
-                            
                             // Filter findings based on scope and other filters
                             List<TrafficFinding> filteredFindings = new ArrayList<>();
                             
                             synchronized (allFindings) {
-                                callbacks.printOutput("[Traffic Monitor] Filtering " + allFindings.size() + " findings...");
-                                
                                 for (TrafficFinding finding : allFindings) {
                                     // Apply scope filter
                                     if (scopeManager.isScopeEnabled() && 
                                         !scopeManager.isInScope(finding.getSourceTransaction().getUrl())) {
-                                        callbacks.printOutput("[Traffic Monitor] ⏭️ Filtered out (scope): " + finding.getTitle());
                                         continue;
                                     }
                                     
                                     // Apply other filters
                                     if (!matchesFilters(finding)) {
-                                        callbacks.printOutput("[Traffic Monitor] ⏭️ Filtered out (filters): " + finding.getTitle());
                                         continue;
                                     }
                                     
                                     filteredFindings.add(finding);
-                                    callbacks.printOutput("[Traffic Monitor] ✅ Included: " + finding.getTitle());
                                 }
                             }
-                            
-                            callbacks.printOutput("[Traffic Monitor] Filtered findings count: " + filteredFindings.size());
-                            callbacks.printOutput("[Traffic Monitor] Last findings count: " + lastFindingsCount);
                             
                             // Only update tree if findings count changed (avoid unnecessary rebuilds)
                             if (filteredFindings.size() != lastFindingsCount) {
                                 lastFindingsCount = filteredFindings.size();
-                                callbacks.printOutput("[Traffic Monitor] 🔄 Updating tree panel with " + filteredFindings.size() + " findings...");
                                 treePanel.updateFindings(filteredFindings);
-                                callbacks.printOutput("[Traffic Monitor] ✅ Tree panel updated successfully");
-                            } else {
-                                callbacks.printOutput("[Traffic Monitor] ⏭️ Skipping tree update (count unchanged)");
                             }
-                        } else {
-                            callbacks.printOutput("[Traffic Monitor] ❌ TrafficFindingsTreePanel is NULL!");
                         }
                     }
                     break;
@@ -875,16 +886,55 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         });
     }
     
+    /**
+     * Clears the analyzed URLs cache in both the queue manager and analyzer.
+     * Call this when scope configuration changes to allow re-analysis.
+     * Also clears findings and UI panels.
+     */
+    private void clearAnalyzedUrlsCache() {
+        // Clear queue manager cache
+        AnalysisQueueManager queueManager = AnalysisQueueManager.getInstance();
+        queueManager.clearAnalyzedUrls();
+        
+        // Clear analyzer cache
+        if (analyzer != null) {
+            analyzer.clearAnalyzedUrls();
+        }
+        
+        // Clear all findings when scope changes
+        synchronized (allFindings) {
+            allFindings.clear();
+        }
+        
+        // Update findings tree (will show empty)
+        updateFindingsTree();
+        
+        // Clear the details panel (Finding Details and Request/Response)
+        clearFindingDetailsPanel();
+        
+        callbacks.printOutput("[Traffic Monitor] 🗑️ Cleared analyzed URLs cache and findings - scope changed");
+    }
+    
+    /**
+     * Clears the Finding Details panel including Request/Response viewers.
+     */
+    private void clearFindingDetailsPanel() {
+        if (findingDetailsPanel != null) {
+            findingDetailsPanel.clear();
+        }
+    }
+    
     private void updateStats() {
         SwingUtilities.invokeLater(() -> {
-            int findingsCount = allFindings.size();
             int trafficCount = bufferManager.size();
             long dataVolume = bufferManager.getTotalDataVolume();
             
+            int findingsCount;
             int criticalCount = 0;
             int highCount = 0;
             
             synchronized (allFindings) {
+                findingsCount = allFindings.size();
                 for (TrafficFinding finding : allFindings) {
                     if ("CRITICAL".equals(finding.getSeverity())) {
                         criticalCount++;
@@ -898,10 +948,16 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             boolean aiConfigured = isAIConfigured();
             String detectionMode = aiConfigured ? "🤖 AI Only" : "⚠️ AI Not Configured";
             
+            // Get queue status
+            AnalysisQueueManager queueManager = AnalysisQueueManager.getInstance();
+            int queueSize = queueManager.getQueueSize();
+            int analyzedCount = queueManager.getAnalyzedCount();
+            
             String status = monitorService.isRunning() ? "🟢 Monitoring" : "🔴 Stopped";
+            String queueStatus = queueSize > 0 ? " | 📥 Queue: " + queueSize : "";
             String stats = String.format(
-                "%s [%s] | Findings: %d (Critical: %d, High: %d) | Traffic: %d | Data: %.2f MB",
-                status, detectionMode, findingsCount, criticalCount, highCount, trafficCount, dataVolume / 1024.0 / 1024.0
+                "%s [%s] | Findings: %d (Critical: %d, High: %d) | Traffic: %d | Analyzed: %d URLs%s",
+                status, detectionMode, findingsCount, criticalCount, highCount, trafficCount, analyzedCount, queueStatus
             );
             
             statsLabel.setText(stats);
@@ -1157,6 +1213,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     HttpTransaction tx = transactions.get(selectedRow);
                     String host = tx.getHost();
                     scopeManager.addScope(host);
+                    // Clear analyzed URLs cache to allow re-analysis with new scope
+                    clearAnalyzedUrlsCache();
                     callbacks.printOutput("[Traffic Monitor] Added to scope: " + host);
                     JOptionPane.showMessageDialog(
                         this,
@@ -1183,6 +1241,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                         : host;
                     String pattern = "*." + domain;
                     scopeManager.addScope(pattern);
+                    // Clear analyzed URLs cache to allow re-analysis with new scope
+                    clearAnalyzedUrlsCache();
                     callbacks.printOutput("[Traffic Monitor] Added to scope: " + pattern);
                     JOptionPane.showMessageDialog(
                         this,
@@ -1283,6 +1343,10 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         JButton closeButton = new JButton("Close");
         closeButton.addActionListener(e -> {
+            // Clear cache to allow re-analysis with any scope changes
+            if (scopeManager.size() > 0 && scopeManager.isScopeEnabled()) {
+                clearAnalyzedUrlsCache();
+            }
             dialog.dispose();
             applyFilters(); // Refresh traffic table
         });

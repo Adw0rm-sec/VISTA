@@ -129,9 +129,20 @@ public class IntelligentTrafficAnalyzer {
     public List<TrafficFinding> analyzeTransaction(HttpTransaction transaction) {
         List<TrafficFinding> findings = new ArrayList<>();
         
-        if (transaction == null || transaction.getResponse() == null) {
+        // Debug logging for null checks
+        if (transaction == null) {
+            System.out.println("[Traffic Monitor] ❌ analyzeTransaction: transaction is NULL");
             return findings;
         }
+        
+        byte[] response = transaction.getResponse();
+        if (response == null) {
+            System.out.println("[Traffic Monitor] ❌ analyzeTransaction: response is NULL for " + transaction.getUrl());
+            System.out.println("[Traffic Monitor] ❓ Transaction has request bytes: " + (transaction.getRequest() != null ? "YES" : "NO"));
+            return findings;
+        }
+        
+        System.out.println("[Traffic Monitor] ✓ analyzeTransaction: response size = " + response.length + " bytes for " + transaction.getUrl());
         
         String contentType = transaction.getContentType();
         if (contentType == null) {
@@ -147,7 +158,7 @@ public class IntelligentTrafficAnalyzer {
         } else if (lowerContentType.contains("application/json")) {
             findings.addAll(analyzeJsonResponse(transaction));
         } else {
-            System.out.println("[Traffic Monitor] ⏭️ Skipping: " + contentType);
+            System.out.println("[Traffic Monitor] ⏭️ Skipping content-type: " + contentType);
         }
         
         return findings;
@@ -326,46 +337,39 @@ public class IntelligentTrafficAnalyzer {
     
     private String buildHtmlAnalysisPrompt(HttpTransaction transaction, String htmlContent) {
         return String.format(
-            "Analyze this HTML for security issues:\n\n" +
+            "Analyze this HTML/Response for security vulnerabilities.\n\n" +
             "URL: %s\n" +
             "Content-Type: %s\n" +
             "Size: %d bytes\n\n" +
-            "HTML:\n%s\n\n" +
-            "Find the following security issues:\n\n" +
-            "1. EXPOSED API KEYS:\n" +
-            "   - Look for patterns like: apiKey, api_key, API_KEY, apikey\n" +
-            "   - AWS keys (AKIA...), Google API keys (AIza...), Stripe keys (sk_...)\n" +
-            "   - Any key-value pairs with 'key' in the name\n\n" +
-            "2. HARDCODED CREDENTIALS:\n" +
-            "   - Usernames: username, user, login, email\n" +
-            "   - Passwords: password, passwd, pwd (plaintext, encrypted, or hashed)\n" +
-            "   - Database credentials\n" +
-            "   - Admin credentials\n\n" +
-            "3. PRIVATE IP ADDRESSES:\n" +
-            "   - 10.x.x.x, 172.16-31.x.x, 192.168.x.x\n" +
-            "   - Internal network IPs\n" +
-            "   - Localhost references (127.0.0.1)\n\n" +
-            "4. HIDDEN FORM FIELDS:\n" +
-            "   - <input type=\"hidden\" name=\"...\" value=\"...\">\n" +
-            "   - Look for sensitive data in hidden fields\n" +
-            "   - Session tokens, user IDs, admin flags\n\n" +
-            "5. AUTHENTICATION TOKENS:\n" +
-            "   - JWT tokens, Bearer tokens\n" +
-            "   - Session IDs, CSRF tokens\n" +
-            "   - OAuth tokens\n\n" +
-            "6. SENSITIVE COMMENTS:\n" +
-            "   - <!-- TODO: remove before production -->\n" +
-            "   - Debug information\n" +
-            "   - Developer notes with credentials\n\n" +
-            "DO NOT report:\n" +
-            "- Public URLs or endpoints\n" +
-            "- Public IP addresses\n" +
-            "- Generic form fields without sensitive values\n\n" +
-            "Response Format:\n" +
-            "- Type: [API_KEY|CREDENTIAL|PRIVATE_IP|HIDDEN_FIELD|TOKEN|DEBUG_CODE|SENSITIVE_DATA]\n" +
-            "- Severity: [CRITICAL|HIGH|MEDIUM|LOW]\n" +
-            "- Evidence: [exact code snippet]\n" +
-            "- Description: [brief explanation of the issue]",
+            "Content:\n%s\n\n" +
+            "IMPORTANT INSTRUCTIONS:\n" +
+            "- ONLY report issues where you find ACTUAL sensitive data\n" +
+            "- Each finding MUST have concrete evidence (exact code/text snippet)\n" +
+            "- If you find NOTHING, respond with just: NO_FINDINGS\n" +
+            "- Do NOT report potential/theoretical issues\n" +
+            "- Do NOT report if evidence is missing or uncertain\n\n" +
+            "LOOK FOR:\n" +
+            "1. API_KEY: Actual API keys in HTML/JS (AKIA*, AIza*, sk_*, api_key=\"xxx\")\n" +
+            "2. CREDENTIAL: Hardcoded passwords, usernames with passwords\n" +
+            "3. PRIVATE_IP: Internal IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x, 127.0.0.1)\n" +
+            "4. TOKEN: JWT tokens (eyJ...), session IDs, auth tokens with actual values\n" +
+            "5. HIDDEN_FIELD: Hidden inputs with sensitive values (not CSRF tokens)\n" +
+            "6. SENSITIVE_DATA: PII, credit cards, SSN, internal paths with secrets\n\n" +
+            "DO NOT REPORT:\n" +
+            "- Public URLs, CDN links, or public API endpoints\n" +
+            "- CSRF tokens in hidden fields (these are expected)\n" +
+            "- Empty hidden fields or generic form fields\n" +
+            "- Security headers (CSP, HSTS, X-Frame-Options) - these are GOOD\n" +
+            "- Theoretical/potential issues without proof\n\n" +
+            "OUTPUT FORMAT (only if findings exist):\n" +
+            "For EACH finding, output EXACTLY:\n" +
+            "---\n" +
+            "Type: CREDENTIAL\n" +
+            "Severity: CRITICAL\n" +
+            "Evidence: <input type=\"hidden\" name=\"admin_pass\" value=\"secret123\">\n" +
+            "Description: Admin password exposed in hidden form field\n" +
+            "---\n\n" +
+            "Remember: NO_FINDINGS if nothing found. Quality over quantity.",
             transaction.getUrl(),
             transaction.getContentType(),
             htmlContent.length(),
@@ -375,49 +379,37 @@ public class IntelligentTrafficAnalyzer {
     
     private String buildJavaScriptAnalysisPrompt(HttpTransaction transaction, String jsContent) {
         return String.format(
-            "Analyze this JavaScript for security issues:\n\n" +
+            "Analyze this JavaScript for security vulnerabilities.\n\n" +
             "URL: %s\n" +
             "Content-Type: %s\n" +
             "Size: %d bytes\n\n" +
             "JavaScript:\n%s\n\n" +
-            "Find the following security issues:\n\n" +
-            "1. EXPOSED API KEYS:\n" +
-            "   - Look for patterns like: apiKey, api_key, API_KEY, apikey\n" +
-            "   - AWS keys (AKIA...), Google API keys (AIza...), Stripe keys (sk_...)\n" +
-            "   - Any key-value pairs with 'key' in the name\n" +
-            "   - const/var/let declarations with keys\n\n" +
-            "2. HARDCODED CREDENTIALS:\n" +
-            "   - Usernames: username, user, login, email\n" +
-            "   - Passwords: password, passwd, pwd (plaintext, encrypted, or hashed)\n" +
-            "   - Database credentials\n" +
-            "   - Admin credentials\n\n" +
-            "3. PRIVATE IP ADDRESSES:\n" +
-            "   - 10.x.x.x, 172.16-31.x.x, 192.168.x.x\n" +
-            "   - Internal network IPs\n" +
-            "   - Localhost references (127.0.0.1)\n\n" +
-            "4. AUTHENTICATION TOKENS:\n" +
-            "   - JWT tokens, Bearer tokens\n" +
-            "   - Session IDs, CSRF tokens\n" +
-            "   - OAuth tokens\n" +
-            "   - Authorization headers\n\n" +
-            "5. DEBUG CODE:\n" +
-            "   - console.log with sensitive data\n" +
-            "   - Debug flags (DEBUG=true)\n" +
-            "   - Development endpoints\n" +
-            "   - TODO comments with credentials\n\n" +
-            "6. SENSITIVE CONFIGURATION:\n" +
-            "   - Database connection strings\n" +
-            "   - API endpoints with credentials\n" +
-            "   - Environment variables with secrets\n\n" +
-            "DO NOT report:\n" +
-            "- Public URLs or endpoints\n" +
-            "- Public IP addresses\n" +
-            "- Generic variable names without sensitive values\n\n" +
-            "Response Format:\n" +
-            "- Type: [API_KEY|CREDENTIAL|PRIVATE_IP|TOKEN|DEBUG_CODE|SENSITIVE_DATA]\n" +
-            "- Severity: [CRITICAL|HIGH|MEDIUM|LOW]\n" +
-            "- Evidence: [exact code snippet]\n" +
-            "- Description: [brief explanation of the issue]",
+            "IMPORTANT INSTRUCTIONS:\n" +
+            "- ONLY report issues where you find ACTUAL sensitive data in the code\n" +
+            "- Each finding MUST have concrete evidence (exact code snippet)\n" +
+            "- If you find NOTHING, respond with just: NO_FINDINGS\n" +
+            "- Do NOT report potential/theoretical issues\n" +
+            "- Do NOT report if evidence is missing or uncertain\n\n" +
+            "LOOK FOR:\n" +
+            "1. API_KEY: Actual API keys like AKIA*, AIza*, sk_*, api_key=\"xxx\"\n" +
+            "2. CREDENTIAL: Hardcoded passwords, database credentials\n" +
+            "3. PRIVATE_IP: Internal IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n" +
+            "4. TOKEN: JWT tokens (eyJ...), session tokens, auth tokens\n" +
+            "5. SENSITIVE_DATA: PII, credit card numbers, SSN, encryption keys\n\n" +
+            "DO NOT REPORT:\n" +
+            "- Public URLs, CDN links, or public endpoints\n" +
+            "- Variable names without actual sensitive values\n" +
+            "- Generic patterns without concrete data\n" +
+            "- Minified library code (jQuery, React, etc.)\n\n" +
+            "OUTPUT FORMAT (only if findings exist):\n" +
+            "For EACH finding, output EXACTLY:\n" +
+            "---\n" +
+            "Type: API_KEY\n" +
+            "Severity: HIGH\n" +
+            "Evidence: const apiKey = \"AIzaSyD-xxxxxxxxxxxx\"\n" +
+            "Description: Google API key exposed in client-side JavaScript\n" +
+            "---\n\n" +
+            "Remember: NO_FINDINGS if nothing found. Quality over quantity.",
             transaction.getUrl(),
             transaction.getContentType(),
             jsContent.length(),
@@ -429,97 +421,331 @@ public class IntelligentTrafficAnalyzer {
         List<TrafficFinding> findings = new ArrayList<>();
         
         try {
+            // Quick check for NO_FINDINGS response
+            String trimmedResponse = aiResponse.trim().toUpperCase();
+            if (trimmedResponse.equals("NO_FINDINGS") || 
+                trimmedResponse.startsWith("NO_FINDINGS") ||
+                trimmedResponse.contains("NO_FINDINGS")) {
+                System.out.println("[Traffic Monitor] ℹ️ AI returned NO_FINDINGS - skipping parse");
+                return findings;
+            }
+            
+            // Also check for common "no issues" phrases
+            String lowerResponse = aiResponse.toLowerCase();
+            if (lowerResponse.contains("no security issues") ||
+                lowerResponse.contains("no vulnerabilities") ||
+                lowerResponse.contains("no issues found") ||
+                lowerResponse.contains("no findings") ||
+                (lowerResponse.contains("nothing") && lowerResponse.contains("found"))) {
+                // Check if there's actually a Type: field - if not, skip
+                if (!aiResponse.contains("Type:") && !aiResponse.contains("type:")) {
+                    System.out.println("[Traffic Monitor] ℹ️ AI indicated no issues - skipping parse");
+                    return findings;
+                }
+            }
+            
             String[] lines = aiResponse.split("\n");
             String currentType = null;
             String currentSeverity = null;
             String currentEvidence = null;
             String currentDescription = null;
+            StringBuilder evidenceBuilder = null;
+            StringBuilder descriptionBuilder = null;
+            boolean collectingEvidence = false;
+            boolean collectingDescription = false;
             
             for (String line : lines) {
-                line = line.trim();
+                String trimmedLine = line.trim();
                 
-                if (line.startsWith("- Type:") || line.startsWith("Type:")) {
+                // Normalize markdown formatting: **Type:** -> Type:
+                String normalizedLine = trimmedLine
+                    .replaceAll("\\*\\*([^*]+):\\*\\*", "$1:")  // **Type:** -> Type:
+                    .replaceAll("\\*\\*([^*]+)\\*\\*:", "$1:")  // **Type**: -> Type:
+                    .trim();
+                
+                // Check if this line starts a new field (ends evidence/description collection)
+                boolean isFieldLine = normalizedLine.matches("(?i)^-?\\s*(Type|Severity|Evidence|Description):.*");
+                
+                // If we're collecting evidence and hit a new field, stop collecting
+                if (collectingEvidence && isFieldLine && !normalizedLine.toLowerCase().contains("evidence:")) {
+                    collectingEvidence = false;
+                    if (evidenceBuilder != null) {
+                        currentEvidence = evidenceBuilder.toString().trim();
+                        // Clean up code block markers
+                        currentEvidence = currentEvidence.replaceAll("```[a-zA-Z]*", "").replaceAll("```", "").trim();
+                    }
+                }
+                
+                // If we're collecting description and hit a new field, stop collecting
+                if (collectingDescription && isFieldLine && !normalizedLine.toLowerCase().contains("description:")) {
+                    collectingDescription = false;
+                    if (descriptionBuilder != null) {
+                        currentDescription = descriptionBuilder.toString().trim();
+                    }
+                }
+                
+                // Check for Type field
+                if (normalizedLine.matches("(?i)^-?\\s*Type:.*")) {
+                    // Finalize any ongoing description collection for previous finding
+                    if (collectingDescription && descriptionBuilder != null) {
+                        currentDescription = descriptionBuilder.toString().trim();
+                        collectingDescription = false;
+                    }
+                    
+                    // Save previous finding if complete
                     if (currentType != null && currentSeverity != null) {
-                        System.out.println("[Traffic Monitor] 🤖 AI TYPE: " + currentType);
-                        
-                        // Validate type is not empty or "None Detected"
-                        if (currentType.isEmpty() || "None Detected".equalsIgnoreCase(currentType)) {
-                            System.out.println("[Traffic Monitor] ❌ REJECTED: Empty or 'None Detected' type");
-                        } else if ("HIDDEN_URL".equalsIgnoreCase(currentType)) {
-                            System.out.println("[Traffic Monitor] ❌ BLOCKED HIDDEN_URL");
-                        } else if (currentEvidence == null || currentEvidence.isEmpty()) {
-                            System.out.println("[Traffic Monitor] ❌ REJECTED: Missing evidence for " + currentType);
-                        } else {
-                            TrafficFinding finding = new TrafficFinding(
-                                currentType,
-                                currentSeverity,
-                                "🤖 AI: " + currentType,
-                                currentDescription != null ? currentDescription : "AI detected issue",
-                                currentEvidence,
-                                transaction,
-                                "AI Analysis",
-                                "AI"
-                            );
+                        TrafficFinding finding = createFindingIfValid(transaction, currentType, currentSeverity, currentEvidence, currentDescription);
+                        if (finding != null) {
                             findings.add(finding);
-                            System.out.println("[Traffic Monitor] ✅ AI ADDED: " + currentType);
                         }
                     }
                     
-                    currentType = extractValue(line);
+                    currentType = extractFieldValue(normalizedLine, "Type");
                     currentSeverity = null;
                     currentEvidence = null;
                     currentDescription = null;
+                    evidenceBuilder = null;
+                    descriptionBuilder = null;
+                    collectingEvidence = false;
+                    collectingDescription = false;
                     
-                } else if (line.startsWith("- Severity:") || line.startsWith("Severity:")) {
-                    currentSeverity = extractValue(line);
+                } else if (normalizedLine.matches("(?i)^-?\\s*Severity:.*")) {
+                    currentSeverity = extractFieldValue(normalizedLine, "Severity");
                     
-                } else if (line.startsWith("- Evidence:") || line.startsWith("Evidence:")) {
-                    currentEvidence = extractValue(line);
+                } else if (normalizedLine.matches("(?i)^-?\\s*Evidence:.*")) {
+                    // Stop description collection when evidence starts
+                    if (collectingDescription && descriptionBuilder != null) {
+                        currentDescription = descriptionBuilder.toString().trim();
+                        collectingDescription = false;
+                    }
                     
-                } else if (line.startsWith("- Description:") || line.startsWith("Description:")) {
-                    currentDescription = extractValue(line);
+                    String evidenceValue = extractFieldValue(normalizedLine, "Evidence");
+                    if (!evidenceValue.isEmpty()) {
+                        evidenceBuilder = new StringBuilder(evidenceValue);
+                    } else {
+                        evidenceBuilder = new StringBuilder();
+                    }
+                    collectingEvidence = true;
+                    
+                } else if (normalizedLine.matches("(?i)^-?\\s*Description:.*")) {
+                    // Stop evidence collection when description starts
+                    collectingEvidence = false;
+                    if (evidenceBuilder != null) {
+                        currentEvidence = evidenceBuilder.toString().trim();
+                        currentEvidence = currentEvidence.replaceAll("```[a-zA-Z]*", "").replaceAll("```", "").trim();
+                    }
+                    
+                    // Start collecting description (supports multi-line)
+                    String descValue = extractFieldValue(normalizedLine, "Description");
+                    if (!descValue.isEmpty()) {
+                        descriptionBuilder = new StringBuilder(descValue);
+                    } else {
+                        descriptionBuilder = new StringBuilder();
+                    }
+                    collectingDescription = true;
+                    
+                } else if (collectingEvidence && evidenceBuilder != null) {
+                    // Continue collecting evidence (multi-line)
+                    if (!trimmedLine.isEmpty()) {
+                        if (evidenceBuilder.length() > 0) {
+                            evidenceBuilder.append("\n");
+                        }
+                        evidenceBuilder.append(trimmedLine);
+                    }
+                } else if (collectingDescription && descriptionBuilder != null) {
+                    // Continue collecting description (multi-line)
+                    if (!trimmedLine.isEmpty()) {
+                        if (descriptionBuilder.length() > 0) {
+                            descriptionBuilder.append(" ");  // Use space for description (more readable)
+                        }
+                        descriptionBuilder.append(trimmedLine);
+                    }
                 }
             }
             
+            // Handle last finding - finalize any ongoing collection
+            if (collectingEvidence && evidenceBuilder != null) {
+                currentEvidence = evidenceBuilder.toString().trim();
+                currentEvidence = currentEvidence.replaceAll("```[a-zA-Z]*", "").replaceAll("```", "").trim();
+            }
+            if (collectingDescription && descriptionBuilder != null) {
+                currentDescription = descriptionBuilder.toString().trim();
+            }
+            
             if (currentType != null && currentSeverity != null) {
-                System.out.println("[Traffic Monitor] 🤖 AI TYPE (last): " + currentType);
-                
-                // Validate type is not empty or "None Detected"
-                if (currentType.isEmpty() || "None Detected".equalsIgnoreCase(currentType)) {
-                    System.out.println("[Traffic Monitor] ❌ REJECTED: Empty or 'None Detected' type (last)");
-                } else if ("HIDDEN_URL".equalsIgnoreCase(currentType)) {
-                    System.out.println("[Traffic Monitor] ❌ BLOCKED HIDDEN_URL (last)");
-                } else if (currentEvidence == null || currentEvidence.isEmpty()) {
-                    System.out.println("[Traffic Monitor] ❌ REJECTED: Missing evidence for " + currentType + " (last)");
-                } else {
-                    TrafficFinding finding = new TrafficFinding(
-                        currentType,
-                        currentSeverity,
-                        "🤖 AI: " + currentType,
-                        currentDescription != null ? currentDescription : "AI detected issue",
-                        currentEvidence,
-                        transaction,
-                        "AI Analysis",
-                        "AI"
-                    );
+                TrafficFinding finding = createFindingIfValid(transaction, currentType, currentSeverity, currentEvidence, currentDescription);
+                if (finding != null) {
                     findings.add(finding);
-                    System.out.println("[Traffic Monitor] ✅ AI ADDED (last): " + currentType);
                 }
             }
             
         } catch (Exception e) {
-            System.err.println("Error parsing AI findings: " + e.getMessage());
+            System.err.println("[Traffic Monitor] Error parsing AI findings: " + e.getMessage());
+            e.printStackTrace();
         }
         
         return findings;
     }
     
-    private String extractValue(String line) {
-        int colonIndex = line.indexOf(':');
-        if (colonIndex > 0 && colonIndex < line.length() - 1) {
-            return line.substring(colonIndex + 1).trim();
+    /**
+     * Extract field value from a line like "- Type: API_KEY" or "Type: API_KEY"
+     */
+    private String extractFieldValue(String line, String fieldName) {
+        // Find the field name (case-insensitive) and extract value after colon
+        String lowerLine = line.toLowerCase();
+        int fieldIndex = lowerLine.indexOf(fieldName.toLowerCase());
+        if (fieldIndex >= 0) {
+            int colonIndex = line.indexOf(':', fieldIndex);
+            if (colonIndex > 0 && colonIndex < line.length() - 1) {
+                return line.substring(colonIndex + 1).trim();
+            }
         }
         return "";
+    }
+    
+    /**
+     * Create a finding if it passes validation.
+     */
+    private TrafficFinding createFindingIfValid(HttpTransaction transaction, String type, String severity, 
+                                                  String evidence, String description) {
+        // Clean up type - remove brackets, parentheses, and whitespace
+        if (type != null) {
+            type = type.replaceAll("[\\[\\]\\(\\)]", "").trim();
+        }
+        
+        System.out.println("[Traffic Monitor] 🤖 AI TYPE: " + type);
+        
+        // Validate type is not empty or indicates "none found"
+        if (type == null || type.isEmpty()) {
+            System.out.println("[Traffic Monitor] ❌ REJECTED: Empty type");
+            return null;
+        }
+        
+        // Check for various "none found" patterns (case-insensitive)
+        String lowerType = type.toLowerCase();
+        if (lowerType.contains("none") || 
+            lowerType.contains("n/a") || 
+            lowerType.contains("not found") ||
+            lowerType.contains("no ") ||
+            lowerType.equals("null") ||
+            lowerType.equals("-")) {
+            System.out.println("[Traffic Monitor] ❌ REJECTED: 'None found' type: " + type);
+            return null;
+        }
+        
+        if ("HIDDEN_URL".equalsIgnoreCase(type)) {
+            System.out.println("[Traffic Monitor] ❌ BLOCKED HIDDEN_URL");
+            return null;
+        }
+        
+        // Block DEBUG_CODE - not required to be reported
+        if ("DEBUG_CODE".equalsIgnoreCase(type) || lowerType.contains("debug")) {
+            System.out.println("[Traffic Monitor] ❌ BLOCKED DEBUG_CODE: " + type);
+            return null;
+        }
+        
+        // Clean up evidence - check for N/A or empty or "no evidence" patterns
+        if (evidence != null) {
+            evidence = evidence.trim();
+            // Remove markdown asterisks from evidence
+            evidence = evidence.replaceAll("^\\*+|\\*+$", "").trim();
+            
+            String lowerEvidence = evidence.toLowerCase();
+            
+            // Check for exact "no evidence" values
+            if (lowerEvidence.equals("n/a") || lowerEvidence.equals("none") || 
+                lowerEvidence.equals("-") || lowerEvidence.isEmpty()) {
+                evidence = null;
+            }
+            
+            // Check for "no evidence found" type patterns in the evidence text
+            if (evidence != null && (
+                lowerEvidence.startsWith("no ") ||
+                lowerEvidence.startsWith("*no ") ||
+                lowerEvidence.contains("no evidence") ||
+                lowerEvidence.contains("not found") ||
+                lowerEvidence.contains("not present") ||
+                lowerEvidence.contains("not detected") ||
+                lowerEvidence.contains("were not shown") ||
+                lowerEvidence.contains("were not found") ||
+                lowerEvidence.contains("cannot be fully ruled out") ||
+                lowerEvidence.contains("no explicit") ||
+                lowerEvidence.contains("no api key") ||
+                lowerEvidence.contains("no credential") ||
+                lowerEvidence.contains("no token") ||
+                lowerEvidence.contains("no sensitive") ||
+                lowerEvidence.contains("none found") ||
+                lowerEvidence.contains("none detected") ||
+                lowerEvidence.contains("none present") ||
+                lowerEvidence.contains("no issues") ||
+                lowerEvidence.contains("no security") ||
+                lowerEvidence.contains("no private ip") ||
+                lowerEvidence.contains("no hidden"))) {
+                System.out.println("[Traffic Monitor] ❌ REJECTED: Evidence indicates 'no finding': " + evidence.substring(0, Math.min(50, evidence.length())) + "...");
+                return null;
+            }
+        }
+        
+        if (evidence == null || evidence.isEmpty()) {
+            System.out.println("[Traffic Monitor] ❌ REJECTED: Missing evidence for " + type);
+            return null;
+        }
+        
+        // Clean up severity
+        if (severity != null) {
+            severity = severity.replaceAll("[\\[\\]\\(\\)]", "").trim().toUpperCase();
+            if (severity.equals("N/A") || severity.isEmpty()) {
+                severity = "MEDIUM"; // Default severity
+            }
+        } else {
+            severity = "MEDIUM";
+        }
+        
+        // Block NONE severity findings - not required in UI
+        if ("NONE".equalsIgnoreCase(severity) || "INFO".equalsIgnoreCase(severity)) {
+            System.out.println("[Traffic Monitor] ❌ REJECTED: NONE/INFO severity for " + type);
+            return null;
+        }
+        
+        // Validate description doesn't indicate "no finding"
+        if (description != null) {
+            String lowerDesc = description.toLowerCase();
+            if (lowerDesc.contains("no api key") ||
+                lowerDesc.contains("no credential") ||
+                lowerDesc.contains("no token") ||
+                lowerDesc.contains("no evidence") ||
+                lowerDesc.contains("not found") ||
+                lowerDesc.contains("not present") ||
+                lowerDesc.contains("not detected") ||
+                lowerDesc.contains("no issues") ||
+                lowerDesc.contains("no security issues") ||
+                lowerDesc.contains("no sensitive") ||
+                lowerDesc.contains("no private ip") ||
+                lowerDesc.contains("no hidden") ||
+                lowerDesc.contains("none found") ||
+                lowerDesc.contains("none detected") ||
+                lowerDesc.contains("were not found") ||
+                lowerDesc.contains("does not show") ||
+                lowerDesc.contains("does not contain") ||
+                lowerDesc.startsWith("no ")) {
+                System.out.println("[Traffic Monitor] ❌ REJECTED: Description indicates 'no finding': " + description.substring(0, Math.min(50, description.length())) + "...");
+                return null;
+            }
+        }
+        
+        System.out.println("[Traffic Monitor] ✅ AI ADDED: " + type + " (" + severity + ")");
+        System.out.println("[Traffic Monitor]    📝 Description: " + (description != null ? description.substring(0, Math.min(60, description.length())) + "..." : "null"));
+        
+        return new TrafficFinding(
+            type,
+            severity,
+            "🤖 AI: " + type,
+            description != null ? description : "AI detected issue",
+            evidence,
+            transaction,
+            "AI Analysis",
+            "AI"
+        );
     }
 
     /**
