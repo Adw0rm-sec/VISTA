@@ -88,7 +88,8 @@ jobs:
           For stable releases, use [versioned releases](https://github.com/${{ github.repository }}/releases).
           
         draft: false
-        prerelease: true
+        prerelease: false
+        make_latest: true
         files: |
           target/vista-${{ steps.get_version.outputs.version }}.jar
       env:
