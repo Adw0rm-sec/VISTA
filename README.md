@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange)](https://openjdk.org/)
 
-**Intelligent vulnerability testing with AI-powered guidance, custom templates, and organized workflows**
+**Real-time AI traffic analysis, intelligent vulnerability detection, and organized testing workflows — all inside Burp Suite.**
 
 [Features](#-key-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](#-documentation)
 
@@ -19,37 +19,51 @@
 
 ## 📖 Overview
 
-**VISTA** (Vulnerability Insight & Strategic Test Assistant) is a professional Burp Suite extension that enhances your security testing workflow with AI-powered intelligence. It combines the power of OpenAI and Azure AI with practical pentesting tools to help you test faster, smarter, and more systematically.
+**VISTA** (Vulnerability Insight & Strategic Test Assistant) is a professional Burp Suite extension that enhances your security testing workflow with AI-powered intelligence. It combines real-time traffic analysis, interactive AI guidance, and practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.8.1 | **Status:** Production Ready | **Size:** ~370KB
+**Version:** 2.10.23 | **Status:** Production Ready | **Size:** ~515KB
 
 ### Why VISTA?
 
-- 🤖 **AI-Powered Guidance** - Get intelligent testing suggestions from GPT-4
-- 🆓 **FREE AI Option** - Use OpenRouter with no credit card required
-- 📝 **Custom Templates** - 20+ built-in templates for common vulnerabilities
-- 🎯 **Payload Library** - 100+ pre-built payloads with AI integration
-- 📁 **Request Organization** - Group and track your testing systematically
-- 🛡️ **WAF Detection** - Automatically detect and bypass 8 major WAFs
-- 🚀 **Zero Dependencies** - Pure Java, no external libraries required
+- 🤖 **AI-Powered Traffic Analysis** — Real-time HTTP traffic monitoring with AI-driven vulnerability detection
+- 💡 **Interactive AI Advisor** — Context-aware testing suggestions from GPT-4, Azure, or OpenRouter
+- 🆓 **FREE AI Option** — Use OpenRouter with no credit card required
+- 📝 **Custom Templates** — 20+ built-in templates with a unified customizable prompt system
+- 🎯 **Payload Library** — 100+ pre-built payloads with AI integration
+- 🛡️ **WAF Detection** — Automatically detect and bypass 8 major WAFs
+- 🎯 **Scope-Aware** — Define target scope, only analyze what matters
+- 🚀 **Zero Dependencies** — Pure Java, no external libraries required
 
 ---
 
 ## ✨ Key Features
 
+### 🌐 Intelligent Traffic Monitor *(Flagship Feature)*
+
+Real-time HTTP traffic analysis powered by AI:
+
+- **Automatic Vulnerability Detection** — AI analyzes intercepted traffic and flags security issues with severity ratings
+- **Scope-Aware Analysis** — Define target domains; VISTA only burns AI tokens on in-scope traffic
+- **Hierarchical Findings Tree** — Findings grouped by category with expandable detail view
+- **Live Findings Counter** — Tab badge shows `Findings (5)` so you know when new issues are detected
+- **Customizable Analysis Template** — Edit the AI prompt that drives analysis with a professional split-pane editor
+- **Traffic Tab** — Browse all captured HTTP transactions with request/response viewer
+- **Export & Clear** — Manage findings lifecycle during engagements
+
 ### 🤖 AI-Powered Testing Assistant
 
 Get intelligent, context-aware testing guidance powered by leading AI models:
 
-- **Unified AI Advisor** - Analyzes HTTP requests and suggests targeted testing approaches
-- **Multi-Request Analysis** - Handle complex workflows across multiple requests
-- **Context-Aware Suggestions** - AI adapts based on response patterns and findings
-- **Follow-Up Questions** - Interactive conversation mode for deeper analysis
+- **Interactive AI Advisor** — Analyzes HTTP requests and suggests targeted testing approaches
+- **Multi-Request Analysis** — Handle complex workflows across multiple requests
+- **Context-Aware Suggestions** — AI adapts based on response patterns and findings
+- **Follow-Up Conversations** — Interactive chat mode for deeper analysis
+- **Attach from Repeater** — Send requests to AI without losing conversation context
 
 **Supported AI Providers:**
 - **OpenAI** (GPT-4, GPT-4o, GPT-4o-mini)
 - **Azure OpenAI Service** (Enterprise deployments)
-- **OpenRouter** (500+ models, 2 FREE models available) ⭐ NEW!
+- **OpenRouter** (500+ models, 2 FREE models available) ⭐
 
 ### 📝 Custom AI Prompt Templates
 
@@ -86,20 +100,8 @@ Organize and manage your testing payloads efficiently:
 - Create custom payload collections
 - Bulk import with auto-detection
 - AI-powered payload suggestions
-- Success rate tracking
 - Context-aware filtering
 - Export/Import for sharing
-
-### 📁 Request Collection Engine
-
-Stay organized during complex testing engagements:
-
-- **Group Similar Requests** - Organize endpoints into named collections
-- **Track Progress** - Mark requests as tested/success
-- **Add Notes** - Document observations and findings
-- **Side-by-Side Comparison** - Compare requests and responses
-- **Pattern Detection** - Automatically identify similar endpoints
-- **Export/Import** - Share collections with your team
 
 ### 🛡️ Advanced Security Features
 
@@ -116,20 +118,27 @@ Stay organized during complex testing engagements:
 
 ### 🎨 Modern User Interface
 
-**6 Intuitive Tabs:**
+VISTA features a clean, streamlined UI with a professional status bar:
+
+**Always-Visible Status Bar:**
+- VISTA branding with version
+- Live AI status indicator (● Ready / ● Not Configured)
+- Provider & model display
+- One-click jump to Settings
+
+**5 Focused Tabs:**
 
 | Tab | Purpose |
 |-----|---------|
-| 🏠 **Dashboard** | Quick stats, system status, and actions |
-| 💡 **AI Advisor** | Unified AI testing assistant |
-| 📝 **Prompt Templates** | Custom AI prompt management |
-| 🎯 **Payload Library** | Payload organization and AI integration |
-| 📁 **Collections** | Request organization and comparison |
-| ⚙️ **Settings** | AI provider configuration |
+| 💡 **AI Advisor** | Interactive AI testing assistant with conversation history |
+| 🌐 **Traffic Monitor** | Real-time traffic analysis with AI-powered findings |
+| 📝 **Prompt Templates** | Custom AI prompt management (20+ built-in) |
+| 🎯 **Payload Library** | Payload organization with AI integration (100+) |
+| ⚙️ **Settings** | AI provider configuration and connection testing |
 
 **Context Menu Integration:**
-- Right-click any request → "💡 Send to VISTA AI Advisor"
-- Right-click any request → "📁 Add to Collection"
+- Right-click any request → **"💡 Send to VISTA AI Advisor"**
+- Right-click any request → **"📎 Attach to Interactive Assistant"**
 
 ---
 
@@ -145,18 +154,15 @@ Stay organized during complex testing engagements:
 **Option 1: Download from Releases**
 
 1. Visit [Latest Release](https://github.com/Adw0rm-sec/VISTA/releases/latest)
-2. Download `vista-2.8.1.jar` from Assets
+2. Download `vista-2.10.23.jar` from Assets
 3. In Burp Suite: **Extensions → Add → Java → Select JAR**
-4. VISTA tab appears in Burp
+4. VISTA tab appears in Burp with status bar
 
 **Option 2: Command Line**
 
 ```bash
 # Download latest release
-curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/v2.8.1/vista-2.8.1.jar
-
-# Or download latest auto-build
-curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o vista.jar
+curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10.23.jar
 ```
 
 ### Build from Source
@@ -164,8 +170,8 @@ curl -L https://github.com/Adw0rm-sec/VISTA/raw/main/builds/vista-latest.jar -o 
 ```bash
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
-mvn clean package
-# JAR will be in target/vista-2.8.1.jar
+mvn clean package -DskipTests
+# JAR will be in target/vista-2.10.23.jar
 ```
 
 ---
@@ -174,7 +180,7 @@ mvn clean package
 
 ### Step 1: Configure AI Provider
 
-Go to **VISTA → Settings** tab and configure your AI provider:
+Go to **VISTA → Settings** tab (or click ⚙ in the status bar):
 
 **For OpenAI:**
 ```
@@ -191,7 +197,7 @@ Endpoint: https://your-resource.openai.azure.com
 Deployment: your-deployment-name
 ```
 
-**For OpenRouter (FREE Option):** ⭐ NEW!
+**For OpenRouter (FREE Option):** ⭐
 ```
 Provider: OpenRouter
 API Key: sk-or-v1-... (Get free at openrouter.ai/keys)
@@ -199,41 +205,31 @@ Model: meta-llama/llama-3.3-70b-instruct:free (default)
        or tngtech/deepseek-r1t2-chimera:free (reasoning)
 ```
 
-**Why OpenRouter?**
-- ✅ **Completely FREE** - No credit card required
-- ✅ **GPT-4 Level Quality** - Llama 3.3 70B performs at GPT-4 level
-- ✅ **Large Context** - 128K+ tokens (handles complex requests)
-- ✅ **2 Verified Models** - Both tested and working
-- ✅ **Perfect for Students** - Learn security testing without costs
-- ✅ **5-Minute Setup** - Sign up, get key, start testing
-
 ### Step 2: Start Testing
 
-**Method 1: AI Advisor**
+**Method 1: Traffic Monitor (Passive AI Analysis)**
+1. Go to **Traffic Monitor** tab → Click **"▶ Start Monitoring"**
+2. Configure scope (add your target domains)
+3. Browse the target — VISTA automatically analyzes traffic
+4. Check **Findings** tab for AI-detected vulnerabilities
+
+**Method 2: AI Advisor (Interactive)**
 1. Right-click any request in Burp → **"💡 Send to VISTA AI Advisor"**
 2. AI automatically analyzes the request
 3. Get testing suggestions and payloads
 4. Ask follow-up questions for deeper analysis
 
-**Method 2: Use Templates**
+**Method 3: Use Templates**
 1. Go to **Prompt Templates** tab
 2. Select a template (e.g., "XSS Testing - Reflected")
 3. Click **"Use Template"**
 4. AI provides targeted testing guidance
 
-**Method 3: Organize with Collections**
-1. Right-click requests → **"📁 Add to Collection"**
-2. Group similar endpoints together
-3. Track testing progress
-4. Compare responses side-by-side
-
 ---
 
-## 🆓 FREE AI with OpenRouter (NEW!)
+## 🆓 FREE AI with OpenRouter
 
-VISTA now supports **OpenRouter** - giving you access to powerful AI models **completely free**!
-
-### Why OpenRouter?
+VISTA supports **OpenRouter** — giving you access to powerful AI models **completely free**!
 
 | Feature | OpenRouter | OpenAI | Azure AI |
 |---------|:----------:|:------:|:--------:|
@@ -246,69 +242,17 @@ VISTA now supports **OpenRouter** - giving you access to powerful AI models **co
 
 ### Quick Setup (5 Minutes)
 
-**Step 1: Get Free API Key**
-1. Go to [openrouter.ai](https://openrouter.ai)
-2. Sign up (no credit card needed)
-3. Visit [openrouter.ai/keys](https://openrouter.ai/keys)
-4. Click "Create Key"
-5. Copy your key (starts with `sk-or-v1-...`)
-
-**Step 2: Configure VISTA**
-1. Open Burp Suite → VISTA → Settings
-2. Select Provider: **OpenRouter**
-3. Paste your API key
-4. Model: `meta-llama/llama-3.3-70b-instruct:free` (default)
-5. Click "Test Connection"
-6. Click "Save Configuration"
-
-**Step 3: Start Testing!**
-- All VISTA features work with OpenRouter
-- Same quality as GPT-4
-- Completely free forever
+1. Go to [openrouter.ai](https://openrouter.ai) → Sign up (no credit card)
+2. Visit [openrouter.ai/keys](https://openrouter.ai/keys) → Create Key
+3. In VISTA Settings: Select **OpenRouter**, paste key, save
+4. Done — all VISTA features work for free!
 
 ### Available Free Models
 
-**1. Llama 3.3 70B (Default)** - Recommended
-- Model ID: `meta-llama/llama-3.3-70b-instruct:free`
-- Quality: ⭐⭐⭐⭐⭐ (GPT-4 level)
-- Speed: Fast
-- Context: 131K tokens
-- Best for: General security testing, all VISTA features
-
-**2. DeepSeek R1T2 Chimera (Reasoning)**
-- Model ID: `tngtech/deepseek-r1t2-chimera:free`
-- Quality: ⭐⭐⭐⭐⭐ (Superior reasoning)
-- Speed: Medium
-- Context: 128K+ tokens
-- Best for: Complex WAF bypasses, advanced analysis
-
-### When to Use Each Model
-
-| Task | Recommended Model | Why |
-|------|------------------|-----|
-| General Testing | Llama 3.3 70B | Faster, excellent quality |
-| XSS/SQLi Testing | Llama 3.3 70B | Good payload generation |
-| WAF Bypass | DeepSeek R1T2 | Better reasoning for bypasses |
-| Complex Analysis | DeepSeek R1T2 | Superior logical deduction |
-| Bulk Testing | Llama 3.3 70B | Better throughput |
-
-### Cost Comparison
-
-**Monthly Cost Estimate (100 requests/day):**
-
-| Provider | Model | Monthly Cost |
-|----------|-------|--------------|
-| OpenRouter | Llama 3.3 70B Free | **$0.00** 🎉 |
-| OpenRouter | DeepSeek R1T2 Free | **$0.00** 🎉 |
-| OpenAI | GPT-4o-mini | ~$15-30 |
-| OpenAI | GPT-4o | ~$50-100 |
-| Azure AI | GPT-4 | ~$50-150 |
-
-**Perfect for:**
-- 🎓 Students learning security testing
-- 🔬 Researchers experimenting with AI
-- 💼 Freelancers on a budget
-- 🧪 Testing VISTA before committing to paid providers
+| Model | ID | Best For |
+|-------|-----|---------|
+| **Llama 3.3 70B** (Default) | `meta-llama/llama-3.3-70b-instruct:free` | General testing, fast responses |
+| **DeepSeek R1T2 Chimera** | `tngtech/deepseek-r1t2-chimera:free` | Complex analysis, WAF bypasses |
 
 ---
 
@@ -332,25 +276,22 @@ VISTA now supports **OpenRouter** - giving you access to powerful AI models **co
 ## 💡 Use Cases
 
 ### For Penetration Testers
-- Get AI-powered testing suggestions instantly
-- Use proven payload libraries
-- Organize testing workflows systematically
-- Track progress across engagements
-- Generate professional reports
+- AI-powered traffic analysis catches what manual review misses
+- Interactive AI advisor for deep-dive testing guidance
+- Proven payload libraries with WAF bypass techniques
+- Scope-aware analysis — no wasted tokens on irrelevant traffic
 
 ### For Bug Bounty Hunters
-- Test faster with AI guidance
-- Reuse successful payloads
-- Organize similar endpoints
-- Document testing methodology
-- Export findings for reports
+- Passive AI monitoring while you browse targets
+- Instant findings with severity ratings
+- Customizable templates for focused testing
+- Free AI option via OpenRouter — zero cost
 
 ### For Security Teams
-- Standardize testing approaches
-- Share custom templates across team
+- Standardize testing approaches with shared templates
 - Build team payload libraries
-- Collaborate on collections
-- Maintain testing consistency
+- Consistent AI-driven analysis across engagements
+- Enterprise AI support via Azure OpenAI
 
 ---
 
@@ -361,23 +302,22 @@ VISTA now supports **OpenRouter** - giving you access to powerful AI models **co
 **Cost Optimization:**
 - Default temperature: 0.3 (focused, deterministic responses)
 - Efficient prompts with truncated request/response data
+- Scope filtering prevents unnecessary AI analysis
 - Recommended model: `gpt-4o-mini` (~$0.001-0.003 per interaction)
 
 **Data Privacy:**
 - Requests are truncated before sending to AI
 - Sensitive headers can be filtered
-- No data stored by VISTA (only by AI provider)
+- No data stored by VISTA externally (only by your AI provider)
 - All data stored locally in `~/.vista/`
 
 ### Local Data Storage
-
-VISTA stores configuration and data locally:
 
 ```
 ~/.vista/
 ├── templates/      # Custom prompt templates
 ├── payloads/       # Payload libraries
-├── collections/    # Request collections
+├── sessions/       # Chat session history
 └── config.json     # AI configuration
 ```
 
@@ -392,45 +332,53 @@ VISTA stores configuration and data locally:
 - **API:** Burp Suite Extension API
 - **Dependencies:** Zero external dependencies (Pure Java + Burp API)
 - **Build Tool:** Maven
-- **JAR Size:** ~370KB
-- **Total Files:** 50+ Java files
-- **Lines of Code:** 15,000+
+- **JAR Size:** ~515KB
+- **Total Files:** 90+ Java files
+- **Lines of Code:** 29,000+
 
 ### Project Structure
 
 ```
 src/main/java/
 ├── burp/
-│   └── BurpExtender.java              # Extension entry point
+│   └── BurpExtender.java                 # Extension entry point + status bar
 └── com/vista/security/
-    ├── core/                          # Core functionality
-    │   ├── AIConfigManager.java       # AI configuration
-    │   ├── PromptTemplateManager.java # Template management
-    │   ├── PayloadLibraryManager.java # Payload management
-    │   ├── RequestCollectionManager.java # Collection management
-    │   ├── WAFDetector.java           # WAF detection
-    │   └── BypassKnowledgeBase.java   # Bypass techniques
-    ├── model/                         # Data models
-    │   ├── PromptTemplate.java
-    │   ├── Payload.java
-    │   └── RequestCollection.java
-    ├── service/                       # AI services
-    │   ├── OpenAIService.java
-    │   └── AzureAIService.java
-    └── ui/                            # User interface
-        ├── DashboardPanel.java
-        ├── TestingSuggestionsPanel.java
-        ├── PromptTemplatePanel.java
-        ├── PayloadLibraryPanel.java
-        ├── RequestCollectionPanel.java
-        └── SettingsPanel.java
+    ├── core/                             # Core functionality
+    │   ├── AIConfigManager.java          # AI configuration management
+    │   ├── IntelligentTrafficAnalyzer.java # AI traffic analysis engine
+    │   ├── TrafficBufferManager.java     # Traffic capture & buffering
+    │   ├── TrafficMonitorService.java    # Monitoring orchestration
+    │   ├── ScopeManager.java            # Target scope management
+    │   ├── FindingsManager.java         # AI findings management
+    │   ├── PromptTemplateManager.java   # Template management
+    │   ├── PayloadLibraryManager.java   # Payload management
+    │   ├── WAFDetector.java             # WAF detection
+    │   ├── BypassKnowledgeBase.java     # Bypass techniques
+    │   └── SessionManager.java          # Session persistence
+    ├── model/                            # Data models
+    │   ├── TrafficFinding.java          # AI finding model
+    │   ├── HttpTransaction.java         # HTTP transaction model
+    │   ├── PromptTemplate.java          # Template model
+    │   └── Payload.java                 # Payload model
+    ├── service/                          # AI services
+    │   ├── OpenAIService.java           # OpenAI integration
+    │   ├── AzureAIService.java          # Azure OpenAI integration
+    │   └── OpenRouterService.java       # OpenRouter integration
+    └── ui/                               # User interface
+        ├── TrafficMonitorPanel.java     # Traffic Monitor tab
+        ├── TrafficFindingsTreePanel.java # Hierarchical findings view
+        ├── FindingDetailsPanel.java     # Finding detail viewer
+        ├── TestingSuggestionsPanel.java  # AI Advisor tab
+        ├── PromptTemplatePanel.java     # Prompt Templates tab
+        ├── PromptCustomizationDialog.java # Template editor dialog
+        ├── PayloadLibraryPanel.java     # Payload Library tab
+        ├── SettingsPanel.java           # Settings tab
+        └── HttpMessageViewer.java       # Request/Response viewer
 ```
 
 ---
 
 ## 📖 Documentation
-
-All documentation is included in the main README. For additional help:
 
 - **Issues:** [GitHub Issues](https://github.com/Adw0rm-sec/VISTA/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/Adw0rm-sec/VISTA/discussions)
@@ -449,23 +397,15 @@ We welcome contributions from the community! Whether it's:
 - 📝 Documentation improvements
 - 🔧 Code contributions
 
-Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get started.
+Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
 
 ```bash
-# Clone repository
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
-
-# Build
 mvn clean package
-
-# Run tests
-mvn test
-
-# Check code quality
-mvn checkstyle:check
+# JAR → target/vista-2.10.23.jar
 ```
 
 ---
@@ -481,8 +421,6 @@ VISTA is designed for **authorized security testing only**. Users are responsibl
 - ✅ Using the tool ethically and responsibly
 - ✅ Respecting data privacy and confidentiality
 
-### Security Policy
-
 For security issues, please see [SECURITY.md](SECURITY.md) or contact the maintainers privately.
 
 ---
@@ -493,75 +431,42 @@ VISTA is released under the [MIT License](LICENSE).
 
 ```
 MIT License
-
 Copyright (c) 2026 Adw0rm-sec
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
 ```
 
 ---
 
 ## 🙏 Acknowledgments
 
-VISTA is built on the shoulders of giants:
-
-- **[PayloadsAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings)** - Bypass techniques and payloads
-- **[Burp Suite](https://portswigger.net/burp)** - Extensibility API and platform
-- **[OpenAI](https://openai.com/)** & **[Azure](https://azure.microsoft.com/)** - AI capabilities
-- **Security Community** - Testing methodologies, feedback, and inspiration
+- **[PayloadsAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings)** — Bypass techniques and payloads
+- **[Burp Suite](https://portswigger.net/burp)** — Extensibility API and platform
+- **[OpenAI](https://openai.com/)**, **[Azure](https://azure.microsoft.com/)**, **[OpenRouter](https://openrouter.ai/)** — AI capabilities
+- **Security Community** — Testing methodologies, feedback, and inspiration
 
 ---
 
 ## 📞 Support & Community
 
-### Get Help
-
 - 💬 **Discussions:** [GitHub Discussions](https://github.com/Adw0rm-sec/VISTA/discussions)
 - 🐛 **Bug Reports:** [GitHub Issues](https://github.com/Adw0rm-sec/VISTA/issues)
-- 📧 **Email:** [Contact Maintainers](https://github.com/Adw0rm-sec)
+- 📧 **Contact:** [@Adw0rm-sec](https://github.com/Adw0rm-sec)
 
-### Stay Updated
-
-- ⭐ **Star this repository** to stay updated
-- 👀 **Watch releases** for new versions
-- 🔔 **Follow** [@Adw0rm-sec](https://github.com/Adw0rm-sec) on GitHub
-
----
-
-## 🗺️ Roadmap
-
-### v2.9.0 (Planned)
-- 🤖 AI-powered collection analysis
-- 📥 Bulk import from Proxy/Repeater
-- 🔍 Advanced response comparison
-- 🔎 Enhanced search and filtering
-
-### v3.0.0 (Future)
-- 🎯 Smart Findings Manager
-- 🤖 Automated vulnerability detection
-- 📊 Advanced report generation
-- 🔌 Plugin system for extensibility
+⭐ **Star this repository** to stay updated • 👀 **Watch releases** for new versions
 
 ---
 
 ## 📈 Statistics
 
-- **Total Java Files:** 50+
-- **Lines of Code:** 15,000+
-- **Built-in Templates:** 20+
-- **Built-in Payloads:** 100+
-- **Supported Vulnerabilities:** 10+
-- **WAF Detection:** 8 major WAFs
-- **Bypass Techniques:** 500+
-- **External Dependencies:** 0 (Zero!)
+| Metric | Count |
+|--------|-------|
+| Java Files | 90+ |
+| Lines of Code | 29,000+ |
+| Built-in Templates | 20+ |
+| Built-in Payloads | 100+ |
+| Supported Vulnerabilities | 10+ |
+| WAF Detection | 8 major WAFs |
+| Bypass Techniques | 500+ |
+| External Dependencies | **0** (Zero!) |
 
 ---
 
@@ -569,14 +474,12 @@ VISTA is built on the shoulders of giants:
 
 ### Made with ❤️ for the Security Community
 
-**[⬆ Back to Top](#-vista)**
+**[⬆ Back to Top](#-vista---vulnerability-insight--strategic-test-assistant)**
 
 ---
 
-**VISTA** - Vulnerability Insight & Strategic Test Assistant
+**VISTA** — Vulnerability Insight & Strategic Test Assistant
 
 *Empowering security professionals with AI-powered intelligence*
 
 </div>
-
-<!-- BUILD_INFO --> **Latest Build:** 20260215-174651 | **Version:** 2.10.23 | **Commit:** 3d25bbe
