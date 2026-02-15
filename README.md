@@ -455,21 +455,6 @@ Copyright (c) 2026 Adw0rm-sec
 
 ---
 
-## 📈 Statistics
-
-| Metric | Count |
-|--------|-------|
-| Java Files | 90+ |
-| Lines of Code | 29,000+ |
-| Built-in Templates | 4 expert |
-| Built-in Payloads | 80+ |
-| Supported Vulnerabilities | 10 |
-| WAF Detection | 8 major WAFs |
-| Bypass Techniques | 250+ |
-| External Dependencies | **0** (Zero!) |
-
----
-
 <div align="center">
 
 ### Made with ❤️ for the Security Community
