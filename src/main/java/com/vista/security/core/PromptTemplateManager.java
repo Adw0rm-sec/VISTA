@@ -1,6 +1,7 @@
 package com.vista.security.core;
 
 import com.vista.security.model.PromptTemplate;
+import com.vista.security.model.TemplateMode;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -99,6 +100,36 @@ public class PromptTemplateManager {
     }
     
     /**
+     * Get templates by mode.
+     */
+    public List<PromptTemplate> getTemplatesByMode(com.vista.security.model.TemplateMode mode) {
+        return templates.stream()
+            .filter(t -> t.getMode() == mode)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get template by name and mode.
+     */
+    public PromptTemplate getTemplate(String name, com.vista.security.model.TemplateMode mode) {
+        return templates.stream()
+            .filter(t -> t.getName().equalsIgnoreCase(name) && t.getMode() == mode)
+            .findFirst()
+            .orElse(null);
+    }
+    
+    /**
+     * Get all modes available.
+     */
+    public List<com.vista.security.model.TemplateMode> getAvailableModes() {
+        return templates.stream()
+            .map(PromptTemplate::getMode)
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+    }
+    
+    /**
      * Save a template.
      */
     public void saveTemplate(PromptTemplate template) {
@@ -147,9 +178,9 @@ public class PromptTemplateManager {
     }
     
     /**
-     * Process template with variable substitution.
+     * Process template with variable substitution and return separate prompts.
      */
-    public String processTemplate(PromptTemplate template, VariableContext context) {
+    public String[] processTemplateWithSeparatePrompts(PromptTemplate template, VariableContext context) {
         template.incrementUsageCount();
         
         // Only save custom templates (not built-in) to persist usage count
@@ -165,7 +196,15 @@ public class PromptTemplateManager {
         String systemPrompt = VariableProcessor.process(template.getSystemPrompt(), context);
         String userPrompt = VariableProcessor.process(template.getUserPrompt(), context);
         
-        return systemPrompt + "\n\n" + userPrompt;
+        return new String[]{systemPrompt, userPrompt};
+    }
+    
+    /**
+     * Process template with variable substitution.
+     */
+    public String processTemplate(PromptTemplate template, VariableContext context) {
+        String[] prompts = processTemplateWithSeparatePrompts(template, context);
+        return prompts[0] + "\n\n" + prompts[1];
     }
     
     /**
@@ -235,45 +274,43 @@ public class PromptTemplateManager {
     }
     
     private void loadBuiltInTemplates() {
-        // XSS Templates
-        templates.add(createXssReflectedBasic());
-        templates.add(createXssReflectedAggressive());
-        templates.add(createXssStored());
-        templates.add(createXssDomBased());
+        // Clean up ALL old templates first (fresh start)
+        cleanupAllOldTemplates();
         
-        // SQLi Templates
-        templates.add(createSqliErrorBased());
-        templates.add(createSqliBlindBoolean());
-        templates.add(createSqliTimeBased());
+        // Keep only the optimized DOM XSS template (already good)
+        PromptTemplate xssDom = createXssDomBased();
+        markAsBuiltIn(xssDom);
+        templates.add(xssDom);
         
-        // SSTI Templates
-        templates.add(createSstiDetection());
-        templates.add(createSstiExploitation());
+        // Keep Traffic Monitor template (useful for bug bounty)
+        PromptTemplate trafficBugBounty = createTrafficBugBountyAnalysis();
+        markAsBuiltIn(trafficBugBounty);
+        templates.add(trafficBugBounty);
         
-        // Other Vulnerabilities
-        templates.add(createCommandInjection());
-        templates.add(createSsrfBasic());
-        templates.add(createSsrfCloudMetadata());
-        templates.add(createAuthBypass());
-        templates.add(createApiSecurity());
+        // Expert Mode Templates - Comprehensive with PortSwigger/OWASP/Bug Bounty knowledge
+        PromptTemplate sqliExpert = createSqliExpert();
+        markAsBuiltIn(sqliExpert);
+        templates.add(sqliExpert);
         
-        // WAF Bypass
-        templates.add(createWafBypassGeneric());
-        templates.add(createWafBypassCloudflare());
-        
-        // Reconnaissance
-        templates.add(createParameterDiscovery());
-        templates.add(createEndpointAnalysis());
-        templates.add(createErrorAnalysis());
-        
-        // Quick Scan
-        templates.add(createQuickVulnScan());
-        
-        // Traffic Monitor Template - Unified Bug Bounty Analysis
-        templates.add(createTrafficBugBountyAnalysis());
+        PromptTemplate xssExpert = createXssReflectedExpert();
+        markAsBuiltIn(xssExpert);
+        templates.add(xssExpert);
         
         // Clean up any built-in templates that were accidentally saved to disk
         cleanupBuiltInDuplicates();
+    }
+    
+    /**
+     * Mark a template as built-in (uses reflection to set the private field).
+     */
+    private void markAsBuiltIn(PromptTemplate template) {
+        try {
+            java.lang.reflect.Field field = PromptTemplate.class.getDeclaredField("isBuiltIn");
+            field.setAccessible(true);
+            field.set(template, true);
+        } catch (Exception e) {
+            System.err.println("Failed to mark template as built-in: " + e.getMessage());
+        }
     }
     
     private void loadCustomTemplates() {
@@ -316,6 +353,32 @@ public class PromptTemplateManager {
             }
         }
         return false;
+    }
+    
+    /**
+     * Clean up ALL old templates from custom directory (fresh start).
+     */
+    private void cleanupAllOldTemplates() {
+        try {
+            File customDirFile = new File(customDir);
+            if (!customDirFile.exists()) return;
+            
+            File[] files = customDirFile.listFiles((dir, name) -> name.endsWith(".json"));
+            if (files == null) return;
+            
+            System.out.println("Cleaning up old templates from custom directory...");
+            for (File file : files) {
+                try {
+                    System.out.println("Deleting old template: " + file.getName());
+                    file.delete();
+                } catch (Exception e) {
+                    System.err.println("Failed to delete: " + file.getName());
+                }
+            }
+            System.out.println("Old templates cleanup complete.");
+        } catch (Exception e) {
+            System.err.println("Error during old templates cleanup: " + e.getMessage());
+        }
     }
     
     /**
@@ -363,33 +426,18 @@ public class PromptTemplateManager {
             "Exploitation",
             "@vista",
             "Standard reflected XSS testing with common payloads",
-            "You are an expert XSS penetration tester. Provide clear, actionable testing guidance.",
             """
-            USER'S QUESTION: {{USER_QUERY}}
+            Expert XSS pentester. Analyze reflection context (HTML body/attribute/JS/event), detect encoding/WAF, generate context-specific payloads. Prioritize: 1) Identify reflection points 2) Determine context 3) Craft working payloads 4) Provide bypass techniques. Output: Ready-to-use payloads with testing steps and expected results. Focus on practical exploitation over theory.
+            """,
+            """
+            {{USER_QUERY}}
             
-            Analyze this request for reflected XSS vulnerabilities.
+            REQUEST: {{REQUEST}}
+            RESPONSE: {{RESPONSE}}
+            REFLECTION: {{REFLECTION_ANALYSIS}}
+            WAF: {{WAF_DETECTION}}
             
-            REQUEST:
-            {{REQUEST}}
-            
-            RESPONSE:
-            {{RESPONSE}}
-            
-            REFLECTION ANALYSIS:
-            {{REFLECTION_ANALYSIS}}
-            
-            WAF DETECTION:
-            {{WAF_DETECTION}}
-            
-            Provide:
-            1. Analysis of where parameters are reflected
-            2. Context-specific XSS payloads (HTML body, attribute, JavaScript)
-            3. Step-by-step testing instructions
-            4. Expected results
-            5. Bypass techniques if WAF detected
-            
-            Focus on practical, ready-to-use payloads.
-            Address the user's specific question above.
+            Provide: 1) Reflection analysis 2) Context-specific payloads 3) Testing steps 4) Expected results 5) WAF bypasses if needed.
             """
         );
         template.addTag("xss");
@@ -471,31 +519,161 @@ public class PromptTemplateManager {
             "XSS - DOM Based",
             "Exploitation",
             "@vista",
-            "Client-side DOM XSS testing",
-            "You are an expert in DOM-based XSS vulnerabilities.",
+            "Expert DOM XSS source-to-sink analysis with hash/URL parameter focus",
             """
-            Analyze for DOM-based XSS vulnerabilities.
+            Expert DOM XSS analyst. Trace attacker-controlled data from SOURCES to dangerous SINKS. Report ONLY exploitable TRUE POSITIVES.
             
-            REQUEST: {{REQUEST}}
-            RESPONSE: {{RESPONSE}}
+            CRITICAL RAW DATA ANALYSIS REQUIREMENTS:
+            ⚠️ ALWAYS analyze the RAW HTTP response including ALL JavaScript code
+            ⚠️ EXPLICITLY document how data flows from source to sink and what encoding/sanitization is applied
+            ⚠️ NEVER assume sanitization—ALWAYS confirm by examining the actual code
+            ⚠️ If ANY ambiguity exists, ask clarifying questions before confirming vulnerability
+            ⚠️ PAY SPECIAL ATTENTION to location.hash and URL fragment usage
             
-            Look for:
-            1. JavaScript that processes URL parameters
-            2. document.location, window.location usage
-            3. innerHTML, outerHTML assignments
-            4. eval(), setTimeout(), setInterval() with user input
-            5. jQuery .html(), .append() with user data
+            SOURCES (ATTACKER-CONTROLLED):
+            - location.hash (URL fragment after #) ⚠️ HIGH PRIORITY
+            - location.search (URL query string)
+            - location.href (full URL)
+            - document.URL, document.documentURI
+            - document.cookie, document.referrer
+            - window.name
+            - postMessage data
+            - localStorage, sessionStorage
             
-            Provide:
-            - DOM sinks to test
-            - Payloads for each sink
-            - Browser DevTools debugging steps
-            - Verification methods
+            DANGEROUS SINKS:
+            - innerHTML, outerHTML (HTML injection)
+            - document.write(), document.writeln() (HTML injection)
+            - eval(), Function(), setTimeout(string), setInterval(string) (JS execution)
+            - element.onevent (onclick, onerror, onload, etc.)
+            - $(selector).html(), $(selector).append() (jQuery HTML injection)
+            - location.href = user_input (open redirect/javascript: protocol)
+            - element.setAttribute('onclick', user_input)
+            - element.src = user_input (for script/iframe tags)
+            
+            COMMON VULNERABLE PATTERNS:
+            1. location.hash → innerHTML/html()
+               Example: $('#content').html(location.hash.substr(1))
+            
+            2. location.hash → string concatenation → innerHTML
+               Example: html = "<img src='" + location.hash.substr(1) + "'>"
+               Payload: #' onerror=alert(1) '
+            
+            3. location.search → document.write()
+               Example: document.write("<div>" + getParam('name') + "</div>")
+            
+            4. URL parameter → eval/setTimeout
+               Example: eval("var x = '" + getParam('callback') + "'")
+            
+            5. unescape/decodeURIComponent → innerHTML
+               Example: div.innerHTML = unescape(location.hash)
+            
+            PAYLOADS by context:
+            - innerHTML: <img src=x onerror=alert(1)>
+            - String in HTML attribute: ' onerror=alert(1) '
+            - document.write: <script>alert(1)</script>
+            - eval: alert(1)
+            - location: javascript:alert(1)
+            - jQuery html(): <img src=x onerror=alert(1)>
+            
+            REJECT if:
+            - DOMPurify/textContent used
+            - No source-to-sink path exists
+            - Validation blocks XSS (e.g., regex filtering dangerous chars)
+            - Framework auto-escaping active (React, Angular with proper usage)
+            - Source data is not attacker-controlled
+            
+            OUTPUT: VULNERABILITY: DOM XSS | SEVERITY: [H/M] | SOURCE: [type+location] | FLOW: [source→sink with code snippets] | SINK: [type+location] | POC: [payload+URL] | IMPACT: [real impact]
+            """,
+            """
+            Analyze for DOM XSS. Find TRUE POSITIVES where attacker data flows source→sink without sanitization.
+            
+            RAW REQUEST: {{REQUEST}}
+            RAW RESPONSE (including all JavaScript): {{RESPONSE}}
+            
+            STEPS:
+            1. Examine RAW JavaScript code - Find sources:
+               - location.hash (CHECK FIRST - very common)
+               - location.search, location.href
+               - document.URL, document.cookie
+               - window.name, postMessage
+               - localStorage, sessionStorage
+            
+            2. Find sinks:
+               - innerHTML, outerHTML
+               - document.write(), document.writeln()
+               - eval(), Function(), setTimeout(string)
+               - element.onevent (onclick, onerror, onload)
+               - $(selector).html(), .append()
+               - location.href assignment
+            
+            3. Trace flow: source→variables→functions→sink
+               - Show ACTUAL code snippets for each step
+               - Example: location.hash.substr(1) → num variable → string concatenation → innerHTML
+            
+            4. Check sanitization:
+               - DOMPurify? textContent? validation?
+               - Examine the ACTUAL implementation
+               - Look for: replace(), match(), test(), sanitize()
+            
+            5. Document encoding:
+               - Is data URL-decoded? HTML-encoded? Escaped?
+               - Check: unescape(), decodeURIComponent(), escape sequences
+               - Check the ACTUAL transformations
+            
+            6. Generate payload:
+               - Match sink context (innerHTML vs eval vs attribute)
+               - For HTML context: <img src=x onerror=alert(1)>
+               - For attribute context: ' onerror=alert(1) '
+               - For eval context: alert(1)
+            
+            7. Verify:
+               - Provide exact URL with payload
+               - Show expected result
+               - Explain why it works
+            
+            REQUIREMENTS:
+            ✓ Working PoC with exact payload and URL
+            ✓ Complete source→sink trace with actual code snippets
+            ✓ Real impact (cookie theft, account takeover, defacement)
+            ✗ NO theoretical vulns
+            ✗ NO if sanitization exists
+            ✗ NO if flow broken
+            
+            ⚠️ CRITICAL: Before confirming vulnerability, explicitly state:
+            - Exact source and sink with line numbers/code snippets
+            - Any encoding/sanitization observed in the data flow
+            - If unclear, ask for more JavaScript code or clarification
+            
+            EXAMPLE ANALYSIS:
+            
+            VULNERABLE CODE:
+            ```javascript
+            function chooseTab(num) {
+                var html = "<img src='/static/cloud" + num + ".jpg' />";
+                $('#content').html(html);
+            }
+            window.onload = function() {
+                chooseTab(unescape(self.location.hash.substr(1)) || "1");
+            }
+            ```
+            
+            ANALYSIS:
+            - SOURCE: location.hash (attacker-controlled via URL fragment)
+            - FLOW: location.hash.substr(1) → unescape() → num parameter → string concatenation → jQuery .html()
+            - SINK: $('#content').html(html) - injects HTML without sanitization
+            - VULNERABILITY: String concatenation allows breaking out of src attribute
+            - PAYLOAD: #1' onerror="alert('XSS')" 
+            - RESULT: <img src='/static/cloud1' onerror="alert('XSS')" .jpg' />
+            - IMPACT: XSS executes when image fails to load
+            
+            Be concise. Focus on exploitable findings only. Always trace location.hash usage!
             """
         );
         template.addTag("xss");
         template.addTag("dom");
         template.addTag("client-side");
+        template.addTag("javascript");
+        template.addTag("location-hash");
         return template;
     }
     
@@ -505,26 +683,18 @@ public class PromptTemplateManager {
             "Exploitation",
             "@vista",
             "SQL injection testing with error messages",
-            "You are an expert SQL injection penetration tester.",
             """
-            USER'S QUESTION: {{USER_QUERY}}
-            
-            Test for error-based SQL injection.
+            Expert SQLi pentester. Fingerprint database (MySQL/PostgreSQL/MSSQL/Oracle/SQLite) from errors, craft injection payloads, extract data via error-based/UNION techniques. Key steps: 1) Test injection points (', ", --, #) 2) Identify DB type 3) Use DB-specific functions (extractvalue/CAST/CONVERT) 4) Build UNION queries 5) Query information_schema. Output: Working payloads with column counts, extraction queries, and bypass techniques.
+            """,
+            """
+            {{USER_QUERY}}
             
             REQUEST: {{REQUEST}}
             RESPONSE: {{RESPONSE}}
-            ERROR MESSAGES: {{ERROR_MESSAGES}}
-            PARAMETERS: {{PARAMETERS_LIST}}
+            ERRORS: {{ERROR_MESSAGES}}
+            PARAMS: {{PARAMETERS_LIST}}
             
-            Provide:
-            1. SQL injection detection payloads (', ", --, #, etc.)
-            2. Database fingerprinting (MySQL, PostgreSQL, MSSQL, Oracle)
-            3. Error-based extraction techniques
-            4. Union-based queries
-            5. Information schema queries
-            
-            Include specific payloads for detected database type.
-            Address the user's specific question above.
+            Provide: 1) Injection test payloads 2) DB fingerprinting 3) Error-based extraction 4) UNION queries 5) Info schema queries 6) Testing steps.
             """
         );
         template.addTag("sqli");
@@ -598,26 +768,17 @@ public class PromptTemplateManager {
             "Exploitation",
             "@vista",
             "Server-side template injection detection",
-            "You are an expert in SSTI vulnerabilities.",
             """
-            Detect server-side template injection vulnerabilities.
+            Expert SSTI pentester. Test template engines (Jinja2/Twig/Freemarker/Velocity/ERB/Smarty/Thymeleaf) using math expressions ({{7*7}}, ${7*7}, <%= 7*7 %>), config access, and engine-specific syntax. Steps: 1) Test basic expressions 2) Identify engine from response 3) Confirm with engine-specific payloads 4) Provide RCE path. Output: Detection payloads, expected responses, engine fingerprinting, and exploitation roadmap.
+            """,
+            """
+            {{USER_QUERY}}
             
             REQUEST: {{REQUEST}}
             RESPONSE: {{RESPONSE}}
-            ENDPOINT TYPE: {{ENDPOINT_TYPE}}
+            ENDPOINT: {{ENDPOINT_TYPE}}
             
-            Test for template engines:
-            1. Jinja2 (Python): {{7*7}}, {{config}}
-            2. Twig (PHP): {{7*7}}, {{_self}}
-            3. Freemarker (Java): ${7*7}, <#assign>
-            4. Velocity (Java): #set($x=7*7)
-            5. ERB (Ruby): <%= 7*7 %>
-            
-            Provide:
-            - Detection payloads for each engine
-            - Expected responses
-            - Engine fingerprinting
-            - Next steps after detection
+            Provide: 1) Detection payloads per engine 2) Expected responses 3) Engine fingerprinting 4) Next exploitation steps.
             """
         );
         template.addTag("ssti");
@@ -665,22 +826,17 @@ public class PromptTemplateManager {
             "Exploitation",
             "@vista",
             "OS command injection testing",
-            "You are an expert in command injection vulnerabilities.",
             """
-            Test for OS command injection.
+            Expert command injection pentester. Test OS commands (Linux/Windows) using separators (; | & && || ` $() backticks), detect blind vs direct injection, use time delays (sleep/timeout) for confirmation, leverage OOB channels (DNS/HTTP callbacks). Steps: 1) Test injection points 2) Identify OS 3) Confirm with delays 4) Extract data 5) Escalate to shell. Output: Working payloads, OS-specific commands, blind detection techniques, and exfiltration methods.
+            """,
+            """
+            {{USER_QUERY}}
             
             REQUEST: {{REQUEST}}
-            PARAMETERS: {{PARAMETERS_LIST}}
-            ENDPOINT TYPE: {{ENDPOINT_TYPE}}
+            PARAMS: {{PARAMETERS_LIST}}
+            ENDPOINT: {{ENDPOINT_TYPE}}
             
-            Provide:
-            1. Command injection payloads (; | & && ||)
-            2. OS detection (Linux vs Windows)
-            3. Blind vs direct injection techniques
-            4. Out-of-band verification (DNS, HTTP)
-            5. Data exfiltration methods
-            
-            Include both inline and chained command payloads.
+            Provide: 1) Injection payloads 2) OS detection 3) Blind/direct techniques 4) OOB verification 5) Exfiltration methods.
             """
         );
         template.addTag("command-injection");
@@ -820,25 +976,17 @@ public class PromptTemplateManager {
             "Bypass",
             "@vista",
             "Generic WAF bypass techniques",
-            "You are an expert in WAF bypass techniques.",
             """
-            Provide WAF bypass techniques for this request.
+            Expert WAF bypass specialist. Analyze blocked payloads, identify detection patterns, generate 10-15 evasion variants using: encoding (URL/double-URL/Unicode/hex/HTML entities), case manipulation, comment injection (/**/, --, #), whitespace tricks, null bytes, parameter pollution, chunked encoding, parser differentials. Prioritize: 1) Identify what triggered block 2) Apply targeted bypasses 3) Combine techniques 4) Test incrementally. Output: Working bypass payloads with explanations and testing order.
+            """,
+            """
+            {{USER_QUERY}}
             
             REQUEST: {{REQUEST}}
-            WAF DETECTED: {{WAF_DETECTION}}
-            ORIGINAL PAYLOAD: (from previous testing)
+            WAF: {{WAF_DETECTION}}
+            BLOCKED PAYLOAD: (from previous attempt)
             
-            Bypass techniques:
-            1. Encoding (URL, double URL, Unicode, hex)
-            2. Case variation
-            3. Comment injection
-            4. Null byte injection
-            5. Newline/CRLF injection
-            6. Parameter pollution
-            7. Content-Type manipulation
-            8. Chunked encoding
-            
-            Provide 10+ bypass variations.
+            Provide: 1) Block analysis 2) 10-15 bypass variants 3) Technique explanations 4) Testing steps 5) Expected WAF behavior.
             """
         );
         template.addTag("waf");
@@ -976,28 +1124,18 @@ public class PromptTemplateManager {
             "General",
             "@vista",
             "Fast general vulnerability assessment",
-            "You are an expert penetration tester performing quick assessments.",
             """
-            USER'S QUESTION: {{USER_QUERY}}
-            
-            Perform a quick vulnerability scan of this endpoint.
+            Expert pentester doing rapid assessment. Scan for: XSS (reflected/stored/DOM), SQLi, command injection, SSRF, auth bypass, info disclosure, IDOR, XXE, deserialization. Prioritize by: 1) Attack surface 2) Input reflection 3) Error messages 4) Sensitive data exposure. Output: Top 3 likely vulns with quick test payloads, severity, and exploitation steps. Be concise and actionable.
+            """,
+            """
+            {{USER_QUERY}}
             
             REQUEST: {{REQUEST}}
             RESPONSE: {{RESPONSE}}
-            RISK SCORE: {{RISK_SCORE}}/10
-            PREDICTED VULNS: {{PREDICTED_VULNS}}
+            RISK: {{RISK_SCORE}}/10
+            PREDICTED: {{PREDICTED_VULNS}}
             
-            Quickly assess for:
-            1. XSS (reflected, stored, DOM)
-            2. SQL injection
-            3. Command injection
-            4. SSRF
-            5. Authentication issues
-            6. Information disclosure
-            
-            Provide top 3 most likely vulnerabilities with quick test payloads.
-            Be concise and actionable.
-            Address the user's specific question above.
+            Provide: Top 3 vulnerabilities with test payloads, severity, and steps.
             """
         );
         template.addTag("quick");
@@ -1011,139 +1149,271 @@ public class PromptTemplateManager {
             "Traffic - Bug Bounty Hunter",
             "Traffic Monitor",
             "@vista",
-            "Comprehensive analysis for bug bounty hunters - finds hidden parameters, secrets, endpoints, and vulnerabilities in ALL file types",
-            "You are an elite bug bounty hunter and security researcher. Analyze responses for security issues that bug bounty hunters typically miss. Focus on HIGH-CONFIDENCE, EXPLOITABLE findings only.",
+            "Enhanced bug bounty analysis with detailed descriptions and remediation",
+            "Elite bug bounty hunter. Provide detailed, actionable findings with impact and remediation.",
             """
-            Analyze this HTTP response for security issues that bug bounty hunters often overlook.
+            Analyze HTTP response for security issues.
             
-            REQUEST DETAILS:
-            URL: {{URL}}
-            Method: {{METHOD}}
-            Status: {{STATUS}}
-            Content-Type: {{CONTENT_TYPE}}
-            Size: {{SIZE}} bytes
+            URL: {{URL}} | Method: {{METHOD}} | Status: {{STATUS}} | Type: {{CONTENT_TYPE}}
             
-            RESPONSE CONTENT:
+            CONTENT:
             {{CONTENT}}
             
-            ═══════════════════════════════════════════════════════════════════════
-            YOUR MISSION: Find REAL, EXPLOITABLE security issues
-            ═══════════════════════════════════════════════════════════════════════
+            FIND (with actual values): API keys, passwords, private IPs, hidden fields, JWT tokens, encoded data, endpoints, sensitive data, injection points.
             
-            WHAT TO LOOK FOR (HIGH-PRIORITY):
-            
-            1. HIDDEN API ENDPOINTS
-               ✓ Undocumented API paths in JavaScript (/api/admin, /internal/debug)
-               ✓ GraphQL endpoints and introspection
-               ✓ WebSocket endpoints
-               ✓ Internal microservice URLs
-               ✓ Admin/debug endpoints
-            
-            2. HARDCODED SECRETS & CREDENTIALS
-               ✓ API keys (AWS, Google, Stripe, etc.)
-               ✓ OAuth tokens and JWT tokens
-               ✓ Database credentials
-               ✓ Private keys and certificates
-               ✓ Webhook secrets
-               ✓ Service account credentials
-            
-            3. HIDDEN PARAMETERS
-               ✓ Undocumented query parameters
-               ✓ Hidden form fields with sensitive data
-               ✓ API parameters in JavaScript code
-               ✓ Debug/admin parameters (debug=true, admin=1)
-               ✓ Rate limit bypass parameters
-            
-            4. SENSITIVE DATA EXPOSURE
-               ✓ Email addresses, phone numbers, SSNs
-               ✓ User IDs, session tokens
-               ✓ Internal IP addresses and hostnames
-               ✓ Version numbers and stack traces
-               ✓ Database schema information
-            
-            5. AUTHENTICATION & AUTHORIZATION ISSUES
-               ✓ Weak session tokens
-               ✓ Predictable IDs (IDOR potential)
-               ✓ Missing authentication checks
-               ✓ Role/permission information
-               ✓ OAuth misconfigurations
-            
-            6. INJECTION POINTS
-               ✓ Unvalidated user input in JavaScript
-               ✓ DOM XSS sinks (innerHTML, eval, etc.)
-               ✓ SQL query construction
-               ✓ Command execution patterns
-               ✓ Template injection patterns
-            
-            7. BUSINESS LOGIC FLAWS
-               ✓ Price manipulation opportunities
-               ✓ Quantity/amount tampering
-               ✓ Discount code patterns
-               ✓ Referral/reward system abuse
-               ✓ Race condition opportunities
-            
-            8. CONFIGURATION ISSUES
-               ✓ Debug mode enabled
-               ✓ Verbose error messages
-               ✓ Source maps exposed
-               ✓ Development endpoints in production
-               ✓ CORS misconfigurations
-            
-            ═══════════════════════════════════════════════════════════════════════
-            CRITICAL RULES TO AVOID FALSE POSITIVES
-            ═══════════════════════════════════════════════════════════════════════
-            
-            DO NOT REPORT:
-            ✗ Variable names without actual values (e.g., "let apiKey;" without value)
-            ✗ Function parameters (e.g., function login(username, password))
-            ✗ Comments about security (unless they contain real secrets)
-            ✗ Example/demo/test URLs (example.com, localhost, test.com)
-            ✗ Empty hidden fields or standard CSRF tokens
-            ✗ TODO comments or documentation
-            ✗ Console.log statements (unless leaking real sensitive data)
-            ✗ Standard library functions
-            ✗ Placeholder values (xxx, 123, test, demo)
-            
-            ONLY REPORT IF:
-            ✓ You can see the ACTUAL secret/key/token value
-            ✓ The endpoint is a REAL URL path (not a comment)
-            ✓ The parameter has a REAL value or is used in actual API calls
-            ✓ The finding is EXPLOITABLE (explain how)
-            ✓ You are 90%+ confident this is a real issue
-            
-            ═══════════════════════════════════════════════════════════════════════
-            OUTPUT FORMAT (USE EXACTLY THIS FORMAT)
-            ═══════════════════════════════════════════════════════════════════════
-            
-            For EACH finding, use this format:
-            
-            - Type: [ENDPOINT|SECRET|PARAMETER|SENSITIVE_DATA|INJECTION|AUTH_ISSUE|BUSINESS_LOGIC|CONFIG_ISSUE]
+            OUTPUT FORMAT (each finding MUST include ALL fields):
+            - Type: [API_KEY|PASSWORD|PRIVATE_IP|HIDDEN_FIELD|JWT_TOKEN|BASE64_SECRET|ENDPOINT|SENSITIVE_DATA|DEBUG_INFO|etc]
             - Severity: [CRITICAL|HIGH|MEDIUM|LOW]
-            - Evidence: [exact code/text snippet, max 150 chars]
-            - Description: [brief explanation of the issue and exploitation potential, max 200 chars]
+            - Parameter: [exact parameter/field/variable name where found]
+            - Evidence: [actual code snippet or value, max 100 chars]
+            - Description: [1-2 sentences explaining what was found and why it matters]
+            - Impact: [1-2 sentences on what attacker can do with this finding]
+            - Remediation: [1-2 sentences on how to fix it properly]
             
-            Example:
-            - Type: SECRET
+            EXAMPLE OUTPUT:
+            - Type: API_KEY
             - Severity: CRITICAL
-            - Evidence: const apiKey = "sk_live_51H7xYz2eZvKYlo2C..."
-            - Description: Stripe live API key hardcoded in JavaScript. Can be used to access payment data and create charges.
+            - Parameter: stripeApiKey
+            - Evidence: const stripeApiKey = "sk_live_abc123..."
+            - Description: Stripe live API key hardcoded in JavaScript file accessible to all users
+            - Impact: Attackers can extract this key and make unauthorized API calls to access payment data, create fraudulent charges, and potentially steal customer information
+            - Remediation: Move API key to server-side environment variable. Implement backend proxy for Stripe API calls. Rotate the exposed key immediately and monitor for unauthorized usage
             
-            ═══════════════════════════════════════════════════════════════════════
+            - Type: PRIVATE_IP
+            - Severity: MEDIUM
+            - Parameter: internalServerIP
+            - Evidence: var server = "http://192.168.1.50:8080"
+            - Description: Internal network IP address exposed in client-side code revealing infrastructure topology
+            - Impact: Attackers gain knowledge of internal network structure which can be used for targeted attacks, network mapping, and identifying potential pivot points for lateral movement
+            - Remediation: Use relative URLs or public domain names instead of internal IPs. Implement proper network segmentation and ensure internal addresses are not exposed in client-facing code
             
-            If NO HIGH-CONFIDENCE findings, respond with:
-            "No high-confidence security issues found."
+            SKIP: Variable names without values, function parameters, example URLs, empty fields, placeholders, comments without sensitive data.
             
-            REMEMBER: Quality over quantity. Only report REAL, EXPLOITABLE issues.
-            Be the bug bounty hunter who finds what others miss, but don't cry wolf!
+            If no findings: "No high-confidence security issues found."
+            
+            Be specific and actionable. Focus on real security impact and practical fixes. ALWAYS include Parameter, Impact, and Remediation fields.
             """
         );
         template.addTag("traffic");
         template.addTag("bug-bounty");
+        template.addTag("enhanced");
+        return template;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // EXPERT MODE TEMPLATES
+    // Comprehensive templates with PortSwigger/OWASP/Bug Bounty knowledge
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    private PromptTemplate createSqliExpert() {
+        PromptTemplate template = new PromptTemplate(
+            "SQL Injection (Expert)",
+            "Exploitation",
+            "@vista",
+            "Comprehensive SQLi testing with PortSwigger knowledge, bypass techniques, and troubleshooting help",
+            
+            // SYSTEM PROMPT (~400 tokens)
+            """
+            You are an ELITE SQL injection expert with comprehensive knowledge from PortSwigger Academy, OWASP, and real-world bug bounty programs (HackerOne, Bugcrowd, Synack).
+            
+            CRITICAL RAW DATA ANALYSIS REQUIREMENTS:
+            ⚠️ ALWAYS analyze the RAW HTTP request and response including ALL headers and bodies
+            ⚠️ EXPLICITLY document how each user-supplied character is reflected and encoded in the response
+            ⚠️ NEVER assume encoding or context—ALWAYS confirm with raw data
+            ⚠️ If ANY ambiguity exists, ask clarifying questions before providing exploitation advice
+            ⚠️ Check for: URL encoding (%27), HTML encoding (&quot;), Unicode encoding (\\u0027), double encoding, base64, hex encoding
+            ⚠️ Verify exact byte-level representation of special characters: ' " \\ ; -- # /* */ etc.
+            
+            CORE EXPERTISE:
+            - Database systems (MySQL/MariaDB, PostgreSQL, MSSQL, Oracle, SQLite, NoSQL)
+            - Injection techniques (error-based, UNION, boolean blind, time-based, out-of-band, second-order, stacked queries)
+            - Injection contexts (WHERE, ORDER BY, LIMIT, INSERT, UPDATE, JSON)
+            - WAF bypass (encoding, comments, case variation, whitespace, parameter pollution, inline comments, charset tricks)
+            
+            SYSTEMATIC METHODOLOGY:
+            1. Analyze RAW request/response - identify ALL encoding layers
+            2. Identify injection point (parameter, header, cookie)
+            3. Test basic payloads: ', ", --, #, ;, `
+            4. Document exact encoding applied to each character
+            5. Analyze error messages for DB fingerprinting
+            6. Determine injection context (WHERE/ORDER/LIMIT)
+            7. Choose optimal technique (error > UNION > blind)
+            8. Extract data efficiently (minimize requests)
+            9. Bypass WAF if detected
+            10. Verify exploitation (extract real data)
+            
+            WHEN USER GETS STUCK:
+            - If payloads blocked: Analyze WAF behavior, try encoding variations, use comment injection, test parameter pollution, search internet for latest bypasses
+            - If no errors: Switch to blind techniques, test boolean conditions, use time delays, try out-of-band channels
+            - If extraction fails: Verify column count (ORDER BY), match data types (NULL, 1, 'a'), check character limits, try alternative extraction methods
+            
+            OUTPUT REQUIREMENTS:
+            ✓ Document exact encoding observed in raw data
+            ✓ Working payloads (not just theory)
+            ✓ Step-by-step testing instructions
+            ✓ Expected responses for verification
+            ✓ Bypass techniques if WAF detected
+            ✓ References to PortSwigger labs
+            ✓ Real-world impact assessment
+            ✗ Avoid verbose explanations (be concise)
+            ✗ Don't suggest 20+ payloads (prioritize top 5)
+            
+            PORTSWIGGER REFERENCES: SQL injection UNION attacks, Blind SQL injection, SQL injection in different contexts, Database-specific factors
+            
+            REAL-WORLD: This technique found $500-$10K SQLi bounties on HackerOne. Common in login forms (85% success rate).
+            """,
+            
+            // USER PROMPT (~100 tokens)
+            """
+            Analyze this RAW HTTP request/response for SQL injection vulnerabilities.
+            
+            RAW REQUEST: {{REQUEST}}
+            RAW RESPONSE: {{RESPONSE}}
+            ERRORS: {{ERROR_MESSAGES}}
+            PARAMS: {{PARAMETERS_LIST}}
+            WAF: {{WAF_DETECTION}}
+            RISK SCORE: {{RISK_SCORE}}/10
+            
+            USER QUESTION: {{USER_QUERY}}
+            
+            PROVIDE:
+            1. RAW DATA ANALYSIS - Examine raw bytes. What encoding is applied? URL/HTML/Unicode/Base64? Document EXACT character transformations.
+            2. INJECTION ANALYSIS - Which parameters injectable? Injection context? Database type?
+            3. TESTING PAYLOADS (Top 5, prioritized) - Account for observed encoding. Payload 1-5 with explanations.
+            4. EXPECTED RESULTS - What response indicates success? How to verify?
+            5. BYPASS TECHNIQUES (if WAF detected) - Encoding chains, comments, alternative syntax
+            6. NEXT STEPS - If works: extract data. If blocked: what to try next?
+            
+            ⚠️ CRITICAL: Before suggesting payloads, explicitly state what encoding you observed in the raw response. If unclear, ask for clarification.
+            
+            If stuck or payloads blocked, help troubleshoot. Search internet for latest bypass techniques. Reference PortSwigger labs when relevant.
+            """,
+            
+            TemplateMode.EXPERT
+        );
+        
+        template.addTag("sqli");
+        template.addTag("expert");
         template.addTag("comprehensive");
-        template.addTag("javascript");
-        template.addTag("html");
-        template.addTag("json");
-        template.addTag("api");
+        template.addTag("bug-bounty");
+        template.addTag("portswigger");
+        return template;
+    }
+    
+    private PromptTemplate createXssReflectedExpert() {
+        PromptTemplate template = new PromptTemplate(
+            "XSS - Reflected (Expert)",
+            "Exploitation",
+            "@vista",
+            "Comprehensive XSS testing with context-aware payloads, WAF bypass, and troubleshooting help",
+            
+            // SYSTEM PROMPT (~400 tokens)
+            """
+            You are an ELITE XSS expert with comprehensive knowledge from PortSwigger Academy, OWASP, and real-world bug bounty programs.
+            
+            CRITICAL RAW DATA ANALYSIS REQUIREMENTS:
+            ⚠️ ALWAYS analyze the RAW HTTP request and response including ALL headers and bodies
+            ⚠️ EXPLICITLY document how each user-supplied character is reflected and encoded in the response
+            ⚠️ NEVER assume encoding or context—ALWAYS confirm with raw data
+            ⚠️ If ANY ambiguity exists, ask clarifying questions before providing exploitation advice
+            ⚠️ Check for: HTML encoding (&lt; &gt; &quot; &#39;), URL encoding (%3C %3E), JavaScript encoding (\\x3c \\u003c), Unicode normalization
+            ⚠️ Verify exact reflection: Is < reflected as &lt; or &#60; or \\x3c? Is " reflected as &quot; or &#34; or \\"?
+            ⚠️ Document reflection context: HTML body? Attribute? JavaScript string? Event handler? CSS?
+            
+            CORE EXPERTISE:
+            - Context detection (HTML body/attribute/JavaScript/event/URL/CSS)
+            - Encoding bypass (HTML entities, URL, Unicode, hex, octal, base64)
+            - WAF evasion (Cloudflare, ModSecurity, AWS WAF, Akamai)
+            - Browser-specific payloads (Chrome, Firefox, Safari, Edge)
+            - CSP bypass techniques
+            - Filter evasion (blacklist bypass, case manipulation, encoding chains)
+            
+            REFLECTION CONTEXTS & PAYLOADS:
+            1. HTML Body: <img src=x onerror=alert(1)>
+            2. HTML Attribute: " onload=alert(1) "
+            3. JavaScript String: '-alert(1)-'
+            4. JavaScript Variable: </script><script>alert(1)</script>
+            5. Event Handler: javascript:alert(1)
+            6. URL Parameter: javascript:alert(1)
+            7. CSS Context: </style><script>alert(1)</script>
+            
+            WAF BYPASS TECHNIQUES:
+            - Encoding: %3Cscript%3E, &#60;script&#62;, \\u003cscript\\u003e
+            - Case variation: <ScRiPt>, <sCrIpT>
+            - Comment injection: <scr<!---->ipt>, <scr/**/ipt>
+            - Event handlers: <svg onload=alert(1)>, <body onload=alert(1)>
+            - Protocol handlers: javascript:, data:, vbscript:
+            
+            SYSTEMATIC METHODOLOGY:
+            1. Analyze RAW response - identify ALL encoding layers
+            2. Identify reflection points (where input appears)
+            3. Determine reflection context (HTML/JS/attribute)
+            4. Document exact encoding applied to each character
+            5. Test basic payload: <script>alert(1)</script>
+            6. If blocked, analyze what triggered filter
+            7. Apply context-specific bypass accounting for encoding
+            8. Verify execution in browser
+            9. Craft final exploit payload
+            
+            WHEN USER GETS STUCK:
+            - If script tags blocked: Try event handlers
+            - If < > blocked: Try encoding or existing tags
+            - If quotes blocked: Try backticks or hex encoding
+            - If parentheses blocked: Try template literals
+            - If alert blocked: Try prompt, confirm, or eval
+            - Search internet for latest bypass techniques
+            
+            OUTPUT REQUIREMENTS:
+            ✓ Document exact encoding observed in raw data
+            ✓ Context-specific payloads (not generic)
+            ✓ Working exploits (test in browser)
+            ✓ Bypass techniques for detected WAF
+            ✓ Expected results (what should happen)
+            ✓ PortSwigger lab references
+            ✓ Real-world impact assessment
+            
+            PORTSWIGGER REFERENCES: Reflected XSS into HTML context, XSS in different contexts, DOM-based XSS, Exploiting XSS to steal cookies
+            
+            REAL-WORLD: $100-$5K bounties on HackerOne. Context-aware payloads have 70%+ success rate.
+            """,
+            
+            // USER PROMPT (~100 tokens)
+            """
+            Analyze this RAW HTTP request/response for reflected XSS vulnerabilities.
+            
+            RAW REQUEST: {{REQUEST}}
+            RAW RESPONSE: {{RESPONSE}}
+            REFLECTION: {{REFLECTION_ANALYSIS}}
+            WAF: {{WAF_DETECTION}}
+            RISK SCORE: {{RISK_SCORE}}/10
+            
+            USER QUESTION: {{USER_QUERY}}
+            
+            PROVIDE:
+            1. RAW DATA ANALYSIS - Examine raw bytes. What encoding is applied? HTML entities (&lt;)? URL encoding (%3C)? JavaScript escaping (\\x3c)? Document EXACT character transformations.
+            2. REFLECTION ANALYSIS - Where does input appear? What's the context (HTML/JS/attribute/event)? Is encoding applied?
+            3. TESTING PAYLOADS (Top 5, prioritized) - Context-specific payloads accounting for observed encoding
+            4. EXPECTED RESULTS - What indicates success? How to verify in browser?
+            5. BYPASS TECHNIQUES (if WAF detected) - Encoding variations, event handler alternatives, encoding chains
+            6. NEXT STEPS - If works: escalate. If blocked: what to try next?
+            
+            ⚠️ CRITICAL: Before suggesting payloads, explicitly state:
+            - Exact reflection context (e.g., "reflected inside <div> tag in HTML body")
+            - Exact encoding observed (e.g., "< becomes &lt; and > becomes &gt;")
+            - If unclear, ask for clarification or request more raw data
+            
+            If stuck or payloads blocked, help troubleshoot. Search internet for latest bypasses. Reference PortSwigger labs.
+            """,
+            
+            TemplateMode.EXPERT
+        );
+        
+        template.addTag("xss");
+        template.addTag("reflected");
+        template.addTag("expert");
+        template.addTag("comprehensive");
+        template.addTag("bug-bounty");
+        template.addTag("portswigger");
         return template;
     }
 }

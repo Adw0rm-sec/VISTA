@@ -6,7 +6,7 @@ import com.vista.security.ui.SettingsPanel;
 import com.vista.security.ui.PromptTemplatePanel;
 import com.vista.security.ui.PayloadLibraryPanel;
 import com.vista.security.ui.RequestCollectionPanel;
-// Using TrafficMonitorPanelSimple instead of TrafficMonitorPanel
+// Using TrafficMonitorPanel with NEW hierarchical tree UI
 
 import javax.swing.*;
 import java.awt.*;
@@ -39,6 +39,9 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
         callbacks.setExtensionName(EXTENSION_NAME);
+        
+        // Initialize AI Request Logger with callbacks for proper output
+        com.vista.security.core.AIRequestLogger.setCallbacks(callbacks);
         
         // Professional startup banner
         callbacks.printOutput("╔════════════════════════════════════════════════════════════╗");
@@ -88,10 +91,10 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     this.requestCollectionPanel = new RequestCollectionPanel(callbacks);
                     callbacks.printOutput("[VISTA] ✓ RequestCollectionPanel initialized");
                     
-                    // Initialize Traffic Monitor (Simplified version - just traffic capture and scope filtering)
-                    callbacks.printOutput("[VISTA] Initializing TrafficMonitorPanel (Simple)...");
-                    this.trafficMonitorPanel = new com.vista.security.ui.TrafficMonitorPanelSimple(callbacks);
-                    callbacks.printOutput("[VISTA] ✓ TrafficMonitorPanel (Simple) initialized");
+                    // Initialize Traffic Monitor with NEW hierarchical UI
+                    callbacks.printOutput("[VISTA] Initializing TrafficMonitorPanel (Hierarchical UI)...");
+                    this.trafficMonitorPanel = new com.vista.security.ui.TrafficMonitorPanel(callbacks);
+                    callbacks.printOutput("[VISTA] ✓ TrafficMonitorPanel (Hierarchical UI) initialized");
                     
                     // Create modern tabbed interface
                     callbacks.printOutput("[VISTA] Creating tabbed pane...");

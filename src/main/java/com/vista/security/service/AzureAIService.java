@@ -1,5 +1,6 @@
 package com.vista.security.service;
 
+import com.vista.security.core.AIRequestLogger;
 import com.vista.security.model.ChatMessage;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -97,40 +98,96 @@ public class AzureAIService implements AIService {
     
     @Override
     public String ask(String systemPrompt, String userPrompt) throws Exception {
-        String url = buildUrl();
-        String body = buildRequestBody(systemPrompt, userPrompt, config.getTemperature());
+        return ask(systemPrompt, userPrompt, null, null, null);
+    }
+    
+    @Override
+    public String ask(String systemPrompt, String userPrompt, String templateName) throws Exception {
+        return ask(systemPrompt, userPrompt, templateName, null, null);
+    }
+    
+    @Override
+    public String ask(String systemPrompt, String userPrompt, String templateName,
+                     String httpRequest, String httpResponse) throws Exception {
+        // Log the request
+        AIRequestLogger.logRequest("Azure OpenAI", config.getDeploymentName(), systemPrompt, userPrompt, 
+                                   templateName, httpRequest, httpResponse);
         
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("api-key", config.getApiKey())
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+        long startTime = System.currentTimeMillis();
         
-        HttpResponse<String> response = httpClient.send(request, 
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        
-        return parseResponse(response);
+        try {
+            String url = buildUrl();
+            String body = buildRequestBody(systemPrompt, userPrompt, config.getTemperature());
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
+                    .header("api-key", config.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            
+            HttpResponse<String> response = httpClient.send(request, 
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            
+            String result = parseResponse(response);
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Log the response
+            AIRequestLogger.logResponse("Azure OpenAI", result, duration);
+            
+            return result;
+        } catch (Exception e) {
+            AIRequestLogger.logError("Azure OpenAI", "ask", e);
+            throw e;
+        }
     }
     
     @Override
     public String askWithHistory(List<ChatMessage> messages) throws Exception {
-        String url = buildUrl();
-        String body = buildRequestBodyWithHistory(messages, config.getTemperature());
+        return askWithHistory(messages, null, null, null);
+    }
+    
+    @Override
+    public String askWithHistory(List<ChatMessage> messages, String templateName) throws Exception {
+        return askWithHistory(messages, templateName, null, null);
+    }
+    
+    @Override
+    public String askWithHistory(List<ChatMessage> messages, String templateName,
+                                String httpRequest, String httpResponse) throws Exception {
+        // Log the request with history
+        AIRequestLogger.logRequestWithHistory("Azure OpenAI", config.getDeploymentName(), messages, 
+                                             templateName, httpRequest, httpResponse);
         
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("api-key", config.getApiKey())
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+        long startTime = System.currentTimeMillis();
         
-        HttpResponse<String> response = httpClient.send(request, 
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        
-        return parseResponse(response);
+        try {
+            String url = buildUrl();
+            String body = buildRequestBodyWithHistory(messages, config.getTemperature());
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
+                    .header("api-key", config.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            
+            HttpResponse<String> response = httpClient.send(request, 
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            
+            String result = parseResponse(response);
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Log the response
+            AIRequestLogger.logResponse("Azure OpenAI", result, duration);
+            
+            return result;
+        } catch (Exception e) {
+            AIRequestLogger.logError("Azure OpenAI", "askWithHistory", e);
+            throw e;
+        }
     }
 
     private String buildUrl() {

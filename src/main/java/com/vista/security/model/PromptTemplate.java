@@ -21,6 +21,7 @@ public class PromptTemplate {
     private String userPrompt;
     private boolean isBuiltIn;
     private boolean isActive;
+    private TemplateMode mode;
     
     // AI Configuration Overrides (optional)
     private String modelOverride;
@@ -38,6 +39,14 @@ public class PromptTemplate {
      */
     public PromptTemplate(String name, String category, String author, String description,
                          String systemPrompt, String userPrompt) {
+        this(name, category, author, description, systemPrompt, userPrompt, TemplateMode.STANDARD);
+    }
+    
+    /**
+     * Constructor for creating new templates with mode.
+     */
+    public PromptTemplate(String name, String category, String author, String description,
+                         String systemPrompt, String userPrompt, TemplateMode mode) {
         this.id = UUID.randomUUID().toString().substring(0, 8);
         this.name = name;
         this.category = category;
@@ -47,6 +56,7 @@ public class PromptTemplate {
         this.userPrompt = userPrompt;
         this.isBuiltIn = false;
         this.isActive = true;
+        this.mode = mode != null ? mode : TemplateMode.STANDARD;
         this.createdAt = System.currentTimeMillis();
         this.modifiedAt = System.currentTimeMillis();
         this.usageCount = 0;
@@ -59,7 +69,7 @@ public class PromptTemplate {
     public PromptTemplate(String id, String name, String category, String author, String description,
                          String systemPrompt, String userPrompt, boolean isBuiltIn, boolean isActive,
                          String modelOverride, Double temperatureOverride, Integer maxTokensOverride,
-                         long createdAt, long modifiedAt, int usageCount, List<String> tags) {
+                         long createdAt, long modifiedAt, int usageCount, List<String> tags, TemplateMode mode) {
         this.id = id;
         this.name = name;
         this.category = category;
@@ -69,6 +79,7 @@ public class PromptTemplate {
         this.userPrompt = userPrompt;
         this.isBuiltIn = isBuiltIn;
         this.isActive = isActive;
+        this.mode = mode != null ? mode : TemplateMode.STANDARD;
         this.modelOverride = modelOverride;
         this.temperatureOverride = temperatureOverride;
         this.maxTokensOverride = maxTokensOverride;
@@ -88,6 +99,7 @@ public class PromptTemplate {
     public String getUserPrompt() { return userPrompt; }
     public boolean isBuiltIn() { return isBuiltIn; }
     public boolean isActive() { return isActive; }
+    public TemplateMode getMode() { return mode; }
     public String getModelOverride() { return modelOverride; }
     public Double getTemperatureOverride() { return temperatureOverride; }
     public Integer getMaxTokensOverride() { return maxTokensOverride; }
@@ -147,6 +159,11 @@ public class PromptTemplate {
         this.modifiedAt = System.currentTimeMillis();
     }
     
+    public void setMode(TemplateMode mode) {
+        this.mode = mode != null ? mode : TemplateMode.STANDARD;
+        this.modifiedAt = System.currentTimeMillis();
+    }
+    
     public void setTags(List<String> tags) { 
         this.tags = tags;
         this.modifiedAt = System.currentTimeMillis();
@@ -198,7 +215,8 @@ public class PromptTemplate {
             author,
             description,
             systemPrompt,
-            userPrompt
+            userPrompt,
+            mode
         );
         copy.tags = new ArrayList<>(this.tags);
         copy.modelOverride = this.modelOverride;
@@ -222,6 +240,7 @@ public class PromptTemplate {
         json.append("  \"userPrompt\": \"").append(escapeJson(userPrompt)).append("\",\n");
         json.append("  \"isBuiltIn\": ").append(isBuiltIn).append(",\n");
         json.append("  \"isActive\": ").append(isActive).append(",\n");
+        json.append("  \"mode\": \"").append(mode.name()).append("\",\n");
         json.append("  \"modelOverride\": ").append(modelOverride != null ? "\"" + escapeJson(modelOverride) + "\"" : "null").append(",\n");
         json.append("  \"temperatureOverride\": ").append(temperatureOverride).append(",\n");
         json.append("  \"maxTokensOverride\": ").append(maxTokensOverride).append(",\n");
@@ -252,6 +271,8 @@ public class PromptTemplate {
             String userPrompt = extractJsonString(json, "userPrompt");
             boolean isBuiltIn = extractJsonBoolean(json, "isBuiltIn");
             boolean isActive = extractJsonBoolean(json, "isActive");
+            String modeStr = extractJsonStringOrNull(json, "mode");
+            TemplateMode mode = modeStr != null ? TemplateMode.fromString(modeStr) : TemplateMode.STANDARD;
             String modelOverride = extractJsonStringOrNull(json, "modelOverride");
             Double temperatureOverride = extractJsonDoubleOrNull(json, "temperatureOverride");
             Integer maxTokensOverride = extractJsonIntOrNull(json, "maxTokensOverride");
@@ -262,7 +283,7 @@ public class PromptTemplate {
             
             return new PromptTemplate(id, name, category, author, description, systemPrompt, userPrompt,
                 isBuiltIn, isActive, modelOverride, temperatureOverride, maxTokensOverride,
-                createdAt, modifiedAt, usageCount, tags);
+                createdAt, modifiedAt, usageCount, tags, mode);
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse PromptTemplate from JSON: " + e.getMessage(), e);
         }

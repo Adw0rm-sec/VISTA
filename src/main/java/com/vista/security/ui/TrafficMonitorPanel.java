@@ -29,32 +29,24 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private final TrafficBufferManager bufferManager;
     private final TrafficFilterEngine filterEngine;
     private final TrafficMonitorService monitorService;
-    private final IntelligentTrafficAnalyzer analyzer;
+    private IntelligentTrafficAnalyzer analyzer; // NOT final - can be updated when AI config changes
     private final ScopeManager scopeManager; // NEW: Scope management
     
-    // UI Components - Findings View
-    private JTable findingsTable;
-    private DefaultTableModel findingsTableModel;
-    private JTextArea findingDetailsArea;
+    // UI Components - Findings View (now using hierarchical tree)
+    // Old table components removed - using TrafficFindingsTreePanel and FindingDetailsPanel
     private JLabel statsLabel;
     
     // UI Components - Traffic View
     private JTable trafficTable;
     private DefaultTableModel trafficTableModel;
-    private JTextArea requestResponseArea;
     
     // UI Components - Controls
     private JTextField urlFilterField;
-    private JComboBox<String> severityFilterCombo;
-    private JComboBox<String> typeFilterCombo;
-    private JComboBox<String> methodFilterCombo;
-    private JComboBox<String> detectionEngineFilterCombo; // NEW: Detection engine filter
-    private JCheckBox autoAnalyzeCheckbox;
-    private JCheckBox scopeEnabledCheckbox; // NEW: Enable scope filtering
+    private JCheckBox scopeEnabledCheckbox; // Enable scope filtering
     private JButton startStopButton;
     private JButton clearButton;
     private JButton exportButton;
-    private JButton manageScopeButton; // NEW: Manage scope button
+    private JButton manageScopeButton; // Manage scope button
     
     // Data
     private final List<TrafficFinding> allFindings;
@@ -62,15 +54,23 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private int requestCounter = 0; // NEW: Request numbering
     private boolean firstStart = true; // Track first monitoring start
     private com.vista.security.service.AIService cachedAIService; // Cache AI service to avoid recreating
+    private int lastFindingsCount = 0; // Track findings count to avoid unnecessary tree updates
     
     public TrafficMonitorPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
         this.allFindings = new ArrayList<>();
         
+        // Print version information
+        callbacks.printOutput("═══════════════════════════════════════");
+        callbacks.printOutput("VISTA Traffic Monitor v2.10.10-FINAL");
+        callbacks.printOutput("Content-Type Detection: ENABLED");
+        callbacks.printOutput("URL Extension Fallback: ENABLED");
+        callbacks.printOutput("═══════════════════════════════════════");
+        
         // Initialize core components
-        this.bufferManager = new TrafficBufferManager(1000);
+        this.bufferManager = new TrafficBufferManager(10000); // Increased from 1000 to 10000
         this.filterEngine = new TrafficFilterEngine();
-        this.scopeManager = new ScopeManager(); // NEW: Initialize scope manager
+        this.scopeManager = new ScopeManager();
         
         TrafficCaptureListener captureListener = new TrafficCaptureListener(callbacks, bufferManager);
         this.monitorService = new TrafficMonitorService(callbacks, bufferManager, captureListener, 5);
@@ -85,6 +85,15 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Add listener
         bufferManager.addListener(this);
+        
+        // Listen for AI configuration changes and update analyzer
+        AIConfigManager.getInstance().addListener(config -> {
+            callbacks.printOutput("[Traffic Monitor] AI configuration changed, updating analyzer...");
+            this.cachedAIService = createAIService();
+            this.analyzer = new IntelligentTrafficAnalyzer(cachedAIService, findingsManager);
+            this.analyzer.setScopeManager(this.scopeManager);
+            callbacks.printOutput("[Traffic Monitor] Analyzer updated with new AI configuration");
+        });
         
         // Initialize UI
         setLayout(new BorderLayout());
@@ -121,61 +130,34 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     private JPanel createControlsPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new GridBagLayout());
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(2, 5, 2, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.NONE;
         
         // Start/Stop button
+        gbc.gridx = 0;
+        gbc.gridy = 0;
         startStopButton = new JButton("▶ Start Monitoring");
         startStopButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
         startStopButton.addActionListener(e -> toggleMonitoring());
-        panel.add(startStopButton);
+        mainPanel.add(startStopButton, gbc);
         
-        // Auto-analyze checkbox
-        autoAnalyzeCheckbox = new JCheckBox("Auto-Analyze", true);
-        autoAnalyzeCheckbox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        panel.add(autoAnalyzeCheckbox);
+        // Separator
+        gbc.gridx = 1;
+        JSeparator sep1 = new JSeparator(SwingConstants.VERTICAL);
+        sep1.setPreferredSize(new Dimension(2, 25));
+        mainPanel.add(sep1, gbc);
         
-        panel.add(new JSeparator(SwingConstants.VERTICAL));
-        
-        // HTTP Method filter
-        panel.add(new JLabel("Method:"));
-        methodFilterCombo = new JComboBox<>(new String[]{"All", "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"});
-        methodFilterCombo.setToolTipText("Filter by HTTP method");
-        methodFilterCombo.addActionListener(e -> applyFilters());
-        panel.add(methodFilterCombo);
-        
-        // URL filter
-        panel.add(new JLabel("URL:"));
-        urlFilterField = new JTextField(15);
-        urlFilterField.setToolTipText("Filter by URL pattern (e.g., example.com/api)");
-        urlFilterField.addActionListener(e -> applyFilters());
-        panel.add(urlFilterField);
-        
-        // Severity filter
-        panel.add(new JLabel("Severity:"));
-        severityFilterCombo = new JComboBox<>(new String[]{"All", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"});
-        severityFilterCombo.addActionListener(e -> applyFilters());
-        panel.add(severityFilterCombo);
-        
-        // Type filter
-        panel.add(new JLabel("Type:"));
-        typeFilterCombo = new JComboBox<>(new String[]{"All", "SECRET", "HIDDEN_URL", "PARAMETER", "TOKEN", "DEBUG_CODE"});
-        typeFilterCombo.addActionListener(e -> applyFilters());
-        panel.add(typeFilterCombo);
-        
-        // Detection Engine filter
-        panel.add(new JLabel("Engine:"));
-        detectionEngineFilterCombo = new JComboBox<>(new String[]{"All", "🔍 Pattern", "🤖 AI"});
-        detectionEngineFilterCombo.setToolTipText("Filter by detection engine");
-        detectionEngineFilterCombo.addActionListener(e -> applyFilters());
-        panel.add(detectionEngineFilterCombo);
-        
-        panel.add(new JSeparator(SwingConstants.VERTICAL));
-        
-        // Scope controls
+        // Enable Scope checkbox
+        gbc.gridx = 2;
         scopeEnabledCheckbox = new JCheckBox("Enable Scope", false);
         scopeEnabledCheckbox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        scopeEnabledCheckbox.setToolTipText("Enable to analyze ONLY in-scope domains (REQUIRED for Traffic Monitor)");
+        scopeEnabledCheckbox.setToolTipText("Enable to analyze ONLY in-scope domains");
         scopeEnabledCheckbox.addActionListener(e -> {
             boolean enabled = scopeEnabledCheckbox.isSelected();
             scopeManager.setScopeEnabled(enabled);
@@ -202,100 +184,79 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             
             applyFilters();
         });
-        panel.add(scopeEnabledCheckbox);
+        mainPanel.add(scopeEnabledCheckbox, gbc);
         
+        // Manage Scope button
+        gbc.gridx = 3;
         manageScopeButton = new JButton("⚙️ Manage Scope");
         manageScopeButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         manageScopeButton.setToolTipText("Add/remove in-scope domains");
         manageScopeButton.addActionListener(e -> showScopeManager());
-        panel.add(manageScopeButton);
+        mainPanel.add(manageScopeButton, gbc);
         
-        panel.add(new JSeparator(SwingConstants.VERTICAL));
+        // Separator
+        gbc.gridx = 4;
+        JSeparator sep2 = new JSeparator(SwingConstants.VERTICAL);
+        sep2.setPreferredSize(new Dimension(2, 25));
+        mainPanel.add(sep2, gbc);
         
         // Clear button
+        gbc.gridx = 5;
         clearButton = new JButton("🗑 Clear");
+        clearButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         clearButton.addActionListener(e -> clearAll());
-        panel.add(clearButton);
+        mainPanel.add(clearButton, gbc);
         
         // Export button
+        gbc.gridx = 6;
         exportButton = new JButton("📤 Export");
+        exportButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         exportButton.addActionListener(e -> exportFindings());
-        panel.add(exportButton);
+        mainPanel.add(exportButton, gbc);
         
-        return panel;
+        // Separator
+        gbc.gridx = 7;
+        JSeparator sep3 = new JSeparator(SwingConstants.VERTICAL);
+        sep3.setPreferredSize(new Dimension(2, 25));
+        mainPanel.add(sep3, gbc);
+        
+        // Customize Prompts button
+        gbc.gridx = 8;
+        JButton customizePromptsButton = new JButton("✏️ Customize Prompts");
+        customizePromptsButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        customizePromptsButton.setToolTipText("Customize AI system and user prompts");
+        customizePromptsButton.addActionListener(e -> showPromptCustomizationDialog());
+        mainPanel.add(customizePromptsButton, gbc);
+        
+        return mainPanel;
     }
     
     private JPanel createFindingsPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         
-        // Findings table with Detection Engine column
-        String[] columnNames = {"Time", "Severity", "Type", "Title", "Category", "Engine", "URL"};
-        findingsTableModel = new DefaultTableModel(columnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
+        // Create hierarchical tree panel (left side)
+        TrafficFindingsTreePanel treePanel = new TrafficFindingsTreePanel();
         
-        findingsTable = new JTable(findingsTableModel);
-        findingsTable.setFont(new Font("Consolas", Font.PLAIN, 12));
-        findingsTable.setRowHeight(25);
-        findingsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        findingsTable.setAutoCreateRowSorter(true); // Enable sorting
-        findingsTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                displayFindingDetails();
-            }
-        });
+        // Create details panel (right side)
+        FindingDetailsPanel detailsPanel = new FindingDetailsPanel();
         
-        // Add keyboard navigation (up/down arrow keys)
-        findingsTable.addKeyListener(new java.awt.event.KeyAdapter() {
-            @Override
-            public void keyPressed(java.awt.event.KeyEvent e) {
-                int selectedRow = findingsTable.getSelectedRow();
-                int rowCount = findingsTable.getRowCount();
-                
-                if (e.getKeyCode() == java.awt.event.KeyEvent.VK_UP) {
-                    if (selectedRow > 0) {
-                        findingsTable.setRowSelectionInterval(selectedRow - 1, selectedRow - 1);
-                        findingsTable.scrollRectToVisible(findingsTable.getCellRect(selectedRow - 1, 0, true));
-                    }
-                    e.consume();
-                } else if (e.getKeyCode() == java.awt.event.KeyEvent.VK_DOWN) {
-                    if (selectedRow < rowCount - 1) {
-                        findingsTable.setRowSelectionInterval(selectedRow + 1, selectedRow + 1);
-                        findingsTable.scrollRectToVisible(findingsTable.getCellRect(selectedRow + 1, 0, true));
-                    }
-                    e.consume();
-                }
-            }
-        });
+        // Connect tree selection to details panel
+        treePanel.setSelectionListener(detailsPanel::showFinding);
         
-        // Set column widths
-        findingsTable.getColumnModel().getColumn(0).setPreferredWidth(150); // Time
-        findingsTable.getColumnModel().getColumn(1).setPreferredWidth(80);  // Severity
-        findingsTable.getColumnModel().getColumn(2).setPreferredWidth(100); // Type
-        findingsTable.getColumnModel().getColumn(3).setPreferredWidth(250); // Title
-        findingsTable.getColumnModel().getColumn(4).setPreferredWidth(120); // Category
-        findingsTable.getColumnModel().getColumn(5).setPreferredWidth(80);  // Engine
-        findingsTable.getColumnModel().getColumn(6).setPreferredWidth(400); // URL
-        
-        JScrollPane tableScrollPane = new JScrollPane(findingsTable);
-        
-        // Details area
-        findingDetailsArea = new JTextArea();
-        findingDetailsArea.setFont(new Font("Consolas", Font.PLAIN, 12));
-        findingDetailsArea.setEditable(false);
-        findingDetailsArea.setLineWrap(true);
-        findingDetailsArea.setWrapStyleWord(true);
-        JScrollPane detailsScrollPane = new JScrollPane(findingDetailsArea);
-        
-        // Split pane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScrollPane, detailsScrollPane);
-        splitPane.setDividerLocation(300);
-        splitPane.setResizeWeight(0.6);
+        // Split pane: tree on left, details on right
+        JSplitPane splitPane = new JSplitPane(
+            JSplitPane.HORIZONTAL_SPLIT, 
+            treePanel, 
+            detailsPanel
+        );
+        splitPane.setDividerLocation(400);
+        splitPane.setResizeWeight(0.4);
         
         panel.add(splitPane, BorderLayout.CENTER);
+        
+        // Store references for updating
+        panel.putClientProperty("treePanel", treePanel);
+        panel.putClientProperty("detailsPanel", detailsPanel);
         
         return panel;
     }
@@ -402,18 +363,18 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         JScrollPane tableScrollPane = new JScrollPane(trafficTable);
         
-        // Request/Response area
-        requestResponseArea = new JTextArea();
-        requestResponseArea.setFont(new Font("Consolas", Font.PLAIN, 11));
-        requestResponseArea.setEditable(false);
-        JScrollPane detailsScrollPane = new JScrollPane(requestResponseArea);
+        // HTTP message viewer (side-by-side Request/Response)
+        HttpMessageViewer httpViewer = new HttpMessageViewer();
         
         // Split pane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScrollPane, detailsScrollPane);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScrollPane, httpViewer);
         splitPane.setDividerLocation(300);
         splitPane.setResizeWeight(0.6);
         
         panel.add(splitPane, BorderLayout.CENTER);
+        
+        // Store reference to httpViewer for updates
+        panel.putClientProperty("httpViewer", httpViewer);
         
         return panel;
     }
@@ -544,11 +505,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             startStopButton.setText("▶ Start Monitoring");
             callbacks.printOutput("[Traffic Monitor] Monitoring stopped");
         } else {
-            // Show informational dialog on first start (not blocking)
-            if (firstStart) {
-                firstStart = false;
-                showScopeInformationDialog();
-            }
+            // REMOVED: Popup dialog on first start (user requested removal)
+            // User can learn about Traffic Monitor from documentation
             
             // Always allow monitoring to start
             monitorService.start();
@@ -567,8 +525,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     private void applyFilters() {
-        // Apply filters to findings table
-        updateFindingsTable();
+        // Apply filters to findings tree
+        updateFindingsTree();
     }
     
     private void clearAll() {
@@ -582,9 +540,12 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         if (result == JOptionPane.YES_OPTION) {
             allFindings.clear();
             bufferManager.clear();
-            updateFindingsTable();
+            if (analyzer != null) {
+                analyzer.clearAnalyzedUrls(); // Clear URL deduplication cache
+            }
+            updateFindingsTree();
             updateTrafficTable();
-            callbacks.printOutput("[Traffic Monitor] All data cleared");
+            callbacks.printOutput("[Traffic Monitor] All data cleared (including analyzed URLs cache)");
         }
     }
     
@@ -593,58 +554,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         JOptionPane.showMessageDialog(this, "Export functionality coming soon!");
     }
     
-    private void displayFindingDetails() {
-        int selectedRow = findingsTable.getSelectedRow();
-        if (selectedRow < 0) {
-            return;
-        }
-        
-        // Get the finding from the DISPLAYED table, not from allFindings directly
-        // because the table may be filtered
-        String selectedTime = (String) findingsTableModel.getValueAt(selectedRow, 0);
-        String selectedTitle = (String) findingsTableModel.getValueAt(selectedRow, 3);
-        
-        TrafficFinding finding = null;
-        synchronized (allFindings) {
-            for (TrafficFinding f : allFindings) {
-                if (f.getFormattedTimestamp().equals(selectedTime) && 
-                    f.getTitle().equals(selectedTitle)) {
-                    finding = f;
-                    break;
-                }
-            }
-        }
-        
-        if (finding == null) {
-            findingDetailsArea.setText("Finding not found");
-            return;
-        }
-        
-        StringBuilder details = new StringBuilder();
-        details.append("═══════════════════════════════════════════════════════════\n");
-        details.append("FINDING DETAILS\n");
-        details.append("═══════════════════════════════════════════════════════════\n\n");
-        
-        details.append("Title: ").append(finding.getTitle()).append("\n");
-        details.append("Severity: ").append(finding.getSeverity()).append("\n");
-        details.append("Type: ").append(finding.getType()).append("\n");
-        details.append("Category: ").append(finding.getCategory()).append("\n");
-        details.append("Time: ").append(finding.getFormattedTimestamp()).append("\n\n");
-        
-        details.append("Description:\n");
-        details.append(finding.getDescription()).append("\n\n");
-        
-        details.append("Evidence:\n");
-        details.append(finding.getEvidence()).append("\n\n");
-        
-        details.append("Source URL:\n");
-        details.append(finding.getSourceTransaction().getUrl()).append("\n\n");
-        
-        details.append("═══════════════════════════════════════════════════════════\n");
-        
-        findingDetailsArea.setText(details.toString());
-        findingDetailsArea.setCaretPosition(0);
-    }
+    // displayFindingDetails method removed - now handled by FindingDetailsPanel
     
     private void displayTrafficDetails() {
         int selectedRow = trafficTable.getSelectedRow();
@@ -671,47 +581,58 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         }
         
         if (transaction == null) {
-            requestResponseArea.setText("Transaction not found");
             return;
         }
         
-        StringBuilder details = new StringBuilder();
-        details.append("═══════════════════════════════════════════════════════════\n");
-        details.append("REQUEST\n");
-        details.append("═══════════════════════════════════════════════════════════\n");
-        details.append(new String(transaction.getRequest()));
-        details.append("\n\n");
-        details.append("═══════════════════════════════════════════════════════════\n");
-        details.append("RESPONSE\n");
-        details.append("═══════════════════════════════════════════════════════════\n");
-        details.append(new String(transaction.getResponse()));
-        
-        requestResponseArea.setText(details.toString());
-        requestResponseArea.setCaretPosition(0);
+        // Get the HttpMessageViewer from the Traffic panel
+        Component[] components = getComponents();
+        for (Component comp : components) {
+            if (comp instanceof JTabbedPane) {
+                JTabbedPane tabbedPane = (JTabbedPane) comp;
+                Component trafficTab = tabbedPane.getComponentAt(1); // Second tab is Traffic
+                
+                if (trafficTab instanceof JPanel) {
+                    JPanel trafficPanel = (JPanel) trafficTab;
+                    HttpMessageViewer httpViewer = 
+                        (HttpMessageViewer) trafficPanel.getClientProperty("httpViewer");
+                    
+                    if (httpViewer != null) {
+                        httpViewer.setHttpMessage(transaction.getRequest(), transaction.getResponse());
+                    }
+                }
+                break;
+            }
+        }
     }
     
     @Override
     public void onTransactionAdded(HttpTransaction transaction) {
-        // Analyze new transaction if auto-analyze is enabled
-        if (autoAnalyzeCheckbox.isSelected()) {
+        // ALWAYS analyze new transactions (Auto-Analyze removed)
+        // CRITICAL: Check scope FIRST - don't analyze out-of-scope traffic at all
+        boolean scopeEnabled = scopeManager.isScopeEnabled();
+        boolean hasScopeDomains = scopeManager.size() > 0;
+        boolean inScope = scopeManager.isInScope(transaction.getUrl());
+        
+        // SKIP ANALYSIS ENTIRELY if scope is enabled and URL is out of scope
+        if (scopeEnabled && hasScopeDomains && !inScope) {
+            callbacks.printOutput("[Traffic Monitor] ⏭️ SKIPPING out-of-scope: " + transaction.getUrl());
+            return; // EARLY RETURN - no analysis at all
+        }
+            
+            // If we reach here, either:
+            // 1. Scope is not enabled (analyze everything)
+            // 2. Scope is enabled but no domains defined (analyze everything)
+            // 3. Scope is enabled and URL is IN SCOPE (analyze this)
+            
             // Determine detection engines
             boolean aiConfigured = isAIConfigured();
-            boolean scopeEnabled = scopeManager.isScopeEnabled();
-            boolean hasScopeDomains = scopeManager.size() > 0;
-            boolean inScope = scopeManager.isInScope(transaction.getUrl());
             
-            // Determine detection mode based on scope and AI config
+            // AI-ONLY MODE: No pattern detection anymore
             String detectionMode;
             if (!aiConfigured) {
-                detectionMode = "🔍 Pattern Only (AI not configured)";
-            } else if (!scopeEnabled) {
-                detectionMode = "🔍 Pattern Only (Scope not enabled)";
-            } else if (!hasScopeDomains) {
-                detectionMode = "🔍 Pattern Only (No domains in scope)";
-            } else if (!inScope) {
-                detectionMode = "🔍 Pattern Only (Out of Scope)";
+                detectionMode = "⚠️ AI Not Configured (No Analysis)";
             } else {
-                detectionMode = "🤖 AI + 🔍 Pattern";
+                detectionMode = "🤖 AI Only";
             }
             
             // Show analyzing indicator
@@ -723,20 +644,23 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             new Thread(() -> {
                 try {
                     callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
-                    callbacks.printOutput("[Traffic Monitor] 🔍 Starting Analysis");
+                    callbacks.printOutput("[Traffic Monitor] 🔍 Starting Analysis (IN-SCOPE)");
                     callbacks.printOutput("[Traffic Monitor] URL: " + transaction.getUrl());
+                    callbacks.printOutput("[Traffic Monitor] Content-Type: " + transaction.getContentType());
                     callbacks.printOutput("[Traffic Monitor] Detection Mode: " + detectionMode);
                     callbacks.printOutput("[Traffic Monitor] AI Configured: " + (aiConfigured ? "✅ YES" : "❌ NO"));
                     callbacks.printOutput("[Traffic Monitor] Scope Enabled: " + (scopeEnabled ? "✅ YES" : "❌ NO"));
                     callbacks.printOutput("[Traffic Monitor] Domains in Scope: " + scopeManager.size());
-                    if (scopeEnabled && hasScopeDomains) {
-                        callbacks.printOutput("[Traffic Monitor] URL In Scope: " + (inScope ? "✅ YES" : "❌ NO"));
-                        if (!inScope) {
-                            callbacks.printOutput("[Traffic Monitor] 💰 AI analysis will be SKIPPED (cost savings)");
-                        }
-                    }
-                    if (!scopeEnabled || !hasScopeDomains) {
-                        callbacks.printOutput("[Traffic Monitor] 💰 AI analysis DISABLED - Enable scope and add domains to use AI");
+                    
+                    // Log content-type filtering decision
+                    String contentType = transaction.getContentType();
+                    boolean isHtmlOrJs = contentType != null && 
+                        (contentType.toLowerCase().contains("text/html") ||
+                         contentType.toLowerCase().contains("javascript"));
+                    if (!isHtmlOrJs) {
+                        callbacks.printOutput("[Traffic Monitor] ⏭️ Content-Type '" + contentType + "' → Skipped (AI only analyzes HTML/JavaScript)");
+                    } else if (aiConfigured) {
+                        callbacks.printOutput("[Traffic Monitor] 🤖 Content-Type '" + contentType + "' → AI analysis ENABLED");
                     }
                     callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
                     
@@ -746,10 +670,31 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     
                     synchronized (allFindings) {
                         allFindings.addAll(findings);
+                        callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
+                        callbacks.printOutput("[Traffic Monitor] 📊 FINDINGS UPDATE:");
+                        callbacks.printOutput("[Traffic Monitor] New findings from AI: " + findings.size());
+                        callbacks.printOutput("[Traffic Monitor] Total findings in memory: " + allFindings.size());
+                        callbacks.printOutput("[Traffic Monitor] ═══════════════════════════════════════");
+                        
+                        // Log each finding being added
+                        for (TrafficFinding finding : findings) {
+                            callbacks.printOutput("[Traffic Monitor] ➕ ADDING FINDING TO UI:");
+                            callbacks.printOutput("[Traffic Monitor]    Type: " + finding.getType());
+                            callbacks.printOutput("[Traffic Monitor]    Severity: " + finding.getSeverity());
+                            callbacks.printOutput("[Traffic Monitor]    Title: " + finding.getTitle());
+                            callbacks.printOutput("[Traffic Monitor]    URL: " + finding.getSourceTransaction().getUrl());
+                            callbacks.printOutput("[Traffic Monitor]    Evidence: " + (finding.getEvidence() != null ? finding.getEvidence().substring(0, Math.min(50, finding.getEvidence().length())) + "..." : "N/A"));
+                        }
                     }
                     
                     if (!findings.isEmpty()) {
                         callbacks.printOutput("[Traffic Monitor] ✅ Found " + findings.size() + " issues in " + transaction.getUrl());
+                        callbacks.printOutput("[Traffic Monitor] 🔄 Calling updateFindingsTree() to refresh UI...");
+                        
+                        // Update findings tree UI
+                        updateFindingsTree();
+                        
+                        callbacks.printOutput("[Traffic Monitor] ✅ updateFindingsTree() completed");
                         
                         // Show notification for critical/high findings
                         for (TrafficFinding finding : findings) {
@@ -776,7 +721,6 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     SwingUtilities.invokeLater(this::updateStats);
                 }
             }).start();
-        }
     }
     
     @Override
@@ -787,104 +731,107 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     private void refreshUI() {
-        updateFindingsTable();
+        updateFindingsTree();
         updateTrafficTable();
         updateStats();
     }
     
-    private void updateFindingsTable() {
+    private void updateFindingsTree() {
         SwingUtilities.invokeLater(() -> {
-            // Save current selection
-            int selectedRow = findingsTable.getSelectedRow();
-            TrafficFinding selectedFinding = null;
-            if (selectedRow >= 0 && selectedRow < findingsTableModel.getRowCount()) {
-                // Get the finding ID from the currently displayed table
-                String selectedTime = (String) findingsTableModel.getValueAt(selectedRow, 0);
-                String selectedTitle = (String) findingsTableModel.getValueAt(selectedRow, 3);
-                
-                // Find the actual finding object
-                synchronized (allFindings) {
-                    for (TrafficFinding f : allFindings) {
-                        if (f.getFormattedTimestamp().equals(selectedTime) && 
-                            f.getTitle().equals(selectedTitle)) {
-                            selectedFinding = f;
-                            break;
+            callbacks.printOutput("[Traffic Monitor] 🔄 updateFindingsTree() called");
+            callbacks.printOutput("[Traffic Monitor] Total findings in allFindings list: " + allFindings.size());
+            
+            // Get the findings panel
+            Component[] components = getComponents();
+            for (Component comp : components) {
+                if (comp instanceof JTabbedPane) {
+                    JTabbedPane tabbedPane = (JTabbedPane) comp;
+                    Component findingsTab = tabbedPane.getComponentAt(0); // First tab is Findings
+                    
+                    if (findingsTab instanceof JPanel) {
+                        JPanel findingsPanel = (JPanel) findingsTab;
+                        TrafficFindingsTreePanel treePanel = 
+                            (TrafficFindingsTreePanel) findingsPanel.getClientProperty("treePanel");
+                        
+                        if (treePanel != null) {
+                            callbacks.printOutput("[Traffic Monitor] ✅ Found TrafficFindingsTreePanel");
+                            
+                            // Filter findings based on scope and other filters
+                            List<TrafficFinding> filteredFindings = new ArrayList<>();
+                            
+                            synchronized (allFindings) {
+                                callbacks.printOutput("[Traffic Monitor] Filtering " + allFindings.size() + " findings...");
+                                
+                                for (TrafficFinding finding : allFindings) {
+                                    // Apply scope filter
+                                    if (scopeManager.isScopeEnabled() && 
+                                        !scopeManager.isInScope(finding.getSourceTransaction().getUrl())) {
+                                        callbacks.printOutput("[Traffic Monitor] ⏭️ Filtered out (scope): " + finding.getTitle());
+                                        continue;
+                                    }
+                                    
+                                    // Apply other filters
+                                    if (!matchesFilters(finding)) {
+                                        callbacks.printOutput("[Traffic Monitor] ⏭️ Filtered out (filters): " + finding.getTitle());
+                                        continue;
+                                    }
+                                    
+                                    filteredFindings.add(finding);
+                                    callbacks.printOutput("[Traffic Monitor] ✅ Included: " + finding.getTitle());
+                                }
+                            }
+                            
+                            callbacks.printOutput("[Traffic Monitor] Filtered findings count: " + filteredFindings.size());
+                            callbacks.printOutput("[Traffic Monitor] Last findings count: " + lastFindingsCount);
+                            
+                            // Only update tree if findings count changed (avoid unnecessary rebuilds)
+                            if (filteredFindings.size() != lastFindingsCount) {
+                                lastFindingsCount = filteredFindings.size();
+                                callbacks.printOutput("[Traffic Monitor] 🔄 Updating tree panel with " + filteredFindings.size() + " findings...");
+                                treePanel.updateFindings(filteredFindings);
+                                callbacks.printOutput("[Traffic Monitor] ✅ Tree panel updated successfully");
+                            } else {
+                                callbacks.printOutput("[Traffic Monitor] ⏭️ Skipping tree update (count unchanged)");
+                            }
+                        } else {
+                            callbacks.printOutput("[Traffic Monitor] ❌ TrafficFindingsTreePanel is NULL!");
                         }
                     }
+                    break;
                 }
-            }
-            
-            findingsTableModel.setRowCount(0);
-            
-            int rowToSelect = -1;
-            int currentRow = 0;
-            
-            synchronized (allFindings) {
-                for (TrafficFinding finding : allFindings) {
-                    // Apply scope filter to findings
-                    if (scopeManager.isScopeEnabled() && 
-                        !scopeManager.isInScope(finding.getSourceTransaction().getUrl())) {
-                        continue;
-                    }
-                    
-                    // Apply other filters
-                    if (!matchesFilters(finding)) {
-                        continue;
-                    }
-                    
-                    findingsTableModel.addRow(new Object[]{
-                        finding.getFormattedTimestamp(),
-                        finding.getSeverity(),
-                        finding.getType(),
-                        finding.getTitle(),
-                        finding.getCategory(),
-                        "AI".equals(finding.getDetectionEngine()) ? "🤖 AI" : "🔍 Pattern",
-                        finding.getSourceTransaction().getUrl()
-                    });
-                    
-                    // Check if this was the selected finding
-                    if (selectedFinding != null && finding == selectedFinding) {
-                        rowToSelect = currentRow;
-                    }
-                    currentRow++;
-                }
-            }
-            
-            // Restore selection
-            if (rowToSelect >= 0 && rowToSelect < findingsTableModel.getRowCount()) {
-                findingsTable.setRowSelectionInterval(rowToSelect, rowToSelect);
             }
         });
     }
     
     private void updateTrafficTable() {
         SwingUtilities.invokeLater(() -> {
-            // Save current selection
+            // Don't update if user is actively selecting/viewing (prevents selection jumping)
+            if (trafficTable.getSelectedRow() >= 0 && trafficTable.hasFocus()) {
+                return; // Skip update to preserve user selection
+            }
+            
+            // Save current selection by URL (more reliable than row index)
             int selectedRow = trafficTable.getSelectedRow();
             String selectedUrl = null;
             if (selectedRow >= 0 && selectedRow < trafficTableModel.getRowCount()) {
                 selectedUrl = (String) trafficTableModel.getValueAt(selectedRow, 3); // URL column
             }
             
+            // Clear table
             trafficTableModel.setRowCount(0);
             
             List<HttpTransaction> transactions = bufferManager.getAllTransactions();
-            String methodFilter = (String) methodFilterCombo.getSelectedItem();
-            String urlFilter = urlFilterField.getText().trim();
+            String urlFilter = urlFilterField != null ? urlFilterField.getText().trim() : "";
             
             int requestNumber = 1;
             int rowToSelect = -1;
             int currentRow = 0;
             
             for (HttpTransaction tx : transactions) {
-                // Apply scope filter
-                if (scopeManager.isScopeEnabled() && !scopeManager.isInScope(tx.getUrl())) {
-                    continue;
-                }
-                
-                // Apply method filter
-                if (!"All".equals(methodFilter)) {
-                    if (!methodFilter.equalsIgnoreCase(tx.getMethod())) {
+                // Apply scope filter if enabled
+                if (scopeManager.isScopeEnabled() && scopeManager.size() > 0) {
+                    if (!scopeManager.isInScope(tx.getUrl())) {
+                        // Skip out-of-scope traffic when scope is enabled
                         continue;
                     }
                 }
@@ -910,16 +857,20 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     tx.getFormattedTimestamp()
                 });
                 
-                // Check if this was the selected row
+                // Check if this was the selected row (match by URL)
                 if (selectedUrl != null && tx.getUrl().equals(selectedUrl)) {
                     rowToSelect = currentRow;
                 }
                 currentRow++;
             }
             
-            // Restore selection
+            // Restore selection only if we found the same URL
             if (rowToSelect >= 0 && rowToSelect < trafficTableModel.getRowCount()) {
-                trafficTable.setRowSelectionInterval(rowToSelect, rowToSelect);
+                final int finalRowToSelect = rowToSelect;
+                // Use invokeLater to ensure table is fully updated before selecting
+                SwingUtilities.invokeLater(() -> {
+                    trafficTable.setRowSelectionInterval(finalRowToSelect, finalRowToSelect);
+                });
             }
         });
     }
@@ -943,9 +894,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                 }
             }
             
-            // Determine detection mode
+            // Determine detection mode - AI ONLY MODE
             boolean aiConfigured = isAIConfigured();
-            String detectionMode = aiConfigured ? "🤖 AI + 🔍 Pattern" : "🔍 Pattern Only";
+            String detectionMode = aiConfigured ? "🤖 AI Only" : "⚠️ AI Not Configured";
             
             String status = monitorService.isRunning() ? "🟢 Monitoring" : "🔴 Stopped";
             String stats = String.format(
@@ -958,36 +909,11 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     private boolean matchesFilters(TrafficFinding finding) {
-        // URL filter
-        String urlFilter = urlFilterField.getText().trim();
+        // URL filter only (other filters were removed from UI)
+        String urlFilter = urlFilterField != null ? urlFilterField.getText().trim() : "";
         if (!urlFilter.isEmpty()) {
             String url = finding.getSourceTransaction().getUrl();
             if (!url.contains(urlFilter)) {
-                return false;
-            }
-        }
-        
-        // Severity filter
-        String severityFilter = (String) severityFilterCombo.getSelectedItem();
-        if (!"All".equals(severityFilter)) {
-            if (!severityFilter.equals(finding.getSeverity())) {
-                return false;
-            }
-        }
-        
-        // Type filter
-        String typeFilter = (String) typeFilterCombo.getSelectedItem();
-        if (!"All".equals(typeFilter)) {
-            if (!typeFilter.equals(finding.getType())) {
-                return false;
-            }
-        }
-        
-        // Detection Engine filter
-        String engineFilter = (String) detectionEngineFilterCombo.getSelectedItem();
-        if (!"All".equals(engineFilter)) {
-            String findingEngine = "AI".equals(finding.getDetectionEngine()) ? "🤖 AI" : "🔍 Pattern";
-            if (!engineFilter.equals(findingEngine)) {
                 return false;
             }
         }
@@ -1041,6 +967,19 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                 burp.IResponseInfo responseInfo = callbacks.getHelpers().analyzeResponse(response);
                 int statusCode = extractStatusCode(responseInfo);
                 String contentType = extractContentType(responseInfo);
+                
+                // Log original content-type from header
+                callbacks.printOutput("[Traffic Monitor] 📋 Header Content-Type: " + (contentType == null ? "null" : contentType));
+                
+                // If content-type is unknown, try to detect from URL extension
+                if (contentType == null || contentType.equals("unknown")) {
+                    String detectedType = detectContentTypeFromUrl(fullUrl);
+                    if (!detectedType.equals("unknown")) {
+                        callbacks.printOutput("[Traffic Monitor] 🔍 Detected from URL extension: " + detectedType);
+                        contentType = detectedType;
+                    }
+                }
+                
                 long responseSize = response.length - responseInfo.getBodyOffset();
                 
                 // Create transaction
@@ -1152,7 +1091,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         try {
             java.util.List<String> headers = responseInfo.getHeaders();
             if (headers == null) {
-                return null;
+                return "unknown";
             }
             
             for (String header : headers) {
@@ -1167,7 +1106,40 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             }
         } catch (Exception e) {
         }
-        return null;
+        return "unknown";
+    }
+    
+    /**
+     * Detects content-type from URL extension when Content-Type header is missing.
+     * This is critical for analyzing JavaScript files that don't send Content-Type headers.
+     */
+    private String detectContentTypeFromUrl(String url) {
+        if (url == null) {
+            return "unknown";
+        }
+        
+        String lowerUrl = url.toLowerCase();
+        
+        // Remove query parameters
+        int queryIndex = lowerUrl.indexOf('?');
+        if (queryIndex > 0) {
+            lowerUrl = lowerUrl.substring(0, queryIndex);
+        }
+        
+        // Check file extension
+        if (lowerUrl.endsWith(".js")) {
+            return "application/javascript";
+        } else if (lowerUrl.endsWith(".html") || lowerUrl.endsWith(".htm")) {
+            return "text/html";
+        } else if (lowerUrl.endsWith(".json")) {
+            return "application/json";
+        } else if (lowerUrl.endsWith(".css")) {
+            return "text/css";
+        } else if (lowerUrl.endsWith(".xml")) {
+            return "application/xml";
+        }
+        
+        return "unknown";
     }
     
     /**
@@ -1395,12 +1367,15 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     }
     
     /**
-     * Checks if AI is configured without creating a new service instance.
+     * Checks if AI is configured by querying AIConfigManager directly.
+     * This ensures we always have the latest configuration status.
      * 
      * @return True if AI is configured, false otherwise
      */
     private boolean isAIConfigured() {
-        return cachedAIService != null && !cachedAIService.getClass().getSimpleName().equals("DummyAIService");
+        // FIXED: Check AIConfigManager directly instead of cached service
+        // This ensures we get real-time configuration status
+        return AIConfigManager.getInstance().isConfigured();
     }
     
     /**
@@ -1616,6 +1591,38 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     );
                 }
             });
+        }
+    }
+    
+    /**
+     * Show dialog to customize AI prompts for traffic analysis
+     */
+    private void showPromptCustomizationDialog() {
+        // Get current prompts from analyzer (if any)
+        String currentJsPrompt = null;
+        String currentHtmlPrompt = null;
+        
+        // Create and show dialog
+        PromptCustomizationDialog dialog = new PromptCustomizationDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this),
+            currentJsPrompt,
+            currentHtmlPrompt
+        );
+        dialog.setVisible(true);
+        
+        // If user saved, apply the prompts
+        if (dialog.isSaved()) {
+            String jsPrompt = dialog.getJsPrompt();
+            String htmlPrompt = dialog.getHtmlPrompt();
+            
+            // Set custom prompts in analyzer
+            // Note: We're using the same template for both JS and HTML for now
+            // The analyzer will use the appropriate one based on content type
+            analyzer.setCustomUserPromptTemplate(jsPrompt);
+            
+            System.out.println("[Traffic Monitor] ✅ Custom prompts applied");
+            System.out.println("[Traffic Monitor] 📝 JS Prompt length: " + jsPrompt.length() + " chars");
+            System.out.println("[Traffic Monitor] 📝 HTML Prompt length: " + htmlPrompt.length() + " chars");
         }
     }
     

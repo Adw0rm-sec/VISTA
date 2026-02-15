@@ -6,12 +6,11 @@ import java.util.UUID;
  * TrafficFinding represents an intelligent security finding discovered
  * through automated analysis of HTTP traffic.
  * 
- * Findings can be:
- * - Secrets (API keys, passwords, tokens)
- * - Hidden URLs and endpoints
- * - Hidden parameters
- * - Sensitive data exposure
- * - Security misconfigurations
+ * Enhanced to support hierarchical display with:
+ * - Domain grouping
+ * - Category grouping (Credentials, Info Disclosure, etc.)
+ * - Specific finding types (API Key, Private IP, etc.)
+ * - Decoded data for encoded findings
  */
 public class TrafficFinding {
     
@@ -26,8 +25,22 @@ public class TrafficFinding {
     private final String category; // JavaScript, JSON Response, HTML Response, Request, Header
     private final String detectionEngine; // Pattern or AI
     
+    // Enhanced fields for hierarchical display
+    private final FindingCategory findingCategory; // Credentials, Info Disclosure, etc.
+    private final FindingType findingType; // API Key, Private IP, etc.
+    private final String location; // Response Body, Request Header, JavaScript, etc.
+    private final String decodedData; // Decoded content if applicable
+    private final String encodingType; // Base64, JWT, Hex, URL
+    private final String domain; // Domain for grouping
+    
+    // New fields for enhanced UI
+    private String affectedParameter; // Specific parameter/field name
+    private String detailedDescription; // Full 2-3 sentence description
+    private String impact; // Impact assessment
+    private String remediation; // How to fix
+    
     /**
-     * Creates a new TrafficFinding.
+     * Creates a new TrafficFinding with enhanced hierarchical fields.
      * 
      * @param type The type of finding
      * @param severity The severity level
@@ -37,10 +50,17 @@ public class TrafficFinding {
      * @param sourceTransaction The source HTTP transaction
      * @param category The category (JavaScript, JSON, etc.)
      * @param detectionEngine The detection engine (Pattern or AI)
+     * @param findingCategory The finding category for grouping
+     * @param findingType The specific finding type
+     * @param location The location in request/response
+     * @param decodedData Decoded content if applicable
+     * @param encodingType The encoding type if applicable
      */
     public TrafficFinding(String type, String severity, String title, String description,
                          String evidence, HttpTransaction sourceTransaction, String category,
-                         String detectionEngine) {
+                         String detectionEngine, FindingCategory findingCategory, 
+                         FindingType findingType, String location, String decodedData, 
+                         String encodingType) {
         this.id = UUID.randomUUID().toString();
         this.type = type;
         this.severity = severity;
@@ -51,6 +71,34 @@ public class TrafficFinding {
         this.timestamp = System.currentTimeMillis();
         this.category = category;
         this.detectionEngine = detectionEngine;
+        this.findingCategory = findingCategory != null ? findingCategory : FindingCategory.GENERAL;
+        this.findingType = findingType != null ? findingType : FindingType.OTHER;
+        this.location = location != null ? location : "Unknown";
+        this.decodedData = decodedData;
+        this.encodingType = encodingType;
+        this.domain = extractDomain(sourceTransaction.getUrl());
+    }
+    
+    /**
+     * Creates a new TrafficFinding with enhanced fields (no encoding).
+     */
+    public TrafficFinding(String type, String severity, String title, String description,
+                         String evidence, HttpTransaction sourceTransaction, String category,
+                         String detectionEngine, FindingCategory findingCategory, 
+                         FindingType findingType, String location) {
+        this(type, severity, title, description, evidence, sourceTransaction, category,
+             detectionEngine, findingCategory, findingType, location, null, null);
+    }
+    
+    /**
+     * Creates a new TrafficFinding with detection engine.
+     * For backward compatibility with existing code.
+     */
+    public TrafficFinding(String type, String severity, String title, String description,
+                         String evidence, HttpTransaction sourceTransaction, String category,
+                         String detectionEngine) {
+        this(type, severity, title, description, evidence, sourceTransaction, category,
+             detectionEngine, FindingCategory.GENERAL, FindingType.OTHER, "Unknown", null, null);
     }
     
     /**
@@ -67,7 +115,8 @@ public class TrafficFinding {
      */
     public TrafficFinding(String type, String severity, String title, String description,
                          String evidence, HttpTransaction sourceTransaction, String category) {
-        this(type, severity, title, description, evidence, sourceTransaction, category, "Pattern");
+        this(type, severity, title, description, evidence, sourceTransaction, category, "Pattern",
+             FindingCategory.GENERAL, FindingType.OTHER, "Unknown", null, null);
     }
     
     // Getters
@@ -112,6 +161,66 @@ public class TrafficFinding {
         return detectionEngine;
     }
     
+    public FindingCategory getFindingCategory() {
+        return findingCategory;
+    }
+    
+    public FindingType getFindingType() {
+        return findingType;
+    }
+    
+    public String getLocation() {
+        return location;
+    }
+    
+    public String getDecodedData() {
+        return decodedData;
+    }
+    
+    public String getEncodingType() {
+        return encodingType;
+    }
+    
+    public String getDomain() {
+        return domain;
+    }
+    
+    public boolean hasDecodedData() {
+        return decodedData != null && !decodedData.isEmpty();
+    }
+    
+    public String getAffectedParameter() {
+        return affectedParameter;
+    }
+    
+    public void setAffectedParameter(String affectedParameter) {
+        this.affectedParameter = affectedParameter;
+    }
+    
+    public String getDetailedDescription() {
+        return detailedDescription;
+    }
+    
+    public void setDetailedDescription(String detailedDescription) {
+        this.detailedDescription = detailedDescription;
+    }
+    
+    public String getImpact() {
+        return impact;
+    }
+    
+    public void setImpact(String impact) {
+        this.impact = impact;
+    }
+    
+    public String getRemediation() {
+        return remediation;
+    }
+    
+    public void setRemediation(String remediation) {
+        this.remediation = remediation;
+    }
+    
     /**
      * Gets a formatted timestamp string.
      * 
@@ -135,6 +244,21 @@ public class TrafficFinding {
             case "LOW": return 2;
             case "INFO": return 1;
             default: return 0;
+        }
+    }
+    
+    /**
+     * Extracts domain from URL.
+     * 
+     * @param url The URL
+     * @return The domain
+     */
+    private String extractDomain(String url) {
+        try {
+            java.net.URL u = new java.net.URL(url);
+            return u.getHost();
+        } catch (Exception e) {
+            return "unknown";
         }
     }
     

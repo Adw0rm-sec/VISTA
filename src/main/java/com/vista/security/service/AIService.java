@@ -26,6 +26,33 @@ public interface AIService {
     String ask(String systemPrompt, String userPrompt) throws Exception;
     
     /**
+     * Send a prompt to the AI service with template tracking.
+     * @param systemPrompt The system context/instructions
+     * @param userPrompt The user's question or request
+     * @param templateName The name of the template being used (null if direct)
+     * @return The AI's response
+     * @throws Exception if the request fails
+     */
+    default String ask(String systemPrompt, String userPrompt, String templateName) throws Exception {
+        return ask(systemPrompt, userPrompt);
+    }
+    
+    /**
+     * Send a prompt to the AI service with template and HTTP context tracking.
+     * @param systemPrompt The system context/instructions
+     * @param userPrompt The user's question or request
+     * @param templateName The name of the template being used (null if direct)
+     * @param httpRequest The HTTP request being analyzed (null if not applicable)
+     * @param httpResponse The HTTP response being analyzed (null if not applicable)
+     * @return The AI's response
+     * @throws Exception if the request fails
+     */
+    default String ask(String systemPrompt, String userPrompt, String templateName, 
+                      String httpRequest, String httpResponse) throws Exception {
+        return ask(systemPrompt, userPrompt, templateName);
+    }
+    
+    /**
      * Send a message with full conversation history.
      * This is more efficient as it doesn't repeat the system prompt every time.
      * @param messages The conversation history (system, user, assistant messages)
@@ -48,6 +75,31 @@ public interface AIService {
             .orElse("");
         
         return ask(systemPrompt, userPrompt);
+    }
+    
+    /**
+     * Send a message with full conversation history and template tracking.
+     * @param messages The conversation history (system, user, assistant messages)
+     * @param templateName The name of the template being used (null if direct)
+     * @return The AI's response
+     * @throws Exception if the request fails
+     */
+    default String askWithHistory(List<ChatMessage> messages, String templateName) throws Exception {
+        return askWithHistory(messages);
+    }
+    
+    /**
+     * Send a message with full conversation history, template, and HTTP context tracking.
+     * @param messages The conversation history (system, user, assistant messages)
+     * @param templateName The name of the template being used (null if direct)
+     * @param httpRequest The HTTP request being analyzed (null if not applicable)
+     * @param httpResponse The HTTP response being analyzed (null if not applicable)
+     * @return The AI's response
+     * @throws Exception if the request fails
+     */
+    default String askWithHistory(List<ChatMessage> messages, String templateName,
+                                  String httpRequest, String httpResponse) throws Exception {
+        return askWithHistory(messages, templateName);
     }
     
     /**

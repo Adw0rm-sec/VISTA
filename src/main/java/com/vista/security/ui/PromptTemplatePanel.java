@@ -126,13 +126,11 @@ public class PromptTemplatePanel extends JPanel {
         templateTable.getColumnModel().getColumn(0).setPreferredWidth(200); // Name
         templateTable.getColumnModel().getColumn(1).setPreferredWidth(100); // Category
         templateTable.getColumnModel().getColumn(2).setPreferredWidth(50);  // Active
-        templateTable.getColumnModel().getColumn(3).setPreferredWidth(50);  // Usage
         
-        // Center align Active and Usage columns
+        // Center align Active column
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(JLabel.CENTER);
         templateTable.getColumnModel().getColumn(2).setCellRenderer(centerRenderer);
-        templateTable.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
         
         JScrollPane tableScroll = new JScrollPane(templateTable);
         tableScroll.setBorder(BorderFactory.createTitledBorder("Templates"));
@@ -661,7 +659,7 @@ public class PromptTemplatePanel extends JPanel {
     // Table model
     
     private static class TemplateTableModel extends AbstractTableModel {
-        private final String[] columnNames = {"Name", "Category", "Active", "Usage"};
+        private final String[] columnNames = {"Name", "Category", "Active"};
         private List<PromptTemplate> templates = new ArrayList<>();
         
         public void setTemplates(List<PromptTemplate> templates) {
@@ -698,14 +696,13 @@ public class PromptTemplatePanel extends JPanel {
                 case 0 -> template.getName() + (template.isBuiltIn() ? " 🔒" : "");
                 case 1 -> template.getCategory();
                 case 2 -> template.isActive() ? "✓" : "";
-                case 3 -> template.getUsageCount();
                 default -> "";
             };
         }
         
         @Override
         public Class<?> getColumnClass(int column) {
-            return column == 3 ? Integer.class : String.class;
+            return String.class;
         }
     }
 }

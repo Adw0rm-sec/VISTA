@@ -1078,7 +1078,10 @@ public class TestingSuggestionsPanel extends JPanel {
                 callbacks.printOutput("[VISTA] Using chat session history - Token efficient mode!");
             } else {
                 // First message - build full prompt
-                String prompt;
+                String systemPrompt;
+                String userPrompt;
+                String templateName = null;
+                
                 if (selectedTemplate != null && !selectedTemplate.startsWith("--")) {
                     // Use template
                     PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
@@ -1087,19 +1090,24 @@ public class TestingSuggestionsPanel extends JPanel {
                         VariableContext context = buildVariableContext(userQuery, requestText, responseText);
                         context.setUserQuery(userQuery);
                         
-                        // Process template with variables
-                        String processedTemplate = templateManager.processTemplate(template, context);
+                        // Process template with variables - get separate prompts
+                        String[] prompts = templateManager.processTemplateWithSeparatePrompts(template, context);
+                        systemPrompt = prompts[0];
+                        userPrompt = prompts[1] + "\n\n=== USER'S SPECIFIC QUESTION ===\n" + enhancedUserQuery + 
+                                     "\n\nIMPORTANT: Address the user's specific question above while following the template guidance.";
+                        templateName = template.getName();
                         
-                        prompt = processedTemplate + "\n\n=== USER'S SPECIFIC QUESTION ===\n" + enhancedUserQuery + 
-                                 "\n\nIMPORTANT: Address the user's specific question above while following the template guidance.";
+                        callbacks.printOutput("[VISTA] Using template: " + templateName);
                     } else {
-                        prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+                        systemPrompt = "You are an expert penetration testing consultant.";
+                        userPrompt = buildInteractivePrompt(userQuery, requestText, responseText);
                     }
                 } else {
-                    prompt = buildInteractivePrompt(userQuery, requestText, responseText);
+                    systemPrompt = "You are an expert penetration testing consultant.";
+                    userPrompt = buildInteractivePrompt(userQuery, requestText, responseText);
                 }
                 
-                response = callAI(prompt);
+                response = callAIWithPrompts(systemPrompt, userPrompt, templateName, requestText, responseText);
             }
             
             // Add AI response to session
@@ -1511,6 +1519,14 @@ public class TestingSuggestionsPanel extends JPanel {
     }
 
     private String callAI(String prompt) throws Exception {
+        return callAIWithPrompts("You are an expert penetration testing consultant.", prompt, null, null, null);
+    }
+    
+    /**
+     * Call AI with separate system and user prompts, with proper logging.
+     */
+    private String callAIWithPrompts(String systemPrompt, String userPrompt, String templateName,
+                                     String httpRequest, String httpResponse) throws Exception {
         AIConfigManager config = AIConfigManager.getInstance();
         
         if ("Azure AI".equalsIgnoreCase(config.getProvider())) {
@@ -1519,23 +1535,20 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setDeploymentName(config.getDeployment());
             c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
-            return new AzureAIService(c).ask(
-                "You are an expert penetration testing consultant.", prompt);
+            return new AzureAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
             com.vista.security.service.OpenRouterService.Configuration c = 
                 new com.vista.security.service.OpenRouterService.Configuration();
             c.setApiKey(config.getOpenRouterApiKey());
             c.setModel(config.getOpenRouterModel());
             c.setTemperature(config.getTemperature());
-            return new com.vista.security.service.OpenRouterService(c).ask(
-                "You are an expert penetration testing consultant.", prompt);
+            return new com.vista.security.service.OpenRouterService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
-            return new OpenAIService(c).ask(
-                "You are an expert penetration testing consultant.", prompt);
+            return new OpenAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         }
     }
     

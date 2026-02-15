@@ -75,13 +75,13 @@ public class AIConfigManager {
     }
     
     public void setOpenAIApiKey(String openaiApiKey) { 
-        this.openaiApiKey = openaiApiKey; 
+        this.openaiApiKey = (openaiApiKey != null) ? openaiApiKey.trim() : ""; 
         save();
         notifyListeners();
     }
     
     public void setAzureApiKey(String azureApiKey) { 
-        this.azureApiKey = azureApiKey; 
+        this.azureApiKey = (azureApiKey != null) ? azureApiKey.trim() : ""; 
         save();
         notifyListeners();
     }
@@ -105,7 +105,7 @@ public class AIConfigManager {
     }
     
     public void setOpenRouterApiKey(String openRouterApiKey) { 
-        this.openRouterApiKey = openRouterApiKey; 
+        this.openRouterApiKey = (openRouterApiKey != null) ? openRouterApiKey.trim() : ""; 
         save();
         notifyListeners();
     }
@@ -149,12 +149,12 @@ public class AIConfigManager {
                             String endpoint, String deployment, String openRouterApiKey,
                             String openRouterModel, double temperature) {
         this.provider = provider;
-        this.openaiApiKey = openaiApiKey;
-        this.azureApiKey = azureApiKey;
+        this.openaiApiKey = (openaiApiKey != null) ? openaiApiKey.trim() : "";
+        this.azureApiKey = (azureApiKey != null) ? azureApiKey.trim() : "";
         this.model = model;
         this.endpoint = endpoint;
         this.deployment = deployment;
-        this.openRouterApiKey = openRouterApiKey;
+        this.openRouterApiKey = (openRouterApiKey != null) ? openRouterApiKey.trim() : "";
         this.openRouterModel = openRouterModel;
         this.temperature = temperature;
         save();

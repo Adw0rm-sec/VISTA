@@ -1,5 +1,6 @@
 package com.vista.security.service;
 
+import com.vista.security.core.AIRequestLogger;
 import com.vista.security.model.ChatMessage;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -52,13 +53,20 @@ public class OpenAIService implements AIService {
     
     @Override
     public String testConnection() throws Exception {
+        // Validate API key
+        String apiKey = config.getApiKey();
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IllegalStateException("OpenAI API key is not configured or is empty");
+        }
+        apiKey = apiKey.trim();
+        
         String url = normalizeUrl(config.getBaseUrl()) + "/chat/completions";
         String body = buildRequestBody("You are a short responder.", "Say 'ok'", 0.1);
         
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
-                .header("Authorization", "Bearer " + config.getApiKey())
+                .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
@@ -76,40 +84,110 @@ public class OpenAIService implements AIService {
     
     @Override
     public String ask(String systemPrompt, String userPrompt) throws Exception {
-        String url = normalizeUrl(config.getBaseUrl()) + "/chat/completions";
-        String body = buildRequestBody(systemPrompt, userPrompt, config.getTemperature());
+        return ask(systemPrompt, userPrompt, null, null, null);
+    }
+    
+    @Override
+    public String ask(String systemPrompt, String userPrompt, String templateName) throws Exception {
+        return ask(systemPrompt, userPrompt, templateName, null, null);
+    }
+    
+    @Override
+    public String ask(String systemPrompt, String userPrompt, String templateName, 
+                     String httpRequest, String httpResponse) throws Exception {
+        // Log the request
+        AIRequestLogger.logRequest("OpenAI", config.getModel(), systemPrompt, userPrompt, 
+                                   templateName, httpRequest, httpResponse);
         
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("Authorization", "Bearer " + config.getApiKey())
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+        long startTime = System.currentTimeMillis();
         
-        HttpResponse<String> response = httpClient.send(request, 
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        
-        return parseResponse(response);
+        try {
+            // Validate and trim API key
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                throw new IllegalStateException("OpenAI API key is not configured or is empty");
+            }
+            apiKey = apiKey.trim();
+            
+            String url = normalizeUrl(config.getBaseUrl()) + "/chat/completions";
+            String body = buildRequestBody(systemPrompt, userPrompt, config.getTemperature());
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            
+            HttpResponse<String> response = httpClient.send(request, 
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            
+            String result = parseResponse(response);
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Log the response
+            AIRequestLogger.logResponse("OpenAI", result, duration);
+            
+            return result;
+        } catch (Exception e) {
+            AIRequestLogger.logError("OpenAI", "ask", e);
+            throw e;
+        }
     }
     
     @Override
     public String askWithHistory(List<ChatMessage> messages) throws Exception {
-        String url = normalizeUrl(config.getBaseUrl()) + "/chat/completions";
-        String body = buildRequestBodyWithHistory(messages, config.getTemperature());
+        return askWithHistory(messages, null, null, null);
+    }
+    
+    @Override
+    public String askWithHistory(List<ChatMessage> messages, String templateName) throws Exception {
+        return askWithHistory(messages, templateName, null, null);
+    }
+    
+    @Override
+    public String askWithHistory(List<ChatMessage> messages, String templateName,
+                                String httpRequest, String httpResponse) throws Exception {
+        // Log the request with history
+        AIRequestLogger.logRequestWithHistory("OpenAI", config.getModel(), messages, 
+                                             templateName, httpRequest, httpResponse);
         
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .header("Authorization", "Bearer " + config.getApiKey())
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+        long startTime = System.currentTimeMillis();
         
-        HttpResponse<String> response = httpClient.send(request, 
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        
-        return parseResponse(response);
+        try {
+            // Validate and trim API key
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                throw new IllegalStateException("OpenAI API key is not configured or is empty");
+            }
+            apiKey = apiKey.trim();
+            
+            String url = normalizeUrl(config.getBaseUrl()) + "/chat/completions";
+            String body = buildRequestBodyWithHistory(messages, config.getTemperature());
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            
+            HttpResponse<String> response = httpClient.send(request, 
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            
+            String result = parseResponse(response);
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Log the response
+            AIRequestLogger.logResponse("OpenAI", result, duration);
+            
+            return result;
+        } catch (Exception e) {
+            AIRequestLogger.logError("OpenAI", "askWithHistory", e);
+            throw e;
+        }
     }
 
     private String buildRequestBody(String systemPrompt, String userPrompt, double temperature) {
