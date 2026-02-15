@@ -28,8 +28,8 @@
 - 🤖 **AI-Powered Traffic Analysis** — Real-time HTTP traffic monitoring with AI-driven vulnerability detection
 - 💡 **Interactive AI Advisor** — Context-aware testing suggestions from GPT-4, Azure, or OpenRouter
 - 🆓 **FREE AI Option** — Use OpenRouter with no credit card required
-- 📝 **Custom Templates** — 20+ built-in templates with a unified customizable prompt system
-- 🎯 **Payload Library** — 100+ pre-built payloads with AI integration
+- 📝 **Custom Templates** — 4 built-in expert templates with a unified customizable prompt system
+- 🎯 **Payload Library** — 80+ pre-built payloads across 8 categories with AI integration
 - 🛡️ **WAF Detection** — Automatically detect and bypass 8 major WAFs
 - 🎯 **Scope-Aware** — Define target scope, only analyze what matters
 - 🚀 **Zero Dependencies** — Pure Java, no external libraries required
@@ -69,16 +69,14 @@ Get intelligent, context-aware testing guidance powered by leading AI models:
 
 Accelerate your testing with pre-built and custom templates:
 
-**20+ Built-in Templates:**
-- XSS Testing (Reflected, Stored, DOM-based)
-- SQL Injection (Error-based, Blind, Time-based)
-- SSRF, SSTI, Command Injection
-- Authentication & Authorization Testing
-- API Security Testing
-- File Upload Vulnerabilities
+**4 Built-in Expert Templates:**
+- XSS - DOM Based (comprehensive DOM XSS testing)
+- SQL Injection Expert (PortSwigger/OWASP-grade methodology)
+- XSS - Reflected Expert (advanced reflected XSS)
+- Traffic - Bug Bounty Hunter (AI-powered traffic analysis)
 
 **Template Features:**
-- 24 dynamic variables ({{URL}}, {{METHOD}}, {{HEADERS}}, etc.)
+- 35 dynamic variables ({{URL}}, {{METHOD}}, {{REQUEST}}, {{RESPONSE}}, etc.)
 - Create and save custom templates
 - Search and filter functionality
 - Import/Export for team collaboration
@@ -88,13 +86,15 @@ Accelerate your testing with pre-built and custom templates:
 
 Organize and manage your testing payloads efficiently:
 
-**100+ Built-in Payloads:**
-- XSS (Basic, Event Handlers, Encoding Bypasses)
-- SQL Injection (MySQL, PostgreSQL, MSSQL, Oracle)
+**80+ Built-in Payloads across 8 Libraries:**
+- XSS Reflected (Basic, Event Handlers, Encoding Bypasses)
+- XSS Stored (Persistent payloads)
+- SQL Injection - Error Based (MySQL, PostgreSQL, MSSQL, Oracle)
+- SQL Injection - Blind (Boolean-based techniques)
 - SSTI (Jinja2, Twig, Freemarker, Velocity)
 - SSRF (Cloud Metadata, Internal Networks)
 - Command Injection (Linux, Windows)
-- XXE, LFI, NoSQL Injection
+- XXE (XML External Entity payloads)
 
 **Library Features:**
 - Create custom payload collections
@@ -106,12 +106,12 @@ Organize and manage your testing payloads efficiently:
 ### 🛡️ Advanced Security Features
 
 **WAF Detection & Bypass:**
-- Automatically detects 8 major WAFs (Cloudflare, AWS WAF, ModSecurity, Akamai, Imperva, F5, Barracuda, Fortinet)
-- 500+ real-world bypass techniques from PayloadsAllTheThings
+- Automatically detects 8 major WAFs (Cloudflare, AWS WAF, ModSecurity, Akamai, Imperva, Wordfence, Sucuri, F5 BIG-IP)
+- 250+ real-world bypass techniques from PayloadsAllTheThings
 - WAF-specific bypass suggestions
 
 **Systematic Testing:**
-- Step-by-step methodologies for 9 vulnerability types
+- Step-by-step methodologies for 5 vulnerability types (XSS, SQLi, SSTI, Command Injection, SSRF)
 - Headless browser verification for XSS
 - Reflection analysis for input tracking
 - Seamless Burp Repeater integration
@@ -132,8 +132,8 @@ VISTA features a clean, streamlined UI with a professional status bar:
 |-----|---------|
 | 💡 **AI Advisor** | Interactive AI testing assistant with conversation history |
 | 🌐 **Traffic Monitor** | Real-time traffic analysis with AI-powered findings |
-| 📝 **Prompt Templates** | Custom AI prompt management (20+ built-in) |
-| 🎯 **Payload Library** | Payload organization with AI integration (100+) |
+| 📝 **Prompt Templates** | Custom AI prompt management (4 expert built-in) |
+| 🎯 **Payload Library** | Payload organization with AI integration (80+) |
 | ⚙️ **Settings** | AI provider configuration and connection testing |
 
 **Context Menu Integration:**
@@ -201,7 +201,7 @@ Deployment: your-deployment-name
 ```
 Provider: OpenRouter
 API Key: sk-or-v1-... (Get free at openrouter.ai/keys)
-Model: meta-llama/llama-3.3-70b-instruct:free (default)
+Model: meta-llama/llama-3.3-70b-instruct:free (recommended)
        or tngtech/deepseek-r1t2-chimera:free (reasoning)
 ```
 
@@ -251,7 +251,7 @@ VISTA supports **OpenRouter** — giving you access to powerful AI models **comp
 
 | Model | ID | Best For |
 |-------|-----|---------|
-| **Llama 3.3 70B** (Default) | `meta-llama/llama-3.3-70b-instruct:free` | General testing, fast responses |
+| **Llama 3.3 70B** (Recommended) | `meta-llama/llama-3.3-70b-instruct:free` | General testing, fast responses |
 | **DeepSeek R1T2 Chimera** | `tngtech/deepseek-r1t2-chimera:free` | Complex analysis, WAF bypasses |
 
 ---
@@ -265,11 +265,11 @@ VISTA supports **OpenRouter** — giving you access to powerful AI models **comp
 | Server-Side Template Injection (SSTI) | ✅ | ✅ | ✅ | ✅ |
 | Command Injection | ✅ | ✅ | ✅ | ✅ |
 | Server-Side Request Forgery (SSRF) | ✅ | ✅ | ✅ | ✅ |
-| XML External Entity (XXE) | ✅ | ✅ | ✅ | ✅ |
-| Local File Inclusion (LFI) | ✅ | ✅ | ✅ | ✅ |
-| Insecure Direct Object Reference (IDOR) | ✅ | ✅ | ✅ | ✅ |
-| Authentication Bypass | ✅ | ✅ | ✅ | ✅ |
-| NoSQL Injection | ✅ | ✅ | ✅ | ✅ |
+| XML External Entity (XXE) | ✅ | ✅ | ✅ | — |
+| Local File Inclusion (LFI) | ✅ | — | ✅ | — |
+| Insecure Direct Object Reference (IDOR) | ✅ | — | ✅ | — |
+| Authentication Bypass | ✅ | — | ✅ | — |
+| NoSQL Injection | ✅ | — | ✅ | — |
 
 ---
 
@@ -461,11 +461,11 @@ Copyright (c) 2026 Adw0rm-sec
 |--------|-------|
 | Java Files | 90+ |
 | Lines of Code | 29,000+ |
-| Built-in Templates | 20+ |
-| Built-in Payloads | 100+ |
-| Supported Vulnerabilities | 10+ |
+| Built-in Templates | 4 expert |
+| Built-in Payloads | 80+ |
+| Supported Vulnerabilities | 10 |
 | WAF Detection | 8 major WAFs |
-| Bypass Techniques | 500+ |
+| Bypass Techniques | 250+ |
 | External Dependencies | **0** (Zero!) |
 
 ---
