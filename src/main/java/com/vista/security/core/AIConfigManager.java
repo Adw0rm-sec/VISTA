@@ -23,7 +23,7 @@ public class AIConfigManager {
     private String endpoint = "";
     private String deployment = "";
     private String openRouterApiKey = "";
-    private String openRouterModel = "meta-llama/llama-3.3-70b-instruct:free";
+    private String openRouterModel = "deepseek/deepseek-r1-0528:free";
     private double temperature = 0.3; // Lower default for cost efficiency
     private int maxTokens = 2000; // Limit response tokens
     private int timeout = 60000; // Request timeout in milliseconds (60 seconds)
@@ -261,7 +261,7 @@ public class AIConfigManager {
             endpoint = extractJsonString(content, "endpoint", "");
             deployment = extractJsonString(content, "deployment", "");
             openRouterApiKey = extractJsonString(content, "openRouterApiKey", "");
-            openRouterModel = extractJsonString(content, "openRouterModel", "meta-llama/llama-3.3-70b-instruct:free");
+            openRouterModel = extractJsonString(content, "openRouterModel", "deepseek/deepseek-r1-0528:free");
             temperature = extractJsonDouble(content, "temperature", 0.3);
             maxTokens = extractJsonInt(content, "maxTokens", 2000);
             

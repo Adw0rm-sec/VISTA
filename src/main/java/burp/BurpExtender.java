@@ -17,13 +17,13 @@ import java.util.List;
  * VISTA - AI-Powered Security Testing Assistant
  * Professional-grade Burp Suite extension for intelligent vulnerability exploitation.
  * 
- * @version 2.10.24
+ * @version 2.10.25
  * @author VISTA Security Team
  */
 public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     
     private static final String EXTENSION_NAME = "VISTA";
-    private static final String VERSION = "2.10.24";
+    private static final String VERSION = "2.10.25";
     
     private IBurpExtenderCallbacks callbacks;
     private TestingSuggestionsPanel testingSuggestionsPanel;

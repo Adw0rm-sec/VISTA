@@ -160,16 +160,19 @@ public class SettingsPanel extends JPanel {
         openRouterKeyRow.add(showOpenRouterKeyBtn);
         openRouterPanel.add(openRouterKeyRow);
         
-        // Populate OpenRouter models - VERIFIED WORKING FREE MODELS
-        // These models have been tested and confirmed working with free API keys
-        openRouterModelCombo.addItem("meta-llama/llama-3.3-70b-instruct:free");
-        openRouterModelCombo.addItem("tngtech/deepseek-r1t2-chimera:free");
+        // Populate OpenRouter models - TOP 5 FREE MODELS (updated Feb 2026)
+        // These models are verified available on OpenRouter's free tier
+        openRouterModelCombo.addItem("deepseek/deepseek-r1-0528:free");          // 671B, 164K ctx — Best reasoning
+        openRouterModelCombo.addItem("openai/gpt-oss-120b:free");                // 117B MoE, 131K ctx — High-reasoning, agentic
+        openRouterModelCombo.addItem("arcee-ai/trinity-large-preview:free");     // 400B MoE, 131K ctx — Agentic, long prompts
+        openRouterModelCombo.addItem("stepfun/step-3.5-flash:free");             // 196B MoE, 256K ctx — Fast reasoning
+        openRouterModelCombo.addItem("z-ai/glm-4.5-air:free");                  // MoE, 131K ctx — Thinking mode
         openRouterModelCombo.setEditable(true);
         
         JPanel modelRow = createRow("Model:", openRouterModelCombo);
         openRouterPanel.add(modelRow);
         
-        JLabel openRouterInfo1 = new JLabel("2 verified free models: Llama 3.3 70B & DeepSeek R1T2 Chimera");
+        JLabel openRouterInfo1 = new JLabel("5 top free models — DeepSeek R1 (recommended), GPT-OSS-120B, Trinity, Step Flash, GLM 4.5");
         openRouterInfo1.setFont(VistaTheme.FONT_SMALL);
         openRouterInfo1.setForeground(VistaTheme.TEXT_MUTED);
         JPanel infoPanel1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
@@ -177,7 +180,7 @@ public class SettingsPanel extends JPanel {
         infoPanel1.add(openRouterInfo1);
         openRouterPanel.add(infoPanel1);
         
-        JLabel openRouterInfo2 = new JLabel("Get free API key at openrouter.ai/keys (no credit card needed)");
+        JLabel openRouterInfo2 = new JLabel("Get free API key at openrouter.ai/keys (no credit card needed) — Free models rotate regularly");
         openRouterInfo2.setFont(VistaTheme.FONT_SMALL);
         openRouterInfo2.setForeground(VistaTheme.TEXT_MUTED);
         JPanel infoPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
@@ -548,17 +551,31 @@ public class SettingsPanel extends JPanel {
                 details.append("Get a new key at: openrouter.ai/keys");
             }
             
+        } else if (errorMessage.contains("402") || errorMessage.toLowerCase().contains("payment") ||
+                   errorMessage.toLowerCase().contains("insufficient")) {
+            details.append("💳 Payment Required / Insufficient Credits\n\n");
+            details.append("Your account doesn't have enough credits for this model.\n\n");
+            details.append("Suggestions:\n");
+            details.append("• Switch to a free model (models ending with :free)\n");
+            details.append("• Add credits at openrouter.ai/credits\n");
+            details.append("• Check your billing status at openrouter.ai/settings\n");
+            
         } else if (errorMessage.contains("429") || errorMessage.toLowerCase().contains("rate limit") ||
                    errorMessage.toLowerCase().contains("quota")) {
             details.append("⏱️ Rate Limit / Quota Exceeded\n\n");
             details.append("You've hit the API rate limit or quota.\n\n");
             details.append("Suggestions:\n");
             details.append("• Wait a few minutes and try again\n");
-            details.append("• Check your API usage/billing\n");
-            details.append("• Consider upgrading your plan\n");
+            details.append("• Free models have lower rate limits — space out your requests\n");
+            details.append("• Check your API usage at openrouter.ai/activity\n");
+            if ("OpenRouter".equals(provider)) {
+                details.append("• Try a different free model (some have higher limits)\n");
+            } else {
+                details.append("• Consider upgrading your plan\n");
+            }
             
         } else if (errorMessage.contains("404") || errorMessage.toLowerCase().contains("not found") ||
-                   errorMessage.toLowerCase().contains("model")) {
+                   errorMessage.toLowerCase().contains("no longer available")) {
             details.append("🔍 Model/Endpoint Not Found\n\n");
             details.append("The specified model or endpoint wasn't found.\n\n");
             details.append("Suggestions:\n");
@@ -567,6 +584,10 @@ public class SettingsPanel extends JPanel {
             if ("Azure AI".equals(provider)) {
                 details.append("• Check your deployment name in Azure Portal\n");
                 details.append("• Verify the endpoint URL is correct\n");
+            } else if ("OpenRouter".equals(provider)) {
+                details.append("• Free models are rotated regularly on OpenRouter\n");
+                details.append("• Select an updated model from the dropdown list\n");
+                details.append("• Browse available models at openrouter.ai/models?q=free\n");
             } else {
                 details.append("• Try a different model (e.g., gpt-4o-mini)\n");
             }

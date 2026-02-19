@@ -19,7 +19,7 @@ public class OpenRouterService implements AIService {
     
     private static final String BASE_URL = "https://openrouter.ai/api/v1";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
     
     private static final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
@@ -40,7 +40,7 @@ public class OpenRouterService implements AIService {
      * OpenRouter-specific configuration.
      */
     public static class Configuration extends AIService.Configuration {
-        private String model = "meta-llama/llama-3.1-8b-instruct:free";
+        private String model = "deepseek/deepseek-r1-0528:free";
         
         public String getModel() { return model; }
         public void setModel(String model) { this.model = model; }
@@ -251,16 +251,90 @@ public class OpenRouterService implements AIService {
                 );
     }
     
-    private String parseResponse(HttpResponse<String> response) {
-        if (response.statusCode() >= 300) {
-            return "OpenRouter API error: HTTP " + response.statusCode() + " — " + truncate(response.body(), 800);
+    private String parseResponse(HttpResponse<String> response) throws Exception {
+        int statusCode = response.statusCode();
+        String body = response.body();
+        
+        if (statusCode >= 300) {
+            String errorMsg = parseErrorMessage(body);
+            String detail;
+            
+            switch (statusCode) {
+                case 400 -> detail = "Bad Request — The request was malformed. " + errorMsg;
+                case 401 -> detail = "Authentication Failed — Your OpenRouter API key is invalid or expired. "
+                    + "Get a new key at openrouter.ai/keys\n" + errorMsg;
+                case 402 -> detail = "Payment Required — Insufficient credits for this model. "
+                    + "Add credits at openrouter.ai/credits or switch to a free model.\n" + errorMsg;
+                case 403 -> detail = "Forbidden — Your API key doesn't have permission for this model. "
+                    + "Check your account permissions at openrouter.ai/settings\n" + errorMsg;
+                case 404 -> detail = "Model Not Found — The model '" + config.getModel() + "' doesn't exist or is no longer available. "
+                    + "Free models are rotated regularly. Please select a different model from the dropdown.\n" + errorMsg;
+                case 408 -> detail = "Request Timeout — The model took too long to respond. "
+                    + "Try a faster model like StepFun Step 3.5 Flash.\n" + errorMsg;
+                case 429 -> detail = "Rate Limited — Too many requests. Wait a moment and try again. "
+                    + "Free models have lower rate limits.\n" + errorMsg;
+                case 502, 503 -> detail = "OpenRouter Service Unavailable — The AI provider is temporarily down. "
+                    + "Try again in a few minutes or switch to a different model.\n" + errorMsg;
+                default -> detail = "HTTP " + statusCode + " — " + (errorMsg.isEmpty() ? truncate(body, 400) : errorMsg);
+            }
+            
+            throw new Exception("OpenRouter API error (HTTP " + statusCode + "): " + detail);
         }
         
-        String content = extractContent(response.body());
+        // Check for error in the response body (OpenRouter can return 200 with error in choices)
+        if (body != null && body.contains("\"error\"") && body.contains("\"message\"")) {
+            String inlineError = parseErrorMessage(body);
+            if (!inlineError.isEmpty() && !body.contains("\"choices\"")) {
+                throw new Exception("OpenRouter API error: " + inlineError);
+            }
+        }
+        
+        String content = extractContent(body);
         if (content == null || content.isBlank()) {
-            return "Received response but couldn't parse content:\n" + truncate(response.body(), 1000);
+            throw new Exception("OpenRouter returned an empty response. The model may be overloaded. "
+                + "Try again or switch to a different model.");
         }
         return content;
+    }
+    
+    /**
+     * Extract error message from OpenRouter JSON error response.
+     * Format: {"error":{"message":"...","code":...}} or {"error":{"message":"..."}}
+     */
+    private String parseErrorMessage(String json) {
+        if (json == null || json.isEmpty()) return "";
+        try {
+            int errorIdx = json.indexOf("\"error\"");
+            if (errorIdx < 0) return "";
+            
+            int msgIdx = json.indexOf("\"message\"", errorIdx);
+            if (msgIdx < 0) return "";
+            
+            int colonIdx = json.indexOf(':', msgIdx);
+            if (colonIdx < 0) return "";
+            
+            int firstQuote = json.indexOf('"', colonIdx + 1);
+            if (firstQuote < 0) return "";
+            
+            StringBuilder result = new StringBuilder();
+            boolean escaped = false;
+            for (int i = firstQuote + 1; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (escaped) {
+                    result.append(c);
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    break;
+                } else {
+                    result.append(c);
+                }
+            }
+            return result.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
     
     private String extractContent(String json) {
