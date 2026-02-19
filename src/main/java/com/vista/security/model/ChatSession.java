@@ -72,7 +72,11 @@ public class ChatSession {
      */
     public synchronized void updateSystemPrompt(String newSystemPrompt) {
         this.currentSystemPrompt = newSystemPrompt;
-        addMessage(new ChatMessage(ChatMessage.Role.SYSTEM, newSystemPrompt));
+        // Replace existing system message(s) instead of accumulating them
+        // This prevents token explosion from repeated large system prompts
+        messages.removeIf(m -> m.getRole() == ChatMessage.Role.SYSTEM);
+        messages.add(0, new ChatMessage(ChatMessage.Role.SYSTEM, newSystemPrompt));
+        lastActivityAt = LocalDateTime.now();
     }
     
     /**

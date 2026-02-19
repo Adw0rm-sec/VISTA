@@ -28,6 +28,12 @@ public class AIConfigManager {
     private int maxTokens = 2000; // Limit response tokens
     private int timeout = 60000; // Request timeout in milliseconds (60 seconds)
     
+    // AI Analysis Scope — user-configurable content types and excluded extensions
+    // Content types eligible for AI analysis (matched with contains())
+    private String eligibleContentTypes = "text/html,text/javascript,application/javascript,application/x-javascript,application/json";
+    // File extensions to exclude from AI analysis (comma-separated, with dots)
+    private String excludedExtensions = ".png,.jpg,.jpeg,.gif,.svg,.ico,.webp,.css,.woff,.woff2,.ttf,.eot,.mp4,.webm,.mp3,.wav,.pdf,.zip,.tar,.gz,.xml,.txt,.csv";
+    
     // Listeners for config changes
     private final List<Consumer<AIConfigManager>> listeners = new ArrayList<>();
     
@@ -54,6 +60,8 @@ public class AIConfigManager {
     public double getTemperature() { return temperature; }
     public int getMaxTokens() { return maxTokens; }
     public int getTimeout() { return timeout; }
+    public String getEligibleContentTypes() { return eligibleContentTypes; }
+    public String getExcludedExtensions() { return excludedExtensions; }
     
     // Legacy getter for backward compatibility
     @Deprecated
@@ -140,6 +148,38 @@ public class AIConfigManager {
         }
         save();
         notifyListeners();
+    }
+    
+    public void setEligibleContentTypes(String types) {
+        this.eligibleContentTypes = (types != null) ? types.trim() : "";
+        save();
+        notifyListeners();
+    }
+    
+    public void setExcludedExtensions(String extensions) {
+        this.excludedExtensions = (extensions != null) ? extensions.trim() : "";
+        save();
+        notifyListeners();
+    }
+    
+    /**
+     * Get eligible content types as an array (split by comma).
+     */
+    public String[] getEligibleContentTypesArray() {
+        if (eligibleContentTypes == null || eligibleContentTypes.isBlank()) {
+            return new String[0];
+        }
+        return eligibleContentTypes.split(",");
+    }
+    
+    /**
+     * Get excluded extensions as an array (split by comma).
+     */
+    public String[] getExcludedExtensionsArray() {
+        if (excludedExtensions == null || excludedExtensions.isBlank()) {
+            return new String[0];
+        }
+        return excludedExtensions.split(",");
     }
     
     /**
@@ -235,7 +275,9 @@ public class AIConfigManager {
             json.append("  \"openRouterApiKey\": \"").append(escapeJson(openRouterApiKey)).append("\",\n");
             json.append("  \"openRouterModel\": \"").append(escapeJson(openRouterModel)).append("\",\n");
             json.append("  \"temperature\": ").append(temperature).append(",\n");
-            json.append("  \"maxTokens\": ").append(maxTokens).append("\n");
+            json.append("  \"maxTokens\": ").append(maxTokens).append(",\n");
+            json.append("  \"eligibleContentTypes\": \"").append(escapeJson(eligibleContentTypes)).append("\",\n");
+            json.append("  \"excludedExtensions\": \"").append(escapeJson(excludedExtensions)).append("\"\n");
             json.append("}");
             
             Files.writeString(Path.of(CONFIG_FILE), json.toString());
@@ -264,6 +306,12 @@ public class AIConfigManager {
             openRouterModel = extractJsonString(content, "openRouterModel", "deepseek/deepseek-r1-0528:free");
             temperature = extractJsonDouble(content, "temperature", 0.3);
             maxTokens = extractJsonInt(content, "maxTokens", 2000);
+            
+            // AI Analysis Scope settings
+            String loadedContentTypes = extractJsonString(content, "eligibleContentTypes", null);
+            if (loadedContentTypes != null) eligibleContentTypes = loadedContentTypes;
+            String loadedExtensions = extractJsonString(content, "excludedExtensions", null);
+            if (loadedExtensions != null) excludedExtensions = loadedExtensions;
             
             // Backward compatibility: if old "apiKey" field exists, migrate it
             String legacyApiKey = extractJsonString(content, "apiKey", null);

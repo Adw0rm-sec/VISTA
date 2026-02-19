@@ -100,7 +100,7 @@ public class IntelligentTrafficAnalyzer {
     // Single customizable template (can be modified by user via UI)
     // When set, this replaces DEFAULT_TEMPLATE as the system prompt
     private String customTemplate = null;
-    private static final String[] AI_EXCLUDED_EXTENSIONS = {
+    private static final String[] DEFAULT_AI_EXCLUDED_EXTENSIONS = {
         ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
         ".css", ".woff", ".woff2", ".ttf", ".eot",
         ".mp4", ".webm", ".mp3", ".wav",
@@ -143,8 +143,17 @@ public class IntelligentTrafficAnalyzer {
     
     private boolean isAIExcludedExtension(String url) {
         String lowerUrl = url.toLowerCase();
-        for (String ext : AI_EXCLUDED_EXTENSIONS) {
-            if (lowerUrl.endsWith(ext)) {
+        
+        // Use user-configured extensions if available, otherwise use defaults
+        AIConfigManager config = AIConfigManager.getInstance();
+        String[] extensions = config.getExcludedExtensionsArray();
+        if (extensions.length == 0) {
+            extensions = DEFAULT_AI_EXCLUDED_EXTENSIONS;
+        }
+        
+        for (String ext : extensions) {
+            String trimmedExt = ext.trim().toLowerCase();
+            if (!trimmedExt.isEmpty() && lowerUrl.endsWith(trimmedExt)) {
                 return true;
             }
         }
@@ -157,12 +166,69 @@ public class IntelligentTrafficAnalyzer {
         }
         
         String lowerContentType = contentType.toLowerCase();
-        boolean eligible = lowerContentType.contains("text/html") ||
-                          lowerContentType.contains("text/javascript") ||
-                          lowerContentType.contains("application/javascript") ||
-                          lowerContentType.contains("application/x-javascript");
         
-        return eligible;
+        // Use user-configured content types if available
+        AIConfigManager config = AIConfigManager.getInstance();
+        String[] eligibleTypes = config.getEligibleContentTypesArray();
+        
+        if (eligibleTypes.length == 0) {
+            // Fallback to defaults if config is empty
+            return lowerContentType.contains("text/html") ||
+                   lowerContentType.contains("text/javascript") ||
+                   lowerContentType.contains("application/javascript") ||
+                   lowerContentType.contains("application/x-javascript");
+        }
+        
+        for (String type : eligibleTypes) {
+            String trimmedType = type.trim().toLowerCase();
+            if (!trimmedType.isEmpty() && lowerContentType.contains(trimmedType)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if a transaction is worth sending to AI for analysis.
+     * Returns null if analysis-worthy, or a reason string if it should be skipped.
+     * Called by AnalysisQueueManager.processTask() to avoid wasting queue time
+     * on non-security-relevant traffic.
+     */
+    public String getSkipReason(com.vista.security.model.HttpTransaction transaction) {
+        if (transaction == null) {
+            return "Null transaction";
+        }
+        
+        String url = transaction.getUrl();
+        if (url == null || url.isEmpty()) {
+            return "Empty URL";
+        }
+        
+        // Check excluded file extensions (images, fonts, stylesheets, etc.)
+        if (isAIExcludedExtension(url)) {
+            return "Excluded extension";
+        }
+        
+        // Check if response exists
+        byte[] response = transaction.getResponse();
+        if (response == null || response.length == 0) {
+            return "No response data";
+        }
+        
+        // Check content type eligibility
+        String contentType = transaction.getContentType();
+        if (!isAIEligibleContentType(contentType)) {
+            String ct = (contentType != null) ? contentType : "unknown";
+            return "Non-eligible content-type: " + ct;
+        }
+        
+        // Check scope (AI should only analyze in-scope URLs)
+        if (!shouldUseAI(url)) {
+            return "Out of AI scope";
+        }
+        
+        return null; // Analysis-worthy
     }
     
     public List<TrafficFinding> analyzeBatch(List<HttpTransaction> transactions) {

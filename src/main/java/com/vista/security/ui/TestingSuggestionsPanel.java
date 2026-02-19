@@ -10,8 +10,6 @@ import com.vista.security.service.OpenAIService;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DefaultHighlighter;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
@@ -43,9 +41,8 @@ public class TestingSuggestionsPanel extends JPanel {
     private final PayloadLibraryAIIntegration payloadLibraryAI;
     private final ChatSessionManager chatSessionManager;
 
-    // Request/Response display
-    private final JTextArea requestArea = new JTextArea();
-    private final JTextArea responseArea = new JTextArea();
+    // Request/Response display — professional Burp-style viewer
+    private HttpMessageViewer httpMessageViewer;
     
     // Multi-request support
     private final java.util.List<IHttpRequestResponse> attachedRequests = new ArrayList<>();
@@ -54,16 +51,9 @@ public class TestingSuggestionsPanel extends JPanel {
     
     // Template selector
     private JComboBox<String> templateSelector;
-    
-    // Search components
-    private final JTextField requestSearchField = new JTextField(15);
-    private final JTextField responseSearchField = new JTextField(15);
-    private final JLabel requestMatchLabel = new JLabel("");
-    private final JLabel responseMatchLabel = new JLabel("");
 
-    // Suggestions area (main output)
-    private final JTextArea suggestionsArea = new JTextArea();
-    private final JTextField queryField = new JTextField();
+    // Suggestions area (main output) — rich styled conversation
+    private ChatConversationPane conversationPane;
 
     // Status
     private final JLabel statusLabel = new JLabel("Ready");
@@ -120,236 +110,168 @@ public class TestingSuggestionsPanel extends JPanel {
     }
 
     private JPanel buildHeaderPanel() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        // Compact single-row white toolbar — maximizes space for AI conversation
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
         panel.setBackground(VistaTheme.BG_CARD);
         panel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER),
-            new EmptyBorder(14, 16, 10, 16)
+            new EmptyBorder(5, 12, 5, 12)
         ));
 
-        JPanel titleRow = new JPanel(new BorderLayout());
-        titleRow.setOpaque(false);
+        // Left: Brand title + config status
+        JPanel leftSection = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftSection.setOpaque(false);
         
-        JLabel titleLabel = new JLabel("AI Security Advisor");
-        titleLabel.setFont(VistaTheme.FONT_TITLE);
+        JLabel titleLabel = new JLabel("🛡 AI Security Advisor");
+        titleLabel.setFont(VistaTheme.FONT_HEADING);
         titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
+        leftSection.add(titleLabel);
         
-        JLabel subtitleLabel = new JLabel("Interactive testing guidance with WAF bypass intelligence");
-        subtitleLabel.setFont(VistaTheme.FONT_SMALL);
-        subtitleLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        JLabel sep1 = new JLabel("│");
+        sep1.setForeground(VistaTheme.TEXT_MUTED);
+        sep1.setFont(VistaTheme.FONT_SMALL);
+        leftSection.add(sep1);
         
         configStatusLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
+        leftSection.add(configStatusLabel);
         
-        JPanel titleStack = new JPanel();
-        titleStack.setOpaque(false);
-        titleStack.setLayout(new BoxLayout(titleStack, BoxLayout.Y_AXIS));
-        titleStack.add(titleLabel);
-        titleStack.add(Box.createVerticalStrut(2));
-        titleStack.add(subtitleLabel);
+        // Center: Template selector + quick query pills
+        JPanel centerSection = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0));
+        centerSection.setOpaque(false);
         
-        titleRow.add(titleStack, BorderLayout.WEST);
-        titleRow.add(configStatusLabel, BorderLayout.EAST);
-        
-        // Template selector row
-        JPanel templateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        templateRow.setOpaque(false);
-        JLabel templateLabel = new JLabel("Template:");
-        templateLabel.setFont(VistaTheme.FONT_LABEL);
+        JLabel templateLabel = new JLabel("Template");
+        templateLabel.setFont(VistaTheme.FONT_SMALL);
         templateLabel.setForeground(VistaTheme.TEXT_SECONDARY);
-        templateRow.add(templateLabel);
+        centerSection.add(templateLabel);
         
         templateSelector = new JComboBox<>();
         VistaTheme.styleComboBox(templateSelector);
-        templateSelector.setPreferredSize(new Dimension(250, 28));
-        templateSelector.addItem("-- Default (No Template) --");
-        
-        // Load active templates
+        templateSelector.setFont(VistaTheme.FONT_SMALL);
+        templateSelector.setPreferredSize(new Dimension(150, 24));
+        templateSelector.addItem("Default");
         for (PromptTemplate template : templateManager.getActiveTemplates()) {
             templateSelector.addItem(template.getName());
         }
+        centerSection.add(templateSelector);
         
-        templateRow.add(templateSelector);
+        JLabel sep2 = new JLabel("│");
+        sep2.setForeground(VistaTheme.TEXT_MUTED);
+        sep2.setFont(VistaTheme.FONT_SMALL);
+        centerSection.add(sep2);
         
-        JButton manageTemplatesBtn = VistaTheme.compactButton("Manage");
-        manageTemplatesBtn.setToolTipText("Open Prompt Templates tab");
-        manageTemplatesBtn.addActionListener(e -> {
-            Container parent = getParent();
-            while (parent != null && !(parent instanceof JTabbedPane)) {
-                parent = parent.getParent();
-            }
-            if (parent instanceof JTabbedPane) {
-                JTabbedPane tabbedPane = (JTabbedPane) parent;
-                for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-                    if (tabbedPane.getTitleAt(i).contains("Prompt Templates")) {
-                        tabbedPane.setSelectedIndex(i);
-                        break;
-                    }
-                }
-            }
-        });
-        templateRow.add(manageTemplatesBtn);
-
-        JPanel queryRow = new JPanel(new BorderLayout(8, 0));
-        queryRow.setOpaque(false);
-        
-        queryField.setFont(VistaTheme.FONT_BODY);
-        queryField.setBackground(VistaTheme.BG_INPUT);
-        queryField.setForeground(VistaTheme.TEXT_PRIMARY);
-        queryField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(VistaTheme.BORDER, 1),
-            new EmptyBorder(8, 12, 8, 12)));
-        installPlaceholder(queryField, "Ask: 'How to test for XSS?' or 'Bypass this WAF'");
-
-        JButton askBtn = VistaTheme.primaryButton("Send");
-        askBtn.addActionListener(e -> getSuggestions());
-
-        JButton clearBtn = VistaTheme.secondaryButton("Clear");
-        clearBtn.addActionListener(e -> clearConversation());
-        
-        JButton newSessionBtn = VistaTheme.secondaryButton("New Chat");
-        newSessionBtn.setToolTipText("Start fresh conversation (keeps current request)");
-        newSessionBtn.addActionListener(e -> startNewSession());
-
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        btnPanel.setOpaque(false);
-        btnPanel.add(newSessionBtn);
-        btnPanel.add(clearBtn);
-        btnPanel.add(askBtn);
-
-        queryRow.add(queryField, BorderLayout.CENTER);
-        queryRow.add(btnPanel, BorderLayout.EAST);
-
-        JPanel quickPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        quickPanel.setOpaque(false);
-        String[] quickQueries = {"XSS Testing", "SQLi Testing", "SSTI Testing", "Command Injection", "SSRF Testing", "Bypass WAF"};
-        for (String query : quickQueries) {
-            JButton btn = createQuickButton(query);
-            quickPanel.add(btn);
+        // Quick query pills
+        String[] quickQueries = {"XSS", "SQLi", "SSTI", "CMDi", "SSRF", "WAF"};
+        String[] quickLabels = {"XSS Testing", "SQLi Testing", "SSTI Testing", "Command Injection", "SSRF Testing", "Bypass WAF"};
+        for (int i = 0; i < quickQueries.length; i++) {
+            JButton btn = createQuickButton(quickQueries[i], quickLabels[i]);
+            centerSection.add(btn);
         }
 
-        JPanel topSection = new JPanel();
-        topSection.setOpaque(false);
-        topSection.setLayout(new BoxLayout(topSection, BoxLayout.Y_AXIS));
-        topSection.add(titleRow);
-        topSection.add(Box.createVerticalStrut(6));
-        topSection.add(templateRow);
-        topSection.add(Box.createVerticalStrut(8));
+        // Right: Action buttons
+        JPanel rightSection = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        rightSection.setOpaque(false);
+        
+        JButton newSessionBtn = VistaTheme.compactButton("+ New Chat");
+        newSessionBtn.setToolTipText("Start fresh conversation (keeps current request)");
+        newSessionBtn.addActionListener(e -> startNewSession());
+        
+        JButton clearBtn = VistaTheme.compactButton("Clear");
+        clearBtn.setToolTipText("Clear current conversation");
+        clearBtn.addActionListener(e -> clearConversation());
+        
+        rightSection.add(newSessionBtn);
+        rightSection.add(clearBtn);
 
-        panel.add(topSection, BorderLayout.NORTH);
-        panel.add(queryRow, BorderLayout.CENTER);
-        panel.add(quickPanel, BorderLayout.SOUTH);
+        panel.add(leftSection, BorderLayout.WEST);
+        panel.add(centerSection, BorderLayout.CENTER);
+        panel.add(rightSection, BorderLayout.EAST);
 
         return panel;
     }
     
-    private JButton createQuickButton(String label) {
-        JButton btn = VistaTheme.pillButton(label);
+    private JButton createQuickButton(String shortLabel, String fullQuery) {
+        JButton btn = VistaTheme.pillButton(shortLabel);
+        btn.setToolTipText("Quick: How to test for " + fullQuery + "?");
         btn.addActionListener(e -> {
-            queryField.setText("How to test for " + label + "?");
-            getSuggestions();
+            String message = "How to test for " + fullQuery + "?";
+            if (interactiveChatField != null) {
+                interactiveChatField.setText(message);
+            }
+            sendQueryMessage(message);
         });
         return btn;
     }
 
     private JSplitPane buildMainContent() {
-        // Left: Request/Response tabs with search
-        JTabbedPane leftTabs = new JTabbedPane();
-        leftTabs.setFont(VistaTheme.FONT_SMALL_BOLD);
-        leftTabs.setBackground(VistaTheme.BG_PANEL);
-        
-        requestArea.setFont(VistaTheme.FONT_MONO);
-        requestArea.setEditable(false);
-        requestArea.setBackground(VistaTheme.BG_CODE);
-        requestArea.setForeground(VistaTheme.TEXT_PRIMARY);
-        requestArea.setMargin(new Insets(8, 10, 8, 10));
-        
-        responseArea.setFont(VistaTheme.FONT_MONO);
-        responseArea.setEditable(false);
-        responseArea.setBackground(VistaTheme.BG_CODE);
-        responseArea.setForeground(VistaTheme.TEXT_PRIMARY);
-        responseArea.setMargin(new Insets(8, 10, 8, 10));
+        // Left: Professional Request/Response viewer with Burp-style color coding
+        httpMessageViewer = new HttpMessageViewer();
 
-        JPanel requestPanel = createSearchablePanel(requestArea, requestSearchField, requestMatchLabel);
-        JPanel responsePanel = createSearchablePanel(responseArea, responseSearchField, responseMatchLabel);
-
-        leftTabs.addTab("  Request  ", requestPanel);
-        leftTabs.addTab("  Response  ", responsePanel);
-
-        // Right: Suggestions area with interactive chat
-        JPanel rightPanel = new JPanel(new BorderLayout());
+        // Right: Conversation area — maximized
+        JPanel rightPanel = new JPanel(new BorderLayout(0, 0));
         rightPanel.setBackground(VistaTheme.BG_CARD);
         
-        VistaTheme.styleTextArea(suggestionsArea);
-        suggestionsArea.setEditable(false);
+        conversationPane = new ChatConversationPane();
         
-        JScrollPane suggestionsScroll = VistaTheme.styledScrollPane(suggestionsArea);
-        suggestionsScroll.setBorder(VistaTheme.sectionBorder("AI Conversation"));
-        
-        // Loading indicator (initially hidden)
+        // Loading indicator (overlays bottom of conversation)
         loadingLabel = new JLabel();
         loadingLabel.setFont(VistaTheme.FONT_HEADING);
         loadingLabel.setForeground(VistaTheme.PRIMARY);
         loadingLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        loadingLabel.setBorder(new EmptyBorder(12, 12, 12, 12));
+        loadingLabel.setBorder(new EmptyBorder(6, 12, 6, 12));
         loadingLabel.setVisible(false);
         
-        JPanel suggestionsPanel = new JPanel(new BorderLayout());
-        suggestionsPanel.setBackground(VistaTheme.BG_CARD);
-        suggestionsPanel.add(suggestionsScroll, BorderLayout.CENTER);
-        suggestionsPanel.add(loadingLabel, BorderLayout.SOUTH);
+        JPanel conversationArea = new JPanel(new BorderLayout(0, 0));
+        conversationArea.setBackground(VistaTheme.BG_CARD);
+        conversationArea.setBorder(new EmptyBorder(0, 0, 0, 0));
+        conversationArea.add(conversationPane, BorderLayout.CENTER);
+        conversationArea.add(loadingLabel, BorderLayout.SOUTH);
 
-        rightPanel.add(suggestionsPanel, BorderLayout.CENTER);
+        rightPanel.add(conversationArea, BorderLayout.CENTER);
         
-        // Interactive chat panel (shown only in Interactive mode)
+        // Chat input panel — always visible at bottom
         interactiveChatPanel = buildInteractiveChatPanel();
-        interactiveChatPanel.setVisible(false);
+        interactiveChatPanel.setVisible(true);
         rightPanel.add(interactiveChatPanel, BorderLayout.SOUTH);
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftTabs, rightPanel);
-        mainSplit.setResizeWeight(0.4);
-        mainSplit.setDividerSize(6);
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, httpMessageViewer, rightPanel);
+        mainSplit.setResizeWeight(0.35);
+        mainSplit.setDividerSize(5);
         mainSplit.setBorder(null);
 
         return mainSplit;
     }
     
     private JPanel buildInteractiveChatPanel() {
-        JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBackground(VistaTheme.BG_PANEL);
+        JPanel panel = new JPanel(new BorderLayout(0, 4));
+        panel.setBackground(VistaTheme.BG_CARD);
         panel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(1, 0, 0, 0, VistaTheme.BORDER),
-            new EmptyBorder(12, 14, 12, 14)
+            new EmptyBorder(8, 12, 8, 12)
         ));
         
-        // Top section with multi-request management and dropdown
-        JPanel topSection = new JPanel(new BorderLayout(8, 4));
-        topSection.setOpaque(false);
+        // Compact status row: multi-request info + quick attach
+        JPanel statusRow = new JPanel(new BorderLayout(6, 0));
+        statusRow.setOpaque(false);
+        statusRow.setBorder(new EmptyBorder(0, 2, 2, 0));
         
-        // Multi-request info panel
-        JPanel multiRequestPanel = new JPanel(new BorderLayout(8, 0));
-        multiRequestPanel.setOpaque(false);
         multiRequestLabel = new JLabel("No requests attached");
         multiRequestLabel.setFont(VistaTheme.FONT_SMALL);
         multiRequestLabel.setForeground(VistaTheme.TEXT_MUTED);
         
-        manageRequestsButton = VistaTheme.compactButton("Manage Requests (0)");
+        JPanel attachPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        attachPanel.setOpaque(false);
+        
+        manageRequestsButton = VistaTheme.compactButton("📎 Attach");
         manageRequestsButton.setToolTipText("View, add, or remove attached requests");
         manageRequestsButton.addActionListener(e -> showMultiRequestManager());
-        
-        multiRequestPanel.add(multiRequestLabel, BorderLayout.CENTER);
-        multiRequestPanel.add(manageRequestsButton, BorderLayout.EAST);
+        manageRequestsButton.setFont(VistaTheme.FONT_SMALL);
         
         // Dropdown for recent Repeater requests
-        JPanel dropdownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        dropdownPanel.setOpaque(false);
-        JLabel dropdownLabel = new JLabel("Quick attach:");
-        dropdownLabel.setFont(VistaTheme.FONT_SMALL);
-        dropdownLabel.setForeground(VistaTheme.TEXT_SECONDARY);
-        
         JComboBox<String> repeaterDropdown = new JComboBox<>();
         VistaTheme.styleComboBox(repeaterDropdown);
-        repeaterDropdown.setPrototypeDisplayValue("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-        repeaterDropdown.addItem("-- Select recent Repeater request --");
+        repeaterDropdown.setFont(VistaTheme.FONT_SMALL);
+        repeaterDropdown.setPreferredSize(new Dimension(190, 22));
+        repeaterDropdown.addItem("Quick attach from Repeater...");
         repeaterDropdown.addActionListener(e -> {
             int selectedIndex = repeaterDropdown.getSelectedIndex();
             if (selectedIndex > 0) {
@@ -359,42 +281,33 @@ public class TestingSuggestionsPanel extends JPanel {
         });
         
         JButton refreshBtn = VistaTheme.compactButton("↻");
+        refreshBtn.setFont(VistaTheme.FONT_SMALL);
         refreshBtn.setToolTipText("Refresh Repeater request list");
         refreshBtn.addActionListener(e -> updateRepeaterDropdown(repeaterDropdown));
         
-        dropdownPanel.add(dropdownLabel);
-        dropdownPanel.add(repeaterDropdown);
-        dropdownPanel.add(refreshBtn);
+        attachPanel.add(repeaterDropdown);
+        attachPanel.add(refreshBtn);
+        attachPanel.add(manageRequestsButton);
         
-        topSection.add(multiRequestPanel, BorderLayout.NORTH);
-        topSection.add(dropdownPanel, BorderLayout.SOUTH);
+        statusRow.add(multiRequestLabel, BorderLayout.WEST);
+        statusRow.add(attachPanel, BorderLayout.EAST);
         
         // Input row
-        JPanel inputRow = new JPanel(new BorderLayout(8, 0));
+        JPanel inputRow = new JPanel(new BorderLayout(6, 0));
         inputRow.setOpaque(false);
         
         interactiveChatField = new JTextField();
         interactiveChatField.setFont(VistaTheme.FONT_BODY);
-        interactiveChatField.setBackground(VistaTheme.BG_INPUT);
-        interactiveChatField.setForeground(VistaTheme.TEXT_PRIMARY);
-        interactiveChatField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(VistaTheme.BORDER, 1),
-            new EmptyBorder(8, 12, 8, 12)));
-        installPlaceholder(interactiveChatField, "Report what you observed or ask for bypass suggestions...");
+        VistaTheme.styleTextField(interactiveChatField);
+        installPlaceholder(interactiveChatField, "Ask anything — test for XSS, bypass WAF, analyze responses...");
         
-        // Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        buttonPanel.setOpaque(false);
-        
-        JButton sendBtn = VistaTheme.primaryButton("Send");
+        JButton sendBtn = VistaTheme.primaryButton("Send ⏎");
         sendBtn.addActionListener(e -> sendInteractiveMessage());
         
-        buttonPanel.add(sendBtn);
-        
         inputRow.add(interactiveChatField, BorderLayout.CENTER);
-        inputRow.add(buttonPanel, BorderLayout.EAST);
+        inputRow.add(sendBtn, BorderLayout.EAST);
         
-        panel.add(topSection, BorderLayout.NORTH);
+        panel.add(statusRow, BorderLayout.NORTH);
         panel.add(inputRow, BorderLayout.CENTER);
         
         // Enter key to send
@@ -579,7 +492,7 @@ public class TestingSuggestionsPanel extends JPanel {
         }
         
         if (manageRequestsButton != null) {
-            manageRequestsButton.setText("Manage Requests (" + count + ")");
+            manageRequestsButton.setText("📎 Attach (" + count + ")");
         }
         
         // Update chat field background
@@ -654,8 +567,8 @@ public class TestingSuggestionsPanel extends JPanel {
     
     private void sendInteractiveMessage() {
         String message = interactiveChatField.getText().trim();
-        // Check for empty message or placeholder text (starts with hint text)
-        if (message.isEmpty() || message.startsWith("Report what") || message.equals("Report what you observed or ask for bypass suggestions...")) return;
+        // Check for empty message or placeholder text
+        if (message.isEmpty() || message.startsWith("Ask anything") || message.startsWith("Report what")) return;
         
         interactiveChatField.setText("");
         
@@ -736,123 +649,19 @@ public class TestingSuggestionsPanel extends JPanel {
         currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(message));
     }
 
-    private JPanel createSearchablePanel(JTextArea textArea, JTextField searchField, JLabel matchLabel) {
-        JPanel panel = new JPanel(new BorderLayout());
-        
-        JPanel searchBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        
-        JLabel searchIcon = new JLabel("🔍");
-        searchField.setPreferredSize(new Dimension(150, 24));
-        
-        JButton prevBtn = new JButton("◀");
-        JButton nextBtn = new JButton("▶");
-        prevBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        nextBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        prevBtn.setMargin(new Insets(2, 6, 2, 6));
-        nextBtn.setMargin(new Insets(2, 6, 2, 6));
-        
-        matchLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        
-        searchBar.add(searchIcon);
-        searchBar.add(searchField);
-        searchBar.add(prevBtn);
-        searchBar.add(nextBtn);
-        searchBar.add(matchLabel);
-        
-        int[] currentMatch = {-1};
-        List<int[]> matches = new ArrayList<>();
-        
-        Runnable doSearch = () -> {
-            String searchText = searchField.getText();
-            String content = textArea.getText();
-            matches.clear();
-            currentMatch[0] = -1;
-            textArea.getHighlighter().removeAllHighlights();
-            
-            if (searchText.isEmpty() || content.isEmpty()) {
-                matchLabel.setText("");
-                return;
-            }
-            
-            String lowerContent = content.toLowerCase();
-            String lowerSearch = searchText.toLowerCase();
-            int index = 0;
-            
-            while ((index = lowerContent.indexOf(lowerSearch, index)) != -1) {
-                matches.add(new int[]{index, index + searchText.length()});
-                try {
-                    textArea.getHighlighter().addHighlight(index, index + searchText.length(),
-                        new DefaultHighlighter.DefaultHighlightPainter(new Color(255, 255, 0, 150)));
-                } catch (BadLocationException ignored) {}
-                index += searchText.length();
-            }
-            
-            if (!matches.isEmpty()) {
-                currentMatch[0] = 0;
-                matchLabel.setText("1/" + matches.size());
-                scrollToMatch(textArea, matches.get(0));
-            } else {
-                matchLabel.setText("0/0");
-            }
-        };
-        
-        searchField.addActionListener(e -> doSearch.run());
-        searchField.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyReleased(KeyEvent e) {
-                if (e.getKeyCode() != KeyEvent.VK_ENTER) doSearch.run();
-            }
-        });
-        
-        nextBtn.addActionListener(e -> {
-            if (!matches.isEmpty()) {
-                currentMatch[0] = (currentMatch[0] + 1) % matches.size();
-                matchLabel.setText((currentMatch[0] + 1) + "/" + matches.size());
-                scrollToMatch(textArea, matches.get(currentMatch[0]));
-            }
-        });
-        
-        prevBtn.addActionListener(e -> {
-            if (!matches.isEmpty()) {
-                currentMatch[0] = (currentMatch[0] - 1 + matches.size()) % matches.size();
-                matchLabel.setText((currentMatch[0] + 1) + "/" + matches.size());
-                scrollToMatch(textArea, matches.get(currentMatch[0]));
-            }
-        });
-        
-        JScrollPane scroll = new JScrollPane(textArea);
-        scroll.setBorder(null);
-        
-        panel.add(searchBar, BorderLayout.NORTH);
-        panel.add(scroll, BorderLayout.CENTER);
-        
-        return panel;
-    }
-    
-    private void scrollToMatch(JTextArea textArea, int[] match) {
-        try {
-            textArea.setCaretPosition(match[0]);
-            Rectangle rect = textArea.modelToView(match[0]);
-            if (rect != null) textArea.scrollRectToVisible(rect);
-        } catch (BadLocationException ignored) {}
-    }
+
 
     private JPanel buildFooterPanel() {
-        JPanel panel = new JPanel(new BorderLayout(8, 0));
+        JPanel panel = new JPanel(new BorderLayout(4, 0));
         panel.setBackground(VistaTheme.BG_PANEL);
         panel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(1, 0, 0, 0, VistaTheme.BORDER),
-            new EmptyBorder(8, 16, 8, 16)
+            new EmptyBorder(3, 12, 3, 12)
         ));
 
         statusLabel.setFont(VistaTheme.FONT_SMALL);
         statusLabel.setForeground(VistaTheme.TEXT_SECONDARY);
-
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        leftPanel.setOpaque(false);
-        leftPanel.add(statusLabel);
-
-        panel.add(leftPanel, BorderLayout.WEST);
+        panel.add(statusLabel, BorderLayout.WEST);
 
         return panel;
     }
@@ -860,10 +669,10 @@ public class TestingSuggestionsPanel extends JPanel {
     private void updateConfigStatus() {
         AIConfigManager config = AIConfigManager.getInstance();
         if (config.isConfigured()) {
-            configStatusLabel.setText("● " + config.getProvider() + " ready");
+            configStatusLabel.setText("● " + config.getProvider() + " connected");
             configStatusLabel.setForeground(VistaTheme.STATUS_SUCCESS);
         } else {
-            configStatusLabel.setText("● Configure AI in Settings tab");
+            configStatusLabel.setText("● Configure AI in Settings");
             configStatusLabel.setForeground(VistaTheme.STATUS_WARNING);
         }
     }
@@ -880,18 +689,9 @@ public class TestingSuggestionsPanel extends JPanel {
         this.currentRequest = request;
         
         if (request != null) {
+            httpMessageViewer.setHttpMessage(request.getRequest(), request.getResponse());
+
             String reqText = HttpMessageParser.requestToText(helpers, request.getRequest());
-            requestArea.setText(reqText);
-            requestArea.setCaretPosition(0);
-
-            if (request.getResponse() != null) {
-                String respText = HttpMessageParser.responseToText(helpers, request.getResponse());
-                responseArea.setText(respText);
-                responseArea.setCaretPosition(0);
-            } else {
-                responseArea.setText("(No response captured)");
-            }
-
             String summary = extractRequestSummary(reqText);
             
             // If this is a NEW request, create a NEW CHAT SESSION (don't clear old one!)
@@ -930,7 +730,7 @@ public class TestingSuggestionsPanel extends JPanel {
                 newSession.clearAttachedRequests();
                 
                 attachedRequests.clear();
-                suggestionsArea.setText("");
+                conversationPane.clear();
                 currentTestingPlan = null;
                 currentStep = 0;
                 
@@ -1001,8 +801,18 @@ public class TestingSuggestionsPanel extends JPanel {
     // ═══════════════════════════════════════════════════════════════
 
     private void getSuggestions() {
-        String userQuery = queryField.getText().trim();
-        if (userQuery.isEmpty() || userQuery.startsWith("Ask:")) return;
+        // Unified path: get text from the interactive chat field
+        String userQuery = interactiveChatField != null ? interactiveChatField.getText().trim() : "";
+        if (userQuery.isEmpty() || userQuery.startsWith("Ask")) return;
+        sendQueryMessage(userQuery);
+    }
+    
+    /**
+     * Unified method to send a query message — used by quick buttons, getSuggestions, etc.
+     */
+    private void sendQueryMessage(String userQuery) {
+        if (userQuery == null || userQuery.trim().isEmpty()) return;
+        userQuery = userQuery.trim();
         
         if (currentRequest == null) {
             appendSuggestion("SYSTEM", "⚠️ No request loaded. Right-click a request in Burp and select 'Send to VISTA AI'.");
@@ -1015,21 +825,17 @@ public class TestingSuggestionsPanel extends JPanel {
         }
 
         appendSuggestion("YOU", userQuery);
-        queryField.setText("");
+        if (interactiveChatField != null) {
+            interactiveChatField.setText("");
+        }
         conversationHistory.add(new ConversationMessage("user", userQuery));
         
-        // Always use Interactive Assistant mode
         statusLabel.setText("Processing your request...");
-        // Cancel any previous pending AI task to prevent queue buildup
         if (currentAITask != null && !currentAITask.isDone()) {
             currentAITask.cancel(true);
         }
-        currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(userQuery));
-        
-        // Show interactive chat panel after first query
-        if (interactiveChatPanel != null) {
-            interactiveChatPanel.setVisible(true);
-        }
+        final String query = userQuery;
+        currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(query));
     }
     
     private void handleQuickSuggestions(String userQuery) {
@@ -1078,10 +884,12 @@ public class TestingSuggestionsPanel extends JPanel {
             
             // Build enhanced user message with attached requests if any
             String enhancedUserQuery = userQuery;
+            boolean hasAttachedRequests = false;
             List<ChatSession.TestingStep> sessionTestingSteps = activeSession != null ? 
                 activeSession.getTestingSteps() : new ArrayList<>();
             
             if (!sessionTestingSteps.isEmpty()) {
+                hasAttachedRequests = true;
                 // Get the most recent testing steps (attached requests)
                 StringBuilder attachedContext = new StringBuilder();
                 attachedContext.append(userQuery).append("\n\n");
@@ -1120,9 +928,15 @@ public class TestingSuggestionsPanel extends JPanel {
             
             // Use chat session history if available
             if (activeSession != null && activeSession.getExchangeCount() > 0) {
-                // Continue conversation with full history (token efficient!)
+                // Follow-up message — inject fresh security analysis context
+                // The original system prompt is too generic for security testing.
+                // We inject a rich context-aware system message before calling AI.
+                String securityContext = buildFollowUpSecurityContext(requestText, responseText, 
+                    sessionTestingSteps, hasAttachedRequests);
+                activeSession.updateSystemPrompt(securityContext);
+                
                 response = callAIWithHistory(activeSession.getMessages());
-                callbacks.printOutput("[VISTA] Using chat session history - Token efficient mode!");
+                callbacks.printOutput("[VISTA] Using chat session history with refreshed security context");
             } else {
                 // First message - build full prompt
                 String systemPrompt;
@@ -1189,6 +1003,159 @@ public class TestingSuggestionsPanel extends JPanel {
                 e.printStackTrace();
             });
         }
+    }
+    
+    /**
+     * Build a rich security-focused system prompt for follow-up messages.
+     * This ensures the AI has full security testing context on every exchange,
+     * not just the first message. Includes deep analysis, WAF detection,
+     * reflection analysis, payload library, and attached request awareness.
+     */
+    private String buildFollowUpSecurityContext(String requestText, String responseText,
+                                                  List<ChatSession.TestingStep> testingSteps,
+                                                  boolean hasNewAttachedRequests) {
+        // Deep request analysis
+        String deepRequestAnalysis = "Not available";
+        String detectedVulnType = null;
+        String reflectionContext = "unknown";
+        
+        if (currentRequest != null) {
+            RequestAnalysis reqAnalysis = deepRequestAnalyzer.analyze(currentRequest);
+            deepRequestAnalysis = truncate(reqAnalysis.toFormattedString(), 1500);
+            if (!reqAnalysis.predictedVulnerabilities.isEmpty()) {
+                detectedVulnType = reqAnalysis.predictedVulnerabilities.get(0);
+            }
+        }
+        
+        // Deep response analysis
+        String deepResponseAnalysis = "Not available";
+        if (currentRequest != null && currentRequest.getResponse() != null) {
+            ResponseAnalysis respAnalysis = responseAnalyzer.analyze(currentRequest);
+            deepResponseAnalysis = truncate(respAnalysis.toFormattedString(), 1200);
+        }
+        
+        // Reflection analysis
+        String reflectionAnalysis = "Not available";
+        if (currentRequest != null) {
+            ReflectionAnalyzer.ReflectionAnalysis analysis = reflectionAnalyzer.analyze(currentRequest);
+            reflectionAnalysis = truncate(analysis.getSummary(), 1000);
+            if (analysis.getReflections() != null && !analysis.getReflections().isEmpty()) {
+                var firstReflection = analysis.getReflections().get(0);
+                if (firstReflection != null) {
+                    List<ReflectionAnalyzer.ReflectionContext> contexts = firstReflection.getContexts();
+                    if (contexts != null && !contexts.isEmpty() && contexts.get(0) != null) {
+                        reflectionContext = contexts.get(0).getContextType();
+                    }
+                }
+            }
+        }
+        
+        // Payload library context
+        String payloadLibraryContext = "";
+        if (detectedVulnType != null) {
+            payloadLibraryContext = payloadLibraryAI.getPayloadContextForAI(
+                detectedVulnType, reflectionContext, true, 5);
+            String topPayloads = payloadLibraryAI.getTopPayloadsForAI(detectedVulnType, 3);
+            if (!topPayloads.isEmpty()) payloadLibraryContext += topPayloads;
+        }
+        if (payloadLibraryContext.isEmpty()) {
+            payloadLibraryContext = payloadLibraryAI.getRecentSuccessfulPayloadsForAI(3);
+        }
+        
+        // WAF detection
+        List<WAFDetector.WAFInfo> wafList = WAFDetector.detectWAF(responseText, responseText, extractStatusCode(responseText));
+        String wafInfo = wafList.isEmpty() ? "No WAF detected" : WAFDetector.getBypassSuggestions(wafList);
+        
+        // Build testing history summary
+        StringBuilder testingHistoryStr = new StringBuilder();
+        if (!testingSteps.isEmpty()) {
+            testingHistoryStr.append("\n\nTESTING HISTORY (User's previous tests in this session):\n");
+            for (int i = 0; i < testingSteps.size(); i++) {
+                ChatSession.TestingStep step = testingSteps.get(i);
+                testingHistoryStr.append("- Test ").append(i + 1).append(": ");
+                testingHistoryStr.append(step.observation);
+                testingHistoryStr.append(" [Request: ").append(truncate(step.request.split("\r?\n")[0], 60)).append("]");
+                if (step.response != null && !step.response.isEmpty()) {
+                    testingHistoryStr.append(" [Response: ").append(step.response.length()).append(" bytes]");
+                }
+                testingHistoryStr.append("\n");
+            }
+        }
+        
+        // Get template context if a template is selected
+        String templateContext = "";
+        String selectedTemplate = (String) templateSelector.getSelectedItem();
+        if (selectedTemplate != null && !selectedTemplate.startsWith("--") && !selectedTemplate.equals("Default")) {
+            PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
+            if (template != null) {
+                templateContext = "\n\nACTIVE TEMPLATE: " + template.getName() + 
+                    "\nTemplate Guidance: " + truncate(template.getSystemPrompt(), 500);
+            }
+        }
+        
+        return """
+            You are an expert penetration testing mentor in a Burp Suite extension called VISTA.
+            You are in an ongoing conversation helping a security tester find and exploit vulnerabilities.
+            
+            CRITICAL CONTEXT:
+            - The user can ATTACH HTTP request/response pairs to their messages
+            - When the message contains "=== ATTACHED REQUEST/RESPONSE FOR ANALYSIS ===", that is REAL HTTP traffic
+            - You have deep automated analysis of the target below
+            - The REFLECTION ANALYSIS below tells you EXACTLY where and how input is reflected in the response
+            
+            === SESSION'S TARGET REQUEST ANALYSIS ===
+            %s
+            
+            === SESSION'S TARGET RESPONSE ANALYSIS ===
+            %s
+            
+            === REFLECTION ANALYSIS (MOST IMPORTANT — this is pre-computed for you) ===
+            %s
+            
+            === WAF DETECTION ===
+            %s
+            
+            === PAYLOAD LIBRARY (Proven Payloads for detected context) ===
+            %s
+            %s%s
+            
+            MANDATORY RESPONSE RULES:
+            
+            1. DEEP REFLECTION-BASED ANALYSIS (not generic):
+               - You MUST use the REFLECTION ANALYSIS above to identify EXACT reflection points
+               - For each reflected parameter, state: parameter name, WHERE it reflects (HTML body, JS string,
+                 HTML attribute, HTTP header, JSON value, etc.), and WHETHER it is encoded/filtered
+               - Example: "Parameter 'city' is reflected at line 42 inside a JavaScript string var x='REFLECTION'
+                 without any encoding — this is directly exploitable for XSS"
+            
+            2. CONTEXT-SPECIFIC PAYLOADS ONLY (never list multiple contexts):
+               - Based on the EXACT reflection context you identified, provide payloads ONLY for THAT context
+               - If reflected in JS string → give JS string breakout payloads ONLY (e.g. ";alert(1);//)
+               - If reflected in HTML body → give HTML injection payloads ONLY
+               - If reflected in HTML attribute → give attribute breakout payloads ONLY
+               - DO NOT list "Here's what to do for HTML context... here's for JS context..." — you KNOW the context!
+               - Provide the EXACT modified request showing where to inject the payload
+            
+            3. ESCALATION PATH (if primary approach fails):
+               - If the user reports a payload was blocked/filtered, analyze WHAT was filtered
+               - Suggest bypass for THAT specific filter (encoding bypass, alternate syntax, etc.)
+               - If the reflection context is not exploitable, suggest OTHER vulnerability types
+                 that may apply to this specific endpoint (SSRF, SQLi, IDOR, etc.)
+            
+            4. RESPONSE FORMAT:
+               - Start with what you found in the reflection analysis (2-3 sentences, specific)
+               - Give ONE targeted payload with the exact modified request to send
+               - Explain why this payload works for THIS specific reflection context
+               - Tell them exactly what to look for in the response
+               - End with what to do next based on the result
+            
+            NEVER say "I cannot see the request" — the data IS in the message or analysis above.
+            NEVER list payloads for multiple contexts — you already know the exact context.
+            NEVER give generic "try these categories" advice — be surgical and specific.
+            """.formatted(
+                deepRequestAnalysis, deepResponseAnalysis, reflectionAnalysis,
+                wafInfo, payloadLibraryContext, testingHistoryStr.toString(), templateContext
+            );
     }
     
     /**
@@ -1282,44 +1249,34 @@ public class TestingSuggestionsPanel extends JPanel {
             === BYPASS KNOWLEDGE BASE (PayloadsAllTheThings) ===
             %s
             
-            CRITICAL INSTRUCTIONS:
-            1. START with reflection analysis - tell user EXACTLY where parameters are reflected
-            2. Based on reflection context (HTML body, attribute, JavaScript, etc.), suggest SPECIFIC payloads
-            3. If parameter is encoded, suggest encoding bypass techniques
-            4. If parameter is in exploitable context, provide ready-to-use payloads
-            5. Include WAF bypass techniques if WAF detected
-            6. Reference PayloadsAllTheThings techniques
-            7. Explain WHY each payload works for that specific context
-            8. Provide expected results for each test
-            9. Be conversational and educational
+            MANDATORY RESPONSE RULES:
             
-            Format your response as:
+            1. DEEP REFLECTION ANALYSIS (you already have the data — use it):
+               - Use the REFLECTION ANALYSIS above to identify EXACT reflection points
+               - For EACH reflected parameter state: the parameter name, WHERE in the response it reflects
+                 (HTML body, inside <script> block, HTML attribute, JSON value, etc.), and whether it's encoded
+               - Show the exact surrounding code context: e.g. "var city='YOUR_INPUT';" or "<div>YOUR_INPUT</div>"
+               - The user should NOT need to find reflections — you already have that info
             
-            🔍 REFLECTION POINTS:
-            [Summarize where and how parameters are reflected - be specific!]
-            [Example: "Parameter 'q' is reflected in HTML body without encoding - EXPLOITABLE!"]
-            [Example: "Parameter 'search' is reflected in JavaScript string with quotes - need to break out"]
+            2. TARGETED PAYLOADS FOR THE EXACT CONTEXT (do NOT list multiple contexts):
+               - You KNOW the reflection context from the analysis — give payloads ONLY for that context
+               - If JS string context → JS breakout payloads: ";alert(1);// or similar
+               - If HTML body context → HTML injection payloads: <img src=x onerror=alert(1)>
+               - If HTML attribute context → attribute breakout: " onload="alert(1)
+               - DO NOT list "for HTML try X, for JS try Y" — be specific to what you found
+               - Show the EXACT modified request with payload injected in the right place
+               - If the value is encoded (Base64, URL-encoded), show decode→inject→re-encode steps
             
-            📋 TESTING APPROACH:
-            [Step-by-step methodology based on reflection analysis]
+            3. IF PRIMARY CONTEXT IS NOT EXPLOITABLE:
+               - Explain WHY (encoding, CSP, filtering)
+               - Suggest specific bypass techniques for the identified defense
+               - If no XSS path exists, suggest other vulnerability types for this specific endpoint
             
-            🎯 CONTEXT-SPECIFIC PAYLOADS:
-            [Payloads tailored to the exact reflection context]
-            [Example: For HTML body: <script>alert(1)</script>]
-            [Example: For JS string: '; alert(1);//]
-            [Example: For HTML attribute: " onload="alert(1)]
+            4. WAF BYPASS (only if WAF detected):
+               - Techniques specific to the detected WAF and the reflection context
             
-            🛡️ WAF BYPASS (if applicable):
-            [WAF-specific techniques]
-            
-            ✅ EXPECTED RESULTS:
-            [What to look for]
-            
-            💡 PRO TIPS:
-            [Additional insights]
-            
-            REMEMBER: User should NOT need to test for reflections - you already have that info!
-            Provide actionable, context-aware guidance based on actual reflection analysis.
+            CRITICAL: Never list payloads for contexts that don't apply.
+            You have the actual reflection data — be surgical, not encyclopedic.
             """.formatted(userQuery, conversationContext.toString(), 
                          truncate(request, 2000), truncate(response, 1500),
                          reflectionAnalysis,
@@ -1442,10 +1399,12 @@ public class TestingSuggestionsPanel extends JPanel {
                 
                 USER'S QUESTION: %s
                 
-                === DEEP REQUEST ANALYSIS ===
                 %s
                 
-                === DEEP RESPONSE ANALYSIS ===
+                === DEEP REQUEST ANALYSIS (Session's Original Request) ===
+                %s
+                
+                === DEEP RESPONSE ANALYSIS (Session's Original Response) ===
                 %s
                 
                 === REFLECTION ANALYSIS ===
@@ -1463,44 +1422,45 @@ public class TestingSuggestionsPanel extends JPanel {
                 === PAYLOAD LIBRARY (Proven Payloads) ===
                 %s
                 
-                INSTRUCTIONS:
-                Provide a SINGLE, COHESIVE response that naturally integrates ALL the above context.
+                MANDATORY RESPONSE RULES:
                 
-                Your response should flow naturally and include:
-                1. Start with a brief analysis of what you see in the request/response (2-3 sentences)
-                2. Identify the most promising vulnerability based on the deep analysis
-                3. Provide ONE specific test with a payload (preferably from the library)
-                4. Explain WHY this payload will work in this specific context
-                5. Give clear testing instructions
-                6. Tell them what to look for
+                1. DEEP REFLECTION-BASED ANALYSIS (this is your primary job):
+                   - Use the REFLECTION ANALYSIS above to identify EXACT reflection points
+                   - For EACH reflected parameter, state clearly:
+                     • Parameter name and its value
+                     • EXACTLY where it appears in the response (HTML body, inside a <script> tag,
+                       inside an HTML attribute, in a JSON response, in an HTTP header, etc.)
+                     • Whether the reflection is encoded, filtered, or raw
+                     • The exact surrounding code context (e.g. "reflected inside: var data='YOUR_INPUT_HERE';")
+                   - If attached request/response data is present above, analyze THAT data
                 
-                CRITICAL RULES:
-                - Write in a natural, conversational tone (not bullet points or sections)
-                - Integrate all context seamlessly into your narrative
-                - Prioritize payloads from the library (they have proven success rates!)
-                - Reference the deep analysis findings naturally in your explanation
-                - If WAF detected, explain how your payload bypasses it
-                - If high-risk issues found, mention them naturally in context
-                - Keep it focused on ONE test at a time
-                - End by asking them to test and report back
+                2. CONTEXT-SPECIFIC PAYLOADS ONLY (do NOT list multiple contexts):
+                   - Based on the EXACT reflection context you found, provide payloads ONLY for that context
+                   - If input reflects in JS string → JS string breakout payloads ONLY
+                   - If input reflects in HTML body → HTML injection payloads ONLY
+                   - If input reflects in HTML attribute → attribute escape payloads ONLY
+                   - DO NOT say "For HTML context try X, for JS context try Y" — you KNOW the exact context
+                   - Show the EXACT modified request with the payload injected in the right parameter
+                   - If a parameter value is encoded (Base64, URL-encoded, JSON), show how to decode,
+                     inject the payload, and re-encode it
                 
-                DO NOT use section headers like "🔍 ANALYSIS" or "🎯 STEP 1".
-                Instead, write a flowing narrative that guides them naturally through the testing process.
+                3. ESCALATION PATH:
+                   - If the primary reflection context is not exploitable (encoded, filtered),
+                     suggest specific bypass techniques for THAT filter
+                   - If no XSS is possible, suggest other vulnerability types specific to this endpoint
+                     (e.g., SSRF if URL parameters exist, SQLi if database queries likely, IDOR if IDs present)
                 
-                Example of good response:
-                "Looking at your request to /search?q=test, I can see this is a high-risk endpoint (8/10) 
-                with an unvalidated search parameter. The response shows the input is reflected in the HTML 
-                without encoding, which is perfect for XSS testing. I also notice there's no Content-Security-Policy 
-                header, making exploitation easier.
+                4. RESPONSE FORMAT:
+                   - Start by identifying the exact reflection points (be surgical, cite line/context)
+                   - Give ONE targeted payload with the exact modified request
+                   - Explain why this payload works for THIS specific context
+                   - Show what to look for in the response (exact string/behavior)
+                   - End with next steps based on expected result
                 
-                Let's start with a proven XSS payload from the library. Try payload #3: <img src=x onerror=alert(1)>
-                This payload works well in HTML context because it doesn't rely on script tags, which are often 
-                filtered. The onerror event fires immediately when the browser tries to load the invalid image.
-                
-                In Burp Repeater, replace 'test' with this payload in the q parameter and send the request. 
-                Look for the <img> tag in the response - if it appears unencoded, the XSS is confirmed. 
-                Let me know what you see in the response!"
-                """.formatted(userQuery, deepRequestAnalysis, deepResponseAnalysis,
+                CRITICAL: Do NOT list payloads for different contexts as categories.
+                You have the reflection data — use it to give ONE precise, targeted recommendation.
+                Write conversationally but be specific and actionable.
+                """.formatted(userQuery, testingHistory.toString(), deepRequestAnalysis, deepResponseAnalysis,
                              reflectionAnalysis,
                              wafInfo, truncate(methodology, 2000), truncate(bypassKnowledge, 1500),
                              payloadLibraryContext);
@@ -1530,44 +1490,40 @@ public class TestingSuggestionsPanel extends JPanel {
                 === PAYLOAD LIBRARY ===
                 %s
                 
-                INSTRUCTIONS:
-                Provide a SINGLE, COHESIVE response that naturally continues the conversation.
+                MANDATORY RESPONSE RULES:
                 
-                Your response should flow naturally and include:
-                1. Acknowledge what they tested and the results (2-3 sentences)
-                2. Analyze what the results mean (success, failure, or partial success)
-                3. Provide the NEXT logical test based on what you learned
-                4. Use a payload from the library when available
-                5. Explain why this next test makes sense given previous results
-                6. Give clear instructions
-                7. Ask them to test and report back
+                1. ANALYZE TEST RESULTS DEEPLY:
+                   - Look at the TESTING HISTORY above — the user's previous requests and responses are there
+                   - Compare what was sent vs what was returned
+                   - Identify: was the payload reflected? Was it encoded/stripped/blocked? Did the response change?
+                   - Be specific: "Your payload <script> was HTML-encoded to &lt;script&gt; in the response,
+                     meaning the server uses HTML entity encoding on this parameter"
                 
-                CRITICAL RULES:
-                - Write in a natural, conversational tone (not bullet points or sections)
-                - Reference previous tests naturally ("Since the basic payload was filtered...")
-                - Learn from what worked/failed and adapt accordingly
-                - Prioritize library payloads with high success rates
-                - If they're stuck, suggest a different approach from the library
-                - If they succeeded, congratulate and suggest verification
-                - Integrate all context seamlessly into your narrative
+                2. ADAPT BASED ON WHAT YOU LEARNED:
+                   - If payload was encoded → suggest encoding bypass specific to THAT encoding
+                   - If payload was stripped → suggest payloads that avoid the stripped pattern
+                   - If payload was blocked (WAF/403) → suggest WAF bypass techniques
+                   - If payload reflected cleanly but didn't execute → check context (maybe inside a comment, 
+                     inside an attribute that needs event handler, etc.)
+                   - If reflection context changed → adapt payload to the NEW context
                 
-                DO NOT use section headers like "✅ ANALYSIS" or "📍 NEXT STEP".
-                Instead, write a flowing narrative that builds on the conversation naturally.
+                3. GIVE ONE PRECISE NEXT STEP:
+                   - Based on what failed/succeeded, provide the SINGLE best next payload to try
+                   - Show the EXACT modified request with the new payload
+                   - Explain specifically why this bypasses what blocked the previous attempt
+                   - If the current vulnerability type seems not exploitable after multiple attempts,
+                     pivot to a DIFFERENT vulnerability type relevant to this endpoint
                 
-                Example of good response:
-                "I see the basic <script>alert(1)</script> payload was blocked - the response shows it was 
-                HTML-encoded. This tells us there's input sanitization happening. However, looking at the 
-                testing history, I notice the response still reflects our input, just encoded.
+                4. RESPONSE FORMAT:
+                   - Briefly acknowledge what the previous test revealed (be specific, not generic)
+                   - Explain what defense mechanism you identified from the result
+                   - Give ONE targeted next payload with the exact request
+                   - Explain why this will bypass the identified defense
+                   - Tell them what to look for
                 
-                Let's try a different approach using an event handler. From the payload library, try payload #7: 
-                <img src=x onerror=alert(1)>. This has a 78%% success rate and works well when script tags are 
-                filtered because it uses the onerror event instead. The key is that many filters focus on 
-                <script> tags but miss event handlers.
-                
-                Test this in Repeater and check if the <img> tag appears in the response. If it does, we've 
-                bypassed the filter. What do you see?"
-                
-                Adapt your suggestions intelligently based on the complete testing history and analysis.
+                NEVER list multiple context categories — you know what context the reflection is in.
+                NEVER give generic advice — you have the actual test results, analyze them.
+                Write conversationally but be surgical and specific.
                 """.formatted(conversationContext.toString(), testingHistory.toString(),
                              deepRequestAnalysis, deepResponseAnalysis,
                              wafInfo, truncate(bypassKnowledge, 1500),
@@ -1695,16 +1651,12 @@ public class TestingSuggestionsPanel extends JPanel {
         }
         
         attachedRequests.clear();
-        suggestionsArea.setText("");
+        conversationPane.clear();
         currentTestingPlan = null;
         currentStep = 0;
         statusLabel.setText("Ready");
         
         updateMultiRequestLabel();
-        
-        if (interactiveChatPanel != null) {
-            interactiveChatPanel.setVisible(false);
-        }
         
         appendSuggestion("SYSTEM", "Conversation cleared. Start a new interactive testing session!");
     }
@@ -1729,15 +1681,11 @@ public class TestingSuggestionsPanel extends JPanel {
         }
         
         attachedRequests.clear();
-        suggestionsArea.setText("");
+        conversationPane.clear();
         currentTestingPlan = null;
         currentStep = 0;
         
         updateMultiRequestLabel();
-        
-        if (interactiveChatPanel != null) {
-            interactiveChatPanel.setVisible(false);
-        }
         
         // Show new session message
         String requestSummary = "current request";
@@ -1757,15 +1705,12 @@ public class TestingSuggestionsPanel extends JPanel {
 
     private void appendSuggestion(String sender, String message) {
         SwingUtilities.invokeLater(() -> {
-            String prefix = switch (sender) {
-                case "YOU" -> "▸ You: ";
-                case "VISTA" -> "◆ VISTA: ";
-                case "SYSTEM" -> "● ";
-                default -> sender + ": ";
-            };
-            suggestionsArea.append(prefix + message + "\n\n");
-            suggestionsArea.append("─────────────────────────────────────────────────────────────\n\n");
-            suggestionsArea.setCaretPosition(suggestionsArea.getDocument().getLength());
+            switch (sender) {
+                case "YOU" -> conversationPane.appendUserMessage(message);
+                case "VISTA" -> conversationPane.appendAIMessage(message);
+                case "SYSTEM" -> conversationPane.appendSystemMessage(message);
+                default -> conversationPane.appendSystemMessage(sender + ": " + message);
+            }
         });
     }
 
@@ -1976,18 +1921,18 @@ public class TestingSuggestionsPanel extends JPanel {
         // Add a helpful message to the conversation if it's empty
         if (conversationHistory.isEmpty()) {
             SwingUtilities.invokeLater(() -> {
-                suggestionsArea.append("📎 Request attached to this session!\n\n");
-                suggestionsArea.append("💡 Quick Start:\n");
-                suggestionsArea.append("1. Type what you observed (e.g., 'I see HTML encoding' or 'WAF blocked my payload')\n");
-                suggestionsArea.append("2. Click Send\n");
-                suggestionsArea.append("3. AI will analyze and provide bypass suggestions\n\n");
-                suggestionsArea.append("Or ask a question like:\n");
-                suggestionsArea.append("• 'How can I bypass this WAF?'\n");
-                suggestionsArea.append("• 'Test for XSS'\n");
-                suggestionsArea.append("• 'Suggest SQLi bypass payloads'\n\n");
-                suggestionsArea.append("💡 TIP: You can attach multiple requests for comparison!\n\n");
-                suggestionsArea.append("─".repeat(60) + "\n\n");
-                suggestionsArea.setCaretPosition(suggestionsArea.getDocument().getLength());
+                conversationPane.appendSystemMessage(
+                    "📎 Request attached to this session!\n\n" +
+                    "💡 Quick Start:\n" +
+                    "1. Type what you observed (e.g., 'I see HTML encoding' or 'WAF blocked my payload')\n" +
+                    "2. Click Send\n" +
+                    "3. AI will analyze and provide bypass suggestions\n\n" +
+                    "Or ask a question like:\n" +
+                    "• 'How can I bypass this WAF?'\n" +
+                    "• 'Test for XSS'\n" +
+                    "• 'Suggest SQLi bypass payloads'\n\n" +
+                    "💡 TIP: You can attach multiple requests for comparison!"
+                );
                 callbacks.printOutput("[VISTA] Help message added to conversation");
             });
         }
@@ -2053,10 +1998,27 @@ public class TestingSuggestionsPanel extends JPanel {
             }
         }
         
-        // Default system prompt
-        return "You are an expert security testing assistant. " +
-               "Analyze HTTP requests and responses for vulnerabilities. " +
-               "Provide step-by-step testing methodologies and exploitation guidance.";
+        // Default system prompt - rich enough for security testing context
+        return """
+            You are an expert penetration testing mentor in a Burp Suite extension called VISTA.
+            You help security testers find and exploit vulnerabilities in web applications.
+            
+            YOUR CAPABILITIES:
+            - Users can ATTACH HTTP request/response pairs to their messages for you to analyze
+            - When a user's message contains "=== ATTACHED REQUEST/RESPONSE FOR ANALYSIS ===" section,
+              that is REAL HTTP traffic they captured — you MUST analyze it thoroughly
+            - You have access to deep automated analysis of the target
+            - Provide specific, actionable testing guidance with real payloads
+            
+            RULES:
+            - Be conversational and educational, not generic
+            - Provide specific payloads, not just theory
+            - Explain WHY each test/payload is relevant to their specific context
+            - If the user attaches request/response data, ALWAYS analyze it in detail
+            - NEVER say "I cannot see the request" or "please paste the request"
+            - Build on previous conversation context naturally
+            - Keep responses focused and practical
+            """;
     }
     
     /**
@@ -2101,7 +2063,7 @@ public class TestingSuggestionsPanel extends JPanel {
      */
     private void loadSessionIntoUI(ChatSession session) {
         // Clear current UI
-        suggestionsArea.setText("");
+        conversationPane.clear();
         conversationHistory.clear();
         
         // NOTE: We DON'T clear testingSteps here anymore - they're stored per-session!
@@ -2111,20 +2073,7 @@ public class TestingSuggestionsPanel extends JPanel {
         IHttpRequestResponse sessionRequest = session.getRequestResponse();
         if (sessionRequest != null) {
             this.currentRequest = sessionRequest;
-            
-            // Display request
-            String reqText = HttpMessageParser.requestToText(helpers, sessionRequest.getRequest());
-            requestArea.setText(reqText);
-            requestArea.setCaretPosition(0);
-            
-            // Display response
-            if (sessionRequest.getResponse() != null) {
-                String respText = HttpMessageParser.responseToText(helpers, sessionRequest.getResponse());
-                responseArea.setText(respText);
-                responseArea.setCaretPosition(0);
-            } else {
-                responseArea.setText("(No response captured)");
-            }
+            httpMessageViewer.setHttpMessage(sessionRequest.getRequest(), sessionRequest.getResponse());
         }
         
         // Load session messages into UI
@@ -2144,11 +2093,6 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Update status
         statusLabel.setText("Loaded session: " + session.getSessionTitle());
-        
-        // Show interactive chat panel
-        if (interactiveChatPanel != null) {
-            interactiveChatPanel.setVisible(true);
-        }
         
         callbacks.printOutput("[VISTA] Loaded session: " + session.getSessionId());
         callbacks.printOutput("[VISTA] Session has " + session.getAttachedRequestCount() + " attached requests");

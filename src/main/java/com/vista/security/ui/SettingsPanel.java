@@ -206,7 +206,7 @@ public class SettingsPanel extends JPanel {
         JPanel backupPanel = createSection("Data Backup & Restore");
         backupPanel.setMaximumSize(new Dimension(600, 280));
         
-        JLabel backupInfo = new JLabel("<html>Export all VISTA data (traffic, findings, templates, payloads, sessions, AI config) to a backup folder, or restore from a previous backup.</html>");
+        JLabel backupInfo = new JLabel("Export all VISTA data (traffic, findings, templates, payloads, sessions, AI config) to a backup folder, or restore from a previous backup.");
         backupInfo.setFont(VistaTheme.FONT_SMALL);
         backupInfo.setForeground(VistaTheme.TEXT_SECONDARY);
         JPanel backupInfoRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
@@ -230,7 +230,7 @@ public class SettingsPanel extends JPanel {
         backupBtnRow.add(importBtn);
         backupPanel.add(backupBtnRow);
         
-        JLabel backupNote = new JLabel("<html><i>💡 Backups include: traffic logs, exploit findings, custom templates,<br>&nbsp;&nbsp;&nbsp;&nbsp;payload libraries, chat sessions, and AI configuration.</i></html>");
+        JLabel backupNote = new JLabel("💡 Backups include: traffic logs, exploit findings, custom templates, payload libraries, chat sessions, and AI configuration.");
         backupNote.setFont(VistaTheme.FONT_SMALL);
         backupNote.setForeground(VistaTheme.TEXT_MUTED);
         JPanel backupNoteRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));

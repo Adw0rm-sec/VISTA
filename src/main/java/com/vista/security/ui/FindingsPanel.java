@@ -28,8 +28,7 @@ public class FindingsPanel extends JPanel {
     private final DefaultTableModel tableModel;
     private final JTable findingsTable;
     private final JTextArea detailsArea;
-    private final JTextArea requestArea;
-    private final JTextArea responseArea;
+    private final HttpMessageViewer httpViewer;
     private final JLabel statsLabel;
 
     public FindingsPanel(IBurpExtenderCallbacks callbacks) {
@@ -45,8 +44,7 @@ public class FindingsPanel extends JPanel {
         };
         this.findingsTable = new JTable(tableModel);
         this.detailsArea = new JTextArea();
-        this.requestArea = new JTextArea();
-        this.responseArea = new JTextArea();
+        this.httpViewer = new HttpMessageViewer();
         this.statsLabel = new JLabel("Findings: 0");
         
         setLayout(new BorderLayout(8, 8));
@@ -99,14 +97,9 @@ public class FindingsPanel extends JPanel {
         Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
         detailsArea.setFont(monoFont);
         detailsArea.setEditable(false);
-        requestArea.setFont(monoFont);
-        requestArea.setEditable(false);
-        responseArea.setFont(monoFont);
-        responseArea.setEditable(false);
         
         detailsTabs.addTab("Details", new JScrollPane(detailsArea));
-        detailsTabs.addTab("Request", new JScrollPane(requestArea));
-        detailsTabs.addTab("Response", new JScrollPane(responseArea));
+        detailsTabs.addTab("Request / Response", httpViewer);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScroll, detailsTabs);
         splitPane.setResizeWeight(0.4);
@@ -203,19 +196,8 @@ public class FindingsPanel extends JPanel {
         detailsArea.setText(finding.getDetailedReport());
         detailsArea.setCaretPosition(0);
         
-        if (finding.getRequest() != null) {
-            requestArea.setText(new String(finding.getRequest(), java.nio.charset.StandardCharsets.UTF_8));
-            requestArea.setCaretPosition(0);
-        } else {
-            requestArea.setText("(No request data)");
-        }
-        
-        if (finding.getResponse() != null) {
-            responseArea.setText(new String(finding.getResponse(), java.nio.charset.StandardCharsets.UTF_8));
-            responseArea.setCaretPosition(0);
-        } else {
-            responseArea.setText("(No response data)");
-        }
+        // Show request/response in professional HttpMessageViewer
+        httpViewer.setHttpMessage(finding.getRequest(), finding.getResponse());
     }
 
     private void markVerified() {

@@ -43,14 +43,36 @@ public class HttpMessageViewer extends JPanel {
     private int currentResponseResultIndex = -1;
     private JTextPane currentSearchPane = null;
     
-    // Color scheme (Burp Suite inspired)
-    private static final Color HEADER_COLOR = new Color(0, 0, 200);        // Blue for headers
-    private static final Color STATUS_SUCCESS_COLOR = new Color(0, 150, 0); // Green for 2xx
-    private static final Color STATUS_ERROR_COLOR = new Color(200, 0, 0);   // Red for 4xx/5xx
-    private static final Color BODY_COLOR = Color.BLACK;                    // Black for body
-    private static final Color BACKGROUND_COLOR = new Color(250, 250, 250); // Light gray background
-    private static final Color SEARCH_HIGHLIGHT_COLOR = new Color(255, 255, 0); // Yellow for search results
-    private static final Color CURRENT_SEARCH_COLOR = new Color(255, 165, 0);   // Orange for current result
+    // Color scheme (Burp Suite inspired — professional HTTP display)
+    private static final Color HTTP_METHOD_COLOR     = new Color(59, 130, 246);    // Blue — GET, POST, PUT
+    private static final Color HTTP_PATH_COLOR       = new Color(15, 23, 42);      // Dark — /api/users
+    private static final Color HTTP_VERSION_COLOR    = new Color(100, 116, 139);   // Gray — HTTP/1.1
+    private static final Color HEADER_NAME_COLOR     = new Color(147, 51, 234);    // Purple — header names
+    private static final Color HEADER_VALUE_COLOR    = new Color(15, 23, 42);      // Dark — header values
+    private static final Color HEADER_COLON_COLOR    = new Color(100, 116, 139);   // Gray — colon separator
+    private static final Color PARAM_NAME_COLOR      = new Color(234, 88, 12);     // Orange — parameter names
+    private static final Color PARAM_VALUE_COLOR     = new Color(22, 163, 74);     // Green — parameter values
+    private static final Color PARAM_SEPARATOR_COLOR = new Color(148, 163, 184);   // Gray — &, =
+    private static final Color STATUS_SUCCESS_COLOR  = new Color(22, 163, 74);     // Green for 2xx
+    private static final Color STATUS_REDIRECT_COLOR = new Color(202, 138, 4);     // Yellow for 3xx
+    private static final Color STATUS_CLIENT_COLOR   = new Color(234, 88, 12);     // Orange for 4xx
+    private static final Color STATUS_ERROR_COLOR    = new Color(220, 38, 38);     // Red for 5xx
+    private static final Color BODY_COLOR            = new Color(15, 23, 42);      // Dark — body text
+    private static final Color BACKGROUND_COLOR      = new Color(250, 250, 250);   // Light gray background
+    private static final Color SEARCH_HIGHLIGHT_COLOR = new Color(255, 255, 0);    // Yellow for search results
+    private static final Color CURRENT_SEARCH_COLOR   = new Color(255, 165, 0);    // Orange for current result
+    
+    // JSON/XML pretty-print colors
+    private static final Color JSON_KEY_COLOR        = new Color(147, 51, 234);    // Purple — JSON keys
+    private static final Color JSON_STRING_COLOR     = new Color(22, 163, 74);     // Green — string values
+    private static final Color JSON_NUMBER_COLOR     = new Color(59, 130, 246);    // Blue — numbers
+    private static final Color JSON_BOOL_COLOR       = new Color(234, 88, 12);     // Orange — true/false/null
+    private static final Color JSON_BRACE_COLOR      = new Color(100, 116, 139);   // Gray — { } [ ]
+    private static final Color XML_TAG_COLOR         = new Color(59, 130, 246);    // Blue — <tag>
+    private static final Color XML_ATTR_NAME_COLOR   = new Color(234, 88, 12);     // Orange — attribute names
+    private static final Color XML_ATTR_VALUE_COLOR  = new Color(22, 163, 74);     // Green — attribute values
+    private static final Color XML_CONTENT_COLOR     = new Color(15, 23, 42);      // Dark — text content
+    private static final Color HTML_TAG_COLOR        = new Color(59, 130, 246);    // Blue — HTML tags
     
     /**
      * Inner class to store search result positions.
@@ -457,6 +479,14 @@ public class HttpMessageViewer extends JPanel {
         pane.setFont(VistaTheme.FONT_MONO);
         pane.setMargin(new Insets(4, 6, 4, 6));
         
+        // CRITICAL: Set caret update policy to NEVER_UPDATE so that
+        // document changes (insertString) don't auto-scroll the viewport.
+        // Without this, the caret chases every insertString call during
+        // displayRequest()/displayResponse(), causing the pane to jump
+        // to the end and then snap back to 0 — making user scroll impossible.
+        javax.swing.text.DefaultCaret caret = (javax.swing.text.DefaultCaret) pane.getCaret();
+        caret.setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);
+        
         return pane;
     }
     
@@ -479,13 +509,25 @@ public class HttpMessageViewer extends JPanel {
         return panel;
     }
     
+    // Track currently displayed message to avoid redundant re-renders
+    // (which cause scroll position reset when table selection is restored)
+    private int currentMessageHash = 0;
+    
     /**
      * Sets the HTTP request and response to display.
+     * Skips re-rendering if the same message is already displayed (prevents scroll reset).
      * 
      * @param request Raw HTTP request bytes
      * @param response Raw HTTP response bytes
      */
     public void setHttpMessage(byte[] request, byte[] response) {
+        // Compute hash to detect if this is the same message already displayed
+        int newHash = java.util.Arrays.hashCode(request) * 31 + java.util.Arrays.hashCode(response);
+        if (newHash == currentMessageHash && currentMessageHash != 0) {
+            return; // Same message — don't re-render, preserve scroll position
+        }
+        currentMessageHash = newHash;
+        
         if (request != null && request.length > 0) {
             String requestStr = new String(request);
             displayRequest(requestStr);
@@ -506,7 +548,9 @@ public class HttpMessageViewer extends JPanel {
     }
     
     /**
-     * Displays HTTP request with syntax highlighting.
+     * Displays HTTP request with Burp-style syntax highlighting.
+     * Colors: method (blue), path (dark), version (gray), header names (purple),
+     * header values (dark), parameters (orange/green), body (dark).
      */
     private void displayRequest(String request) {
         StyledDocument doc = requestPane.getStyledDocument();
@@ -528,27 +572,29 @@ public class HttpMessageViewer extends JPanel {
                 }
                 
                 if (!inBody) {
-                    // First line (request line) - bold blue
                     if (i == 0) {
-                        SimpleAttributeSet attrs = new SimpleAttributeSet();
-                        StyleConstants.setForeground(attrs, HEADER_COLOR);
-                        StyleConstants.setBold(attrs, true);
-                        doc.insertString(doc.getLength(), line + "\n", attrs);
+                        // Request line: GET /path?a=b HTTP/1.1
+                        renderRequestLine(doc, line);
                     } else {
-                        // Header lines - blue
-                        SimpleAttributeSet attrs = new SimpleAttributeSet();
-                        StyleConstants.setForeground(attrs, HEADER_COLOR);
-                        doc.insertString(doc.getLength(), line + "\n", attrs);
+                        // Header lines: Name: Value
+                        renderHeaderLine(doc, line);
                     }
                 } else {
-                    // Body - black
-                    SimpleAttributeSet attrs = new SimpleAttributeSet();
-                    StyleConstants.setForeground(attrs, BODY_COLOR);
-                    doc.insertString(doc.getLength(), line + "\n", attrs);
+                    // Body — check for form-encoded parameters
+                    if (line.contains("=") && !line.contains("<") && !line.contains("{")) {
+                        renderQueryString(doc, line);
+                        doc.insertString(doc.getLength(), "\n", null);
+                    } else {
+                        // Regular body text
+                        SimpleAttributeSet attrs = new SimpleAttributeSet();
+                        StyleConstants.setForeground(attrs, BODY_COLOR);
+                        doc.insertString(doc.getLength(), line + "\n", attrs);
+                    }
                 }
             }
             
-            requestPane.setCaretPosition(0);
+            // Scroll to top after document is fully built
+            SwingUtilities.invokeLater(() -> requestPane.setCaretPosition(0));
             
         } catch (BadLocationException e) {
             requestPane.setText(request);
@@ -556,7 +602,126 @@ public class HttpMessageViewer extends JPanel {
     }
     
     /**
-     * Displays HTTP response with syntax highlighting.
+     * Renders the HTTP request line with color-coded method, path, query params, and version.
+     * Example: GET /api/users?id=123&name=test HTTP/1.1
+     */
+    private void renderRequestLine(StyledDocument doc, String line) throws BadLocationException {
+        String[] parts = line.split(" ", 3);
+        
+        // Method (blue, bold)
+        SimpleAttributeSet methodAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(methodAttrs, HTTP_METHOD_COLOR);
+        StyleConstants.setBold(methodAttrs, true);
+        doc.insertString(doc.getLength(), parts.length > 0 ? parts[0] : "", methodAttrs);
+        doc.insertString(doc.getLength(), " ", null);
+        
+        // Path + query string
+        if (parts.length > 1) {
+            String pathPart = parts[1];
+            int queryIdx = pathPart.indexOf('?');
+            
+            if (queryIdx >= 0) {
+                // Path before query
+                SimpleAttributeSet pathAttrs = new SimpleAttributeSet();
+                StyleConstants.setForeground(pathAttrs, HTTP_PATH_COLOR);
+                StyleConstants.setBold(pathAttrs, true);
+                doc.insertString(doc.getLength(), pathPart.substring(0, queryIdx), pathAttrs);
+                
+                // "?" separator
+                SimpleAttributeSet sepAttrs = new SimpleAttributeSet();
+                StyleConstants.setForeground(sepAttrs, PARAM_SEPARATOR_COLOR);
+                doc.insertString(doc.getLength(), "?", sepAttrs);
+                
+                // Query parameters
+                renderQueryString(doc, pathPart.substring(queryIdx + 1));
+            } else {
+                // Just path, no query
+                SimpleAttributeSet pathAttrs = new SimpleAttributeSet();
+                StyleConstants.setForeground(pathAttrs, HTTP_PATH_COLOR);
+                StyleConstants.setBold(pathAttrs, true);
+                doc.insertString(doc.getLength(), pathPart, pathAttrs);
+            }
+            doc.insertString(doc.getLength(), " ", null);
+        }
+        
+        // HTTP version (gray)
+        if (parts.length > 2) {
+            SimpleAttributeSet verAttrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(verAttrs, HTTP_VERSION_COLOR);
+            doc.insertString(doc.getLength(), parts[2].trim(), verAttrs);
+        }
+        
+        doc.insertString(doc.getLength(), "\n", null);
+    }
+    
+    /**
+     * Renders a query string with color-coded parameter names and values.
+     * Example: id=123&name=test → id (orange) = (gray) 123 (green) & (gray) name (orange) = (gray) test (green)
+     */
+    private void renderQueryString(StyledDocument doc, String queryString) throws BadLocationException {
+        SimpleAttributeSet nameAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(nameAttrs, PARAM_NAME_COLOR);
+        StyleConstants.setBold(nameAttrs, true);
+        
+        SimpleAttributeSet valueAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(valueAttrs, PARAM_VALUE_COLOR);
+        
+        SimpleAttributeSet sepAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(sepAttrs, PARAM_SEPARATOR_COLOR);
+        
+        String[] params = queryString.split("&");
+        for (int p = 0; p < params.length; p++) {
+            if (p > 0) {
+                doc.insertString(doc.getLength(), "&", sepAttrs);
+            }
+            
+            int eqIdx = params[p].indexOf('=');
+            if (eqIdx >= 0) {
+                doc.insertString(doc.getLength(), params[p].substring(0, eqIdx), nameAttrs);
+                doc.insertString(doc.getLength(), "=", sepAttrs);
+                doc.insertString(doc.getLength(), params[p].substring(eqIdx + 1), valueAttrs);
+            } else {
+                doc.insertString(doc.getLength(), params[p], nameAttrs);
+            }
+        }
+    }
+    
+    /**
+     * Renders a header line with color-coded name and value.
+     * Example: Content-Type: application/json → Content-Type (purple) : (gray) application/json (dark)
+     */
+    private void renderHeaderLine(StyledDocument doc, String line) throws BadLocationException {
+        int colonIdx = line.indexOf(':');
+        
+        if (colonIdx > 0) {
+            // Header name (purple, bold)
+            SimpleAttributeSet nameAttrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(nameAttrs, HEADER_NAME_COLOR);
+            StyleConstants.setBold(nameAttrs, true);
+            doc.insertString(doc.getLength(), line.substring(0, colonIdx), nameAttrs);
+            
+            // Colon (gray)
+            SimpleAttributeSet colonAttrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(colonAttrs, HEADER_COLON_COLOR);
+            doc.insertString(doc.getLength(), ":", colonAttrs);
+            
+            // Value (dark)
+            SimpleAttributeSet valueAttrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(valueAttrs, HEADER_VALUE_COLOR);
+            doc.insertString(doc.getLength(), line.substring(colonIdx + 1) + "\n", valueAttrs);
+        } else {
+            // Fallback — plain header
+            SimpleAttributeSet attrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(attrs, HEADER_NAME_COLOR);
+            doc.insertString(doc.getLength(), line + "\n", attrs);
+        }
+    }
+    
+    /**
+     * Displays HTTP response with Burp-style syntax highlighting and pretty-formatted body.
+     * Status line: green (2xx), yellow (3xx), orange (4xx), red (5xx).
+     * Headers: purple names, dark values.
+     * Body: Pretty-formatted JSON/HTML/XML with syntax coloring.
      */
     private void displayResponse(String response) {
         StyledDocument doc = responsePane.getStyledDocument();
@@ -566,6 +731,8 @@ public class HttpMessageViewer extends JPanel {
             
             String[] lines = response.split("\n", -1);
             boolean inBody = false;
+            int bodyStartIdx = 0;
+            String contentType = "";
             
             for (int i = 0; i < lines.length; i++) {
                 String line = lines[i];
@@ -573,6 +740,7 @@ public class HttpMessageViewer extends JPanel {
                 // Detect body start (empty line after headers)
                 if (!inBody && line.trim().isEmpty() && i > 0) {
                     inBody = true;
+                    bodyStartIdx = i + 1;
                     doc.insertString(doc.getLength(), line + "\n", null);
                     continue;
                 }
@@ -580,37 +748,535 @@ public class HttpMessageViewer extends JPanel {
                 if (!inBody) {
                     // First line (status line) - colored based on status code
                     if (i == 0) {
-                        SimpleAttributeSet attrs = new SimpleAttributeSet();
-                        
-                        // Extract status code
-                        int statusCode = extractStatusCode(line);
-                        if (statusCode >= 200 && statusCode < 300) {
-                            StyleConstants.setForeground(attrs, STATUS_SUCCESS_COLOR);
-                        } else if (statusCode >= 400) {
-                            StyleConstants.setForeground(attrs, STATUS_ERROR_COLOR);
-                        } else {
-                            StyleConstants.setForeground(attrs, HEADER_COLOR);
-                        }
-                        StyleConstants.setBold(attrs, true);
-                        doc.insertString(doc.getLength(), line + "\n", attrs);
+                        renderStatusLine(doc, line);
                     } else {
-                        // Header lines - blue
-                        SimpleAttributeSet attrs = new SimpleAttributeSet();
-                        StyleConstants.setForeground(attrs, HEADER_COLOR);
-                        doc.insertString(doc.getLength(), line + "\n", attrs);
+                        // Header lines — extract Content-Type for pretty formatting
+                        String lowerLine = line.toLowerCase();
+                        if (lowerLine.startsWith("content-type:")) {
+                            contentType = line.substring(13).trim().toLowerCase();
+                        }
+                        renderHeaderLine(doc, line);
                     }
                 } else {
-                    // Body - black
-                    SimpleAttributeSet attrs = new SimpleAttributeSet();
-                    StyleConstants.setForeground(attrs, BODY_COLOR);
-                    doc.insertString(doc.getLength(), line + "\n", attrs);
+                    // Body — we hit the first body line, now render entire body at once
+                    // Collect remaining body
+                    StringBuilder bodyBuilder = new StringBuilder();
+                    for (int j = i; j < lines.length; j++) {
+                        if (j > i) bodyBuilder.append("\n");
+                        bodyBuilder.append(lines[j]);
+                    }
+                    String body = bodyBuilder.toString();
+                    
+                    renderBody(doc, body, contentType);
+                    break; // We processed all remaining lines
                 }
             }
             
-            responsePane.setCaretPosition(0);
+            // Scroll to top after document is fully built
+            SwingUtilities.invokeLater(() -> responsePane.setCaretPosition(0));
             
         } catch (BadLocationException e) {
             responsePane.setText(response);
+        }
+    }
+    
+    /**
+     * Renders the HTTP status line with color based on status code.
+     * Example: HTTP/1.1 200 OK → version (gray) + status (green, bold)
+     */
+    private void renderStatusLine(StyledDocument doc, String line) throws BadLocationException {
+        int statusCode = extractStatusCode(line);
+        
+        Color statusColor;
+        if (statusCode >= 200 && statusCode < 300) {
+            statusColor = STATUS_SUCCESS_COLOR;
+        } else if (statusCode >= 300 && statusCode < 400) {
+            statusColor = STATUS_REDIRECT_COLOR;
+        } else if (statusCode >= 400 && statusCode < 500) {
+            statusColor = STATUS_CLIENT_COLOR;
+        } else if (statusCode >= 500) {
+            statusColor = STATUS_ERROR_COLOR;
+        } else {
+            statusColor = HTTP_VERSION_COLOR;
+        }
+        
+        // Find where version ends and status begins
+        String[] parts = line.split(" ", 3);
+        
+        // HTTP version (gray)
+        SimpleAttributeSet verAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(verAttrs, HTTP_VERSION_COLOR);
+        doc.insertString(doc.getLength(), parts.length > 0 ? parts[0] : "", verAttrs);
+        doc.insertString(doc.getLength(), " ", null);
+        
+        // Status code + reason (colored, bold)
+        SimpleAttributeSet statusAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(statusAttrs, statusColor);
+        StyleConstants.setBold(statusAttrs, true);
+        String statusPart = parts.length > 1 ? parts[1] : "";
+        if (parts.length > 2) statusPart += " " + parts[2].trim();
+        doc.insertString(doc.getLength(), statusPart + "\n", statusAttrs);
+    }
+    
+    /**
+     * Renders the response body with pretty formatting based on content type.
+     * Supports: JSON (indented + colored), HTML/XML (indented + tag coloring), plain text.
+     */
+    private void renderBody(StyledDocument doc, String body, String contentType) throws BadLocationException {
+        String trimmedBody = body.trim();
+        
+        if (trimmedBody.isEmpty()) {
+            SimpleAttributeSet attrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(attrs, VistaTheme.TEXT_MUTED);
+            StyleConstants.setItalic(attrs, true);
+            doc.insertString(doc.getLength(), "(empty body)\n", attrs);
+            return;
+        }
+        
+        // Auto-detect format from content or content-type
+        boolean isJson = contentType.contains("json") || 
+                         (trimmedBody.startsWith("{") || trimmedBody.startsWith("["));
+        boolean isXml = contentType.contains("xml") && !contentType.contains("html");
+        boolean isHtml = contentType.contains("html") || 
+                         trimmedBody.toLowerCase().startsWith("<!doctype") ||
+                         trimmedBody.toLowerCase().startsWith("<html");
+        
+        if (isJson) {
+            renderJsonBody(doc, trimmedBody);
+        } else if (isXml) {
+            renderXmlHtmlBody(doc, trimmedBody, false);
+        } else if (isHtml) {
+            renderXmlHtmlBody(doc, trimmedBody, true);
+        } else {
+            // Plain text body
+            SimpleAttributeSet attrs = new SimpleAttributeSet();
+            StyleConstants.setForeground(attrs, BODY_COLOR);
+            doc.insertString(doc.getLength(), body + "\n", attrs);
+        }
+    }
+    
+    /**
+     * Pretty-prints and syntax-highlights a JSON body.
+     * Colors: keys (purple), strings (green), numbers (blue), booleans (orange), braces (gray).
+     */
+    private void renderJsonBody(StyledDocument doc, String json) throws BadLocationException {
+        // Pretty-format first
+        String pretty = prettyFormatJson(json);
+        
+        // Now render with syntax highlighting
+        SimpleAttributeSet keyAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(keyAttrs, JSON_KEY_COLOR);
+        StyleConstants.setBold(keyAttrs, true);
+        
+        SimpleAttributeSet stringAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(stringAttrs, JSON_STRING_COLOR);
+        
+        SimpleAttributeSet numberAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(numberAttrs, JSON_NUMBER_COLOR);
+        
+        SimpleAttributeSet boolAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(boolAttrs, JSON_BOOL_COLOR);
+        StyleConstants.setBold(boolAttrs, true);
+        
+        SimpleAttributeSet braceAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(braceAttrs, JSON_BRACE_COLOR);
+        
+        SimpleAttributeSet defaultAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(defaultAttrs, BODY_COLOR);
+        
+        // Simple state machine to color JSON tokens
+        int i = 0;
+        int len = pretty.length();
+        boolean inString = false;
+        boolean isKey = false;
+        boolean afterColon = false;
+        
+        while (i < len) {
+            char c = pretty.charAt(i);
+            
+            if (c == '"' && !isEscaped(pretty, i)) {
+                if (!inString) {
+                    // Start of string — determine if key or value
+                    inString = true;
+                    isKey = !afterColon;
+                    
+                    // Find end of string
+                    int end = findStringEnd(pretty, i + 1);
+                    String str = pretty.substring(i, end + 1);
+                    
+                    doc.insertString(doc.getLength(), str, isKey ? keyAttrs : stringAttrs);
+                    i = end + 1;
+                    inString = false;
+                    afterColon = false;
+                    continue;
+                }
+            } else if (c == ':') {
+                afterColon = true;
+                doc.insertString(doc.getLength(), ": ", braceAttrs);
+                i++;
+                // Skip whitespace after colon
+                while (i < len && pretty.charAt(i) == ' ') i++;
+                continue;
+            } else if (c == '{' || c == '}' || c == '[' || c == ']') {
+                afterColon = false;
+                doc.insertString(doc.getLength(), String.valueOf(c), braceAttrs);
+                i++;
+                continue;
+            } else if (c == ',') {
+                afterColon = false;
+                doc.insertString(doc.getLength(), ",", braceAttrs);
+                i++;
+                continue;
+            } else if (Character.isDigit(c) || (c == '-' && i + 1 < len && Character.isDigit(pretty.charAt(i + 1)))) {
+                // Number
+                int end = i + 1;
+                while (end < len && (Character.isDigit(pretty.charAt(end)) || pretty.charAt(end) == '.' || pretty.charAt(end) == 'e' || pretty.charAt(end) == 'E' || pretty.charAt(end) == '+' || pretty.charAt(end) == '-')) {
+                    end++;
+                }
+                doc.insertString(doc.getLength(), pretty.substring(i, end), numberAttrs);
+                afterColon = false;
+                i = end;
+                continue;
+            } else if (i + 4 <= len && pretty.substring(i, i + 4).equals("true")) {
+                doc.insertString(doc.getLength(), "true", boolAttrs);
+                afterColon = false;
+                i += 4;
+                continue;
+            } else if (i + 5 <= len && pretty.substring(i, i + 5).equals("false")) {
+                doc.insertString(doc.getLength(), "false", boolAttrs);
+                afterColon = false;
+                i += 5;
+                continue;
+            } else if (i + 4 <= len && pretty.substring(i, i + 4).equals("null")) {
+                doc.insertString(doc.getLength(), "null", boolAttrs);
+                afterColon = false;
+                i += 4;
+                continue;
+            }
+            
+            // Default character (whitespace, newlines)
+            doc.insertString(doc.getLength(), String.valueOf(c), defaultAttrs);
+            if (c == '\n') afterColon = false;
+            i++;
+        }
+    }
+    
+    /**
+     * Pretty-prints and syntax-highlights HTML/XML body.
+     * Tags in blue, attribute names in orange, attribute values in green, content in dark.
+     */
+    private void renderXmlHtmlBody(StyledDocument doc, String body, boolean isHtml) throws BadLocationException {
+        // Pretty-format first
+        String pretty = prettyFormatXmlHtml(body);
+        
+        SimpleAttributeSet tagAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(tagAttrs, isHtml ? HTML_TAG_COLOR : XML_TAG_COLOR);
+        StyleConstants.setBold(tagAttrs, true);
+        
+        SimpleAttributeSet attrNameAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(attrNameAttrs, XML_ATTR_NAME_COLOR);
+        
+        SimpleAttributeSet attrValueAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(attrValueAttrs, XML_ATTR_VALUE_COLOR);
+        
+        SimpleAttributeSet contentAttrs = new SimpleAttributeSet();
+        StyleConstants.setForeground(contentAttrs, XML_CONTENT_COLOR);
+        
+        // Simple parser: split on < and > to identify tags vs content
+        int i = 0;
+        int len = pretty.length();
+        
+        while (i < len) {
+            char c = pretty.charAt(i);
+            
+            if (c == '<') {
+                // Find end of tag
+                int end = pretty.indexOf('>', i);
+                if (end < 0) end = len - 1;
+                
+                String tag = pretty.substring(i, end + 1);
+                renderTag(doc, tag, tagAttrs, attrNameAttrs, attrValueAttrs);
+                i = end + 1;
+            } else {
+                // Content between tags
+                int nextTag = pretty.indexOf('<', i);
+                if (nextTag < 0) nextTag = len;
+                
+                String content = pretty.substring(i, nextTag);
+                if (!content.isBlank()) {
+                    doc.insertString(doc.getLength(), content, contentAttrs);
+                } else {
+                    doc.insertString(doc.getLength(), content, null);
+                }
+                i = nextTag;
+            }
+        }
+    }
+    
+    /**
+     * Renders a single HTML/XML tag with colored attributes.
+     */
+    private void renderTag(StyledDocument doc, String tag, 
+                          SimpleAttributeSet tagAttrs, SimpleAttributeSet attrNameAttrs,
+                          SimpleAttributeSet attrValueAttrs) throws BadLocationException {
+        // Simple approach: find first space (tag name end), then parse attributes
+        int spaceIdx = -1;
+        for (int i = 1; i < tag.length(); i++) {
+            if (Character.isWhitespace(tag.charAt(i))) {
+                spaceIdx = i;
+                break;
+            }
+        }
+        
+        if (spaceIdx < 0 || tag.startsWith("<!") || tag.startsWith("<?")) {
+            // No attributes — render whole tag
+            doc.insertString(doc.getLength(), tag, tagAttrs);
+            return;
+        }
+        
+        // Tag name (e.g., <div)
+        doc.insertString(doc.getLength(), tag.substring(0, spaceIdx), tagAttrs);
+        
+        // Attributes part
+        String attrPart = tag.substring(spaceIdx, tag.length() - (tag.endsWith("/>") ? 2 : 1));
+        
+        // Simple attribute parser
+        int i = 0;
+        int attrLen = attrPart.length();
+        while (i < attrLen) {
+            char c = attrPart.charAt(i);
+            
+            if (Character.isWhitespace(c)) {
+                doc.insertString(doc.getLength(), " ", null);
+                i++;
+            } else if (c == '=') {
+                doc.insertString(doc.getLength(), "=", tagAttrs);
+                i++;
+            } else if (c == '"' || c == '\'') {
+                // Attribute value
+                char quote = c;
+                int end = attrPart.indexOf(quote, i + 1);
+                if (end < 0) end = attrLen - 1;
+                doc.insertString(doc.getLength(), attrPart.substring(i, end + 1), attrValueAttrs);
+                i = end + 1;
+            } else {
+                // Attribute name
+                int end = i;
+                while (end < attrLen && !Character.isWhitespace(attrPart.charAt(end)) && attrPart.charAt(end) != '=') {
+                    end++;
+                }
+                doc.insertString(doc.getLength(), attrPart.substring(i, end), attrNameAttrs);
+                i = end;
+            }
+        }
+        
+        // Closing bracket
+        doc.insertString(doc.getLength(), tag.endsWith("/>") ? "/>" : ">", tagAttrs);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // Pretty-Format Helpers
+    // ═══════════════════════════════════════════════════════════════
+    
+    /**
+     * Pretty-formats a JSON string with proper indentation.
+     */
+    private String prettyFormatJson(String json) {
+        if (json == null || json.isEmpty()) return json;
+        
+        StringBuilder sb = new StringBuilder();
+        int indent = 0;
+        boolean inString = false;
+        
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            
+            if (c == '"' && !isEscaped(json, i)) {
+                inString = !inString;
+                sb.append(c);
+            } else if (inString) {
+                sb.append(c);
+            } else if (c == '{' || c == '[') {
+                sb.append(c);
+                // Check if empty object/array
+                int next = skipWhitespace(json, i + 1);
+                if (next < json.length() && (json.charAt(next) == '}' || json.charAt(next) == ']')) {
+                    sb.append(json.charAt(next));
+                    i = next;
+                    continue;
+                }
+                indent++;
+                sb.append('\n');
+                appendIndent(sb, indent);
+            } else if (c == '}' || c == ']') {
+                indent--;
+                sb.append('\n');
+                appendIndent(sb, indent);
+                sb.append(c);
+            } else if (c == ',') {
+                sb.append(",\n");
+                appendIndent(sb, indent);
+            } else if (c == ':') {
+                sb.append(": ");
+            } else if (!Character.isWhitespace(c)) {
+                sb.append(c);
+            }
+        }
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Pretty-formats HTML/XML with proper indentation.
+     * Handles &lt;style&gt; and &lt;script&gt; blocks as raw content
+     * (does not try to parse CSS/JS as HTML tags).
+     */
+    private String prettyFormatXmlHtml(String xml) {
+        if (xml == null || xml.isEmpty()) return xml;
+        
+        StringBuilder sb = new StringBuilder();
+        int indent = 0;
+        int i = 0;
+        
+        // Track whether we're inside a <style> or <script> raw block
+        boolean inRawBlock = false;
+        String rawClosingTag = "";
+        
+        while (i < xml.length()) {
+            if (inRawBlock) {
+                // Inside <style> or <script>: find the matching closing tag
+                int closeIdx = xml.toLowerCase().indexOf(rawClosingTag, i);
+                if (closeIdx < 0) {
+                    // No closing tag found — dump the rest as raw content
+                    String remaining = xml.substring(i).trim();
+                    if (!remaining.isEmpty()) {
+                        // Indent each line of the raw content
+                        for (String rawLine : remaining.split("\n")) {
+                            String trimmedRaw = rawLine.trim();
+                            if (!trimmedRaw.isEmpty()) {
+                                sb.append('\n');
+                                appendIndent(sb, indent);
+                                sb.append(trimmedRaw);
+                            }
+                        }
+                    }
+                    break;
+                }
+                
+                // Extract raw content between opening and closing tag
+                String rawContent = xml.substring(i, closeIdx);
+                
+                // Output each non-empty line with proper indentation
+                for (String rawLine : rawContent.split("\n")) {
+                    String trimmedRaw = rawLine.trim();
+                    if (!trimmedRaw.isEmpty()) {
+                        sb.append('\n');
+                        appendIndent(sb, indent);
+                        sb.append(trimmedRaw);
+                    }
+                }
+                
+                // Output the closing tag
+                indent = Math.max(0, indent - 1);
+                int closeEnd = xml.indexOf('>', closeIdx);
+                if (closeEnd < 0) closeEnd = xml.length() - 1;
+                String closeTag = xml.substring(closeIdx, closeEnd + 1);
+                sb.append('\n');
+                appendIndent(sb, indent);
+                sb.append(closeTag);
+                
+                i = closeEnd + 1;
+                inRawBlock = false;
+                continue;
+            }
+            
+            if (xml.charAt(i) == '<') {
+                int end = xml.indexOf('>', i);
+                if (end < 0) {
+                    sb.append(xml.substring(i));
+                    break;
+                }
+                
+                String tag = xml.substring(i, end + 1);
+                String trimmedTag = tag.trim();
+                String lowerTag = trimmedTag.toLowerCase();
+                
+                boolean isClosing = trimmedTag.startsWith("</");
+                boolean isSelfClosing = trimmedTag.endsWith("/>");
+                boolean isComment = trimmedTag.startsWith("<!--");
+                boolean isDoctype = trimmedTag.startsWith("<!");
+                boolean isProcessing = trimmedTag.startsWith("<?");
+                
+                if (isClosing) {
+                    indent = Math.max(0, indent - 1);
+                }
+                
+                sb.append('\n');
+                appendIndent(sb, indent);
+                sb.append(tag);
+                
+                if (!isClosing && !isSelfClosing && !isComment && !isDoctype && !isProcessing) {
+                    indent++;
+                }
+                
+                // Check if this is a <style> or <script> opening tag
+                // → treat everything until closing tag as raw content
+                if (!isClosing && !isSelfClosing) {
+                    if (lowerTag.startsWith("<style") || lowerTag.startsWith("<script")) {
+                        inRawBlock = true;
+                        rawClosingTag = lowerTag.startsWith("<style") ? "</style" : "</script";
+                    }
+                }
+                
+                i = end + 1;
+            } else {
+                // Text content
+                int nextTag = xml.indexOf('<', i);
+                if (nextTag < 0) nextTag = xml.length();
+                
+                String content = xml.substring(i, nextTag).trim();
+                if (!content.isEmpty()) {
+                    sb.append(content);
+                }
+                i = nextTag;
+            }
+        }
+        
+        // Remove leading newline
+        String result = sb.toString();
+        if (result.startsWith("\n")) result = result.substring(1);
+        return result;
+    }
+    
+    private boolean isEscaped(String s, int index) {
+        int backslashes = 0;
+        int i = index - 1;
+        while (i >= 0 && s.charAt(i) == '\\') {
+            backslashes++;
+            i--;
+        }
+        return backslashes % 2 != 0;
+    }
+    
+    private int findStringEnd(String s, int start) {
+        for (int i = start; i < s.length(); i++) {
+            if (s.charAt(i) == '"' && !isEscaped(s, i)) {
+                return i;
+            }
+        }
+        return s.length() - 1;
+    }
+    
+    private int skipWhitespace(String s, int start) {
+        while (start < s.length() && Character.isWhitespace(s.charAt(start))) {
+            start++;
+        }
+        return start;
+    }
+    
+    private void appendIndent(StringBuilder sb, int level) {
+        for (int i = 0; i < level; i++) {
+            sb.append("  ");
         }
     }
     

@@ -56,7 +56,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private JButton clearButton;
     private JButton exportButton;
     private JButton manageScopeButton; // Manage scope button
-    private JTabbedPane contentTabbedPane; // Inner tabbed pane for Traffic/Findings
+    private JTabbedPane contentTabbedPane; // Inner tabbed pane for Traffic/Findings/Activity Log
+    private ActivityLogPanel activityLogPanel; // Real-time activity log
     
     // Data
     private final List<TrafficFinding> allFindings;
@@ -176,6 +177,10 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         JPanel findingsPanel = createFindingsPanel();
         contentTabbedPane.addTab("  Findings  ", findingsPanel);
         
+        // Activity Log tab (real-time analysis log)
+        activityLogPanel = new ActivityLogPanel();
+        contentTabbedPane.addTab("  📋 Activity Log  ", activityLogPanel);
+        
         // Add to main panel
         add(contentTabbedPane, BorderLayout.CENTER);
         
@@ -290,6 +295,13 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         customizePromptsButton.setToolTipText("Customize the AI analysis template for HTTP traffic monitoring");
         customizePromptsButton.addActionListener(e -> showPromptCustomizationDialog());
         mainPanel.add(customizePromptsButton, gbc);
+        
+        // AI Scope button — configure which content types and extensions get analyzed
+        gbc.gridx = 9;
+        JButton aiScopeButton = VistaTheme.compactButton("AI Scope");
+        aiScopeButton.setToolTipText("Configure which content types and file extensions are sent for AI analysis");
+        aiScopeButton.addActionListener(e -> showAIScopeDialog());
+        mainPanel.add(aiScopeButton, gbc);
         
         return mainPanel;
     }
@@ -676,6 +688,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             if (analyzer != null) {
                 analyzer.clearAnalyzedUrls(); // Clear URL deduplication cache
             }
+            if (activityLogPanel != null) {
+                activityLogPanel.clearLog();
+            }
             updateFindingsTree();
             updateTrafficTable();
             callbacks.printOutput("[Traffic Monitor] All data cleared (including analyzed URLs cache)");
@@ -742,19 +757,35 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     @Override
     public void onTransactionAdded(HttpTransaction transaction) {
-        // CRITICAL: Check scope FIRST - don't analyze out-of-scope traffic at all
+        // STEP 1: Skip known noise/non-security URLs immediately
+        String url = transaction.getUrl();
+        String noiseReason = getNoiseUrlReason(url);
+        if (noiseReason != null) {
+            if (activityLogPanel != null) {
+                activityLogPanel.logSkipped(url, noiseReason);
+            }
+            return; // Don't waste queue capacity on browser noise
+        }
+        
+        // STEP 2: Check scope — don't analyze out-of-scope traffic at all
         boolean scopeEnabled = scopeManager.isScopeEnabled();
         boolean hasScopeDomains = scopeManager.size() > 0;
-        boolean inScope = scopeManager.isInScope(transaction.getUrl());
+        boolean inScope = scopeManager.isInScope(url);
         
         // SKIP ANALYSIS ENTIRELY if scope is enabled and URL is out of scope
         if (scopeEnabled && hasScopeDomains && !inScope) {
+            if (activityLogPanel != null) {
+                activityLogPanel.logSkipped(transaction.getUrl(), "Out of scope");
+            }
             return; // EARLY RETURN - no analysis at all
         }
         
         // Check if AI is configured
         boolean aiConfigured = isAIConfigured();
         if (!aiConfigured) {
+            if (activityLogPanel != null) {
+                activityLogPanel.logSkipped(transaction.getUrl(), "AI not configured");
+            }
             return;
         }
         
@@ -771,12 +802,19 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         // Submit to queue (non-blocking, handles deduplication)
         boolean queued = queueManager.submitForAnalysis(transaction);
         
-        // Update status
+        // Update status and log
         if (queued) {
+            if (activityLogPanel != null) {
+                activityLogPanel.logQueued(requestCounter, transaction.getMethod(), transaction.getUrl());
+            }
             SwingUtilities.invokeLater(() -> {
                 statsLabel.setText("📥 Queued for analysis [" + queueManager.getStatus() + "] " + 
                     truncateUrl(transaction.getUrl(), 60));
             });
+        } else {
+            if (activityLogPanel != null) {
+                activityLogPanel.logSkipped(transaction.getUrl(), "Duplicate URL — already analyzed");
+            }
         }
     }
     
@@ -786,6 +824,19 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private void handleAnalysisResult(AnalysisQueueManager.AnalysisResult result) {
         if (!result.success) {
             callbacks.printError("[Traffic Monitor] Analysis error: " + result.error);
+            if (activityLogPanel != null && result.transaction != null) {
+                activityLogPanel.logError(result.transaction.getUrl(), result.error);
+            }
+            SwingUtilities.invokeLater(this::updateStats);
+            return;
+        }
+        
+        // If URL was not actually analyzed by AI (non-eligible content type, extension, etc.)
+        if (!result.wasAnalyzed) {
+            String reason = result.skipReason != null ? result.skipReason : "Not eligible for AI analysis";
+            if (activityLogPanel != null && result.transaction != null) {
+                activityLogPanel.logSkipped(result.transaction.getUrl(), reason);
+            }
             SwingUtilities.invokeLater(this::updateStats);
             return;
         }
@@ -830,11 +881,21 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     }
                 }
             }
+            // Log findings to activity log
+            if (activityLogPanel != null && addedCount > 0) {
+                StringBuilder summary = new StringBuilder();
+                for (TrafficFinding f : findings) {
+                    if (summary.length() > 0) summary.append(", ");
+                    summary.append(f.getSeverity()).append(": ").append(f.getType());
+                }
+                activityLogPanel.logFinding(transaction.getUrl(), addedCount, 
+                    summary.toString(), result.duration);
+            }
         } else {
-            // Only log "no issues" for non-trivial URLs (avoid spam)
-            String url = transaction.getUrl();
-            if (!url.contains(".css") && !url.contains(".png") && !url.contains(".svg") && !url.contains(".woff")) {
-                callbacks.printOutput("[Traffic Monitor] ℹ️ No issues found in " + truncateUrl(url, 60));
+            // AI analyzed this URL and found no issues — genuinely clean
+            callbacks.printOutput("[Traffic Monitor] ℹ️ No issues found in " + truncateUrl(transaction.getUrl(), 60));
+            if (activityLogPanel != null) {
+                activityLogPanel.logClean(transaction.getUrl(), result.duration);
             }
         }
         
@@ -860,6 +921,83 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private String truncateUrl(String url, int maxLen) {
         if (url == null) return "";
         return url.length() > maxLen ? url.substring(0, maxLen) + "..." : url;
+    }
+    
+    /**
+     * Check if a URL is "noise" — browser telemetry, analytics, CDN, tracking, etc.
+     * Returns a reason string if noise, null if the URL is potentially interesting.
+     */
+    private static final String[][] NOISE_URL_PATTERNS = {
+        // Browser telemetry & updates
+        {"telemetry.mozilla.org", "Mozilla telemetry"},
+        {"incoming.telemetry.mozilla.org", "Mozilla telemetry"},
+        {"firefox.settings.services.mozilla.com", "Firefox settings sync"},
+        {"push.services.mozilla.com", "Mozilla push services"},
+        {"shavar.services.mozilla.com", "Mozilla safebrowsing"},
+        {"content-signature-2.cdn.mozilla.net", "Mozilla CDN"},
+        {"detectportal.firefox.com", "Firefox captive portal"},
+        {"merino.services.mozilla.com", "Firefox suggestions"},
+        {"contile.services.mozilla.com", "Firefox tiles"},
+        
+        // Google/Chrome telemetry
+        {"clients.google.com/chrome", "Chrome telemetry"},
+        {"update.googleapis.com", "Google updates"},
+        {"safebrowsing.googleapis.com", "Google safebrowsing"},
+        {"accounts.google.com/ListAccounts", "Google account check"},
+        
+        // Analytics & tracking
+        {"google-analytics.com", "Google Analytics"},
+        {"analytics.google.com", "Google Analytics"},
+        {"googletagmanager.com", "Google Tag Manager"},
+        {"doubleclick.net", "Google Ads tracking"},
+        {"facebook.com/tr", "Facebook tracking pixel"},
+        {"connect.facebook.net", "Facebook SDK"},
+        {"bat.bing.com", "Bing tracking"},
+        {"ads.mozilla.org", "Mozilla ads"},
+        
+        // CDN & static assets
+        {"cdn.jsdelivr.net", "CDN static assets"},
+        {"cdnjs.cloudflare.com", "CDN static assets"},
+        {"unpkg.com", "CDN static assets"},
+        {"fonts.googleapis.com", "Google Fonts"},
+        {"fonts.gstatic.com", "Google Fonts"},
+        
+        // YouTube telemetry (non-content)
+        {"youtube.com/youtubei/v1/log_event", "YouTube telemetry"},
+        {"youtube.com/api/stats", "YouTube stats"},
+        {"youtube.com/ptracking", "YouTube tracking"},
+        
+        // Browser internals
+        {"ocsp.digicert.com", "Certificate OCSP check"},
+        {"ocsp.pki.goog", "Certificate OCSP check"},
+        {"crl.microsoft.com", "Certificate CRL check"},
+        {"ctldl.windowsupdate.com", "Windows certificate update"},
+    };
+    
+    private String getNoiseUrlReason(String url) {
+        if (url == null || url.isEmpty()) return null;
+        String lowerUrl = url.toLowerCase();
+        
+        for (String[] pattern : NOISE_URL_PATTERNS) {
+            if (lowerUrl.contains(pattern[0])) {
+                return pattern[1];
+            }
+        }
+        
+        // Skip common static asset URLs by extension in path (before query params)
+        String path = lowerUrl;
+        int queryIdx = path.indexOf('?');
+        if (queryIdx > 0) path = path.substring(0, queryIdx);
+        
+        if (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ||
+            path.endsWith(".gif") || path.endsWith(".svg") || path.endsWith(".ico") ||
+            path.endsWith(".webp") || path.endsWith(".woff") || path.endsWith(".woff2") ||
+            path.endsWith(".ttf") || path.endsWith(".eot") || path.endsWith(".css") ||
+            path.endsWith(".mp4") || path.endsWith(".mp3") || path.endsWith(".pdf")) {
+            return "Static asset";
+        }
+        
+        return null; // Not noise — potentially interesting
     }
     
     @Override
@@ -1883,6 +2021,126 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     /**
      * Show dialog to customize AI prompts for traffic analysis
      */
+    /**
+     * Show AI Analysis Scope dialog — allows user to configure which content types
+     * and file extensions are sent for AI analysis (scoped requests only).
+     */
+    private void showAIScopeDialog() {
+        AIConfigManager config = AIConfigManager.getInstance();
+        
+        JDialog dialog = new JDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this),
+            "AI Analysis Scope — Content Types & Extensions",
+            true
+        );
+        dialog.setSize(620, 460);
+        dialog.setLocationRelativeTo(this);
+        
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        mainPanel.setBackground(VistaTheme.BG_PANEL);
+        
+        // Info label
+        JLabel infoLabel = new JLabel("<html><b>Configure which content types to send for AI analysis and which file extensions to skip.</b><br>"
+            + "Only in-scope requests matching these content types will be analyzed by AI.</html>");
+        infoLabel.setFont(VistaTheme.FONT_SMALL);
+        infoLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        infoLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPanel.add(infoLabel);
+        mainPanel.add(Box.createVerticalStrut(12));
+        
+        // ── Eligible Content Types ──
+        JLabel ctTitle = new JLabel("✅ Eligible Content Types (comma-separated):");
+        ctTitle.setFont(VistaTheme.FONT_LABEL);
+        ctTitle.setForeground(VistaTheme.ACCENT);
+        ctTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPanel.add(ctTitle);
+        mainPanel.add(Box.createVerticalStrut(4));
+        
+        JTextArea ctArea = new JTextArea(3, 50);
+        ctArea.setFont(VistaTheme.FONT_MONO_SMALL);
+        ctArea.setLineWrap(true);
+        ctArea.setWrapStyleWord(true);
+        ctArea.setText(config.getEligibleContentTypes());
+        ctArea.setToolTipText("Content types to analyze with AI (matched using 'contains'). E.g.: text/html, application/json");
+        JScrollPane ctScroll = new JScrollPane(ctArea);
+        ctScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        ctScroll.setMaximumSize(new Dimension(590, 80));
+        mainPanel.add(ctScroll);
+        mainPanel.add(Box.createVerticalStrut(12));
+        
+        // ── Excluded Extensions ──
+        JLabel extTitle = new JLabel("🚫 Excluded Extensions (comma-separated, with dots):");
+        extTitle.setFont(VistaTheme.FONT_LABEL);
+        extTitle.setForeground(new Color(220, 38, 38));
+        extTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPanel.add(extTitle);
+        mainPanel.add(Box.createVerticalStrut(4));
+        
+        JTextArea extArea = new JTextArea(3, 50);
+        extArea.setFont(VistaTheme.FONT_MONO_SMALL);
+        extArea.setLineWrap(true);
+        extArea.setWrapStyleWord(true);
+        extArea.setText(config.getExcludedExtensions());
+        extArea.setToolTipText("File extensions to skip from AI analysis. E.g.: .png, .css, .woff, .pdf");
+        JScrollPane extScroll = new JScrollPane(extArea);
+        extScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        extScroll.setMaximumSize(new Dimension(590, 80));
+        mainPanel.add(extScroll);
+        mainPanel.add(Box.createVerticalStrut(8));
+        
+        // Current stats
+        JLabel statsInfo = new JLabel(String.format(
+            "Current: %d content types configured, %d extensions excluded",
+            config.getEligibleContentTypesArray().length,
+            config.getExcludedExtensionsArray().length
+        ));
+        statsInfo.setFont(VistaTheme.FONT_SMALL);
+        statsInfo.setForeground(VistaTheme.TEXT_MUTED);
+        statsInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        mainPanel.add(statsInfo);
+        mainPanel.add(Box.createVerticalStrut(15));
+        
+        // Buttons
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        btnPanel.setOpaque(false);
+        btnPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        
+        JButton resetBtn = VistaTheme.secondaryButton("↩ Reset Defaults");
+        resetBtn.addActionListener(e -> {
+            ctArea.setText("text/html,text/javascript,application/javascript,application/x-javascript,application/json");
+            extArea.setText(".png,.jpg,.jpeg,.gif,.svg,.ico,.webp,.css,.woff,.woff2,.ttf,.eot,.mp4,.webm,.mp3,.wav,.pdf,.zip,.tar,.gz,.xml,.txt,.csv");
+        });
+        
+        JButton cancelBtn = VistaTheme.secondaryButton("Cancel");
+        cancelBtn.addActionListener(e -> dialog.dispose());
+        
+        JButton saveBtn = VistaTheme.primaryButton("💾 Save");
+        saveBtn.addActionListener(e -> {
+            config.setEligibleContentTypes(ctArea.getText().trim());
+            config.setExcludedExtensions(extArea.getText().trim());
+            statsInfo.setText(String.format(
+                "✅ Saved: %d content types, %d extensions excluded",
+                config.getEligibleContentTypesArray().length,
+                config.getExcludedExtensionsArray().length
+            ));
+            statsInfo.setForeground(VistaTheme.ACCENT);
+            callbacks.printOutput("[Traffic Monitor] AI Scope updated — " +
+                config.getEligibleContentTypesArray().length + " content types, " +
+                config.getExcludedExtensionsArray().length + " excluded extensions");
+            dialog.dispose();
+        });
+        
+        btnPanel.add(resetBtn);
+        btnPanel.add(cancelBtn);
+        btnPanel.add(saveBtn);
+        mainPanel.add(btnPanel);
+        
+        dialog.setContentPane(mainPanel);
+        dialog.setVisible(true);
+    }
+    
     private void showPromptCustomizationDialog() {
         // Get current template from analyzer (preserves user edits)
         String currentTemplate = analyzer.getCustomTemplate();

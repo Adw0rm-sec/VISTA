@@ -5,6 +5,36 @@ All notable changes to VISTA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.26] - 2026-02-19
+
+### Added
+- **Real-Time Activity Log** — New "📋 Activity Log" sub-tab under Traffic Monitor
+  - Live-scrolling table showing every request's analysis lifecycle (Captured → Queued → Analyzing → Completed)
+  - Color-coded log levels: CAPTURED (blue), QUEUED (yellow), ANALYZING (cyan), COMPLETED (green), FINDING (orange), SKIPPED (gray), ERROR (red)
+  - Summary bar with live counters for total events, findings, errors, and analysis count
+  - Filter dropdown (All Events, Findings Only, Errors Only, Analysis Only)
+  - Clear log button; max 5,000 entries with automatic oldest-first trimming
+  - Columns: Time, Level, #, Method, URL, Status, Result, Details, Duration
+
+- **Burp-Style HTTP Request/Response Viewer** — Professional syntax highlighting in Traffic Monitor
+  - **Request coloring**: HTTP method (blue bold), URL path (dark bold), query parameters (orange keys, green values), HTTP version (gray)
+  - **Header coloring**: Purple bold header names, gray colon separator, dark values
+  - **Status line coloring**: Green (2xx), yellow (3xx), orange (4xx), red (5xx) status codes
+  - **JSON pretty-formatting**: Auto-detected JSON bodies rendered with 2-space indentation and syntax coloring (purple keys, green strings, blue numbers, orange booleans)
+  - **HTML/XML pretty-formatting**: Auto-detected markup bodies with proper indentation and tag coloring (blue tags, orange attribute names, green attribute values)
+
+### Changed
+- Traffic Monitor now has 3 tabs: Traffic, Findings, Activity Log
+- HttpMessageViewer completely rewritten for professional HTTP display
+
+## [2.10.25] - 2026-02-19
+
+### Fixed
+- **OpenRouter Free Models Updated** — Replaced 5 rotated-out free models with current active ones
+- **parseResponse() Bug Fix** — Fixed critical bug where API errors were returned as strings instead of throwing exceptions
+- **HTTP Error Handling** — Added specific handling for HTTP 400, 401, 403, 429, 500, 502, 503 errors with descriptive messages
+- **Timeout Increased** — Raised API timeout from 60s to 120s for reasoning models (DeepSeek R1, Qwen QwQ)
+
 ## [2.10.24] - 2026-02-19
 
 ### Added

@@ -56,22 +56,41 @@ public class AnalysisQueueManager {
         public final List<TrafficFinding> findings;
         public final long duration;
         public final boolean success;
+        public final boolean wasAnalyzed; // true = AI was actually called, false = skipped (not eligible)
         public final String error;
+        public final String skipReason; // reason why analysis was skipped (null if analyzed)
         
+        /** Result from actual AI analysis */
         public AnalysisResult(HttpTransaction transaction, List<TrafficFinding> findings, long duration) {
             this.transaction = transaction;
             this.findings = findings;
             this.duration = duration;
             this.success = true;
+            this.wasAnalyzed = true;
             this.error = null;
+            this.skipReason = null;
         }
         
+        /** Error result */
         public AnalysisResult(HttpTransaction transaction, String error, long duration) {
             this.transaction = transaction;
             this.findings = null;
             this.duration = duration;
             this.success = false;
+            this.wasAnalyzed = false;
             this.error = error;
+            this.skipReason = null;
+        }
+        
+        /** Skipped result — URL was not eligible for AI analysis */
+        public AnalysisResult(HttpTransaction transaction, long duration, String skipReason) {
+            this.transaction = transaction;
+            this.findings = java.util.Collections.emptyList();
+            this.duration = duration;
+            this.success = true;
+            this.wasAnalyzed = false;
+            this.error = null;
+            this.skipReason = skipReason;
         }
     }
     
@@ -230,19 +249,33 @@ public class AnalysisQueueManager {
         long startTime = System.currentTimeMillis();
         
         try {
-            log("═══════════════════════════════════════");
-            log("🔍 PROCESSING [Queue: " + getQueueSize() + " remaining]");
-            log("URL: " + url);
-            log("Content-Type: " + task.transaction.getContentType());
-            log("═══════════════════════════════════════");
-            
             // Double-check not already analyzed (race condition safety)
             if (analyzedUrls.contains(url)) {
                 log("⏭️ SKIP (analyzed while queued): " + url);
                 return;
             }
             
-            // Perform analysis
+            // Pre-check: Is this URL/content-type worthy of AI analysis?
+            if (analyzer != null) {
+                String skipReason = analyzer.getSkipReason(task.transaction);
+                if (skipReason != null) {
+                    long duration = System.currentTimeMillis() - startTime;
+                    analyzedUrls.add(url);
+                    log("⏭️ SKIP (" + skipReason + "): " + url);
+                    if (resultCallback != null) {
+                        resultCallback.accept(new AnalysisResult(task.transaction, duration, skipReason));
+                    }
+                    return;
+                }
+            }
+            
+            log("═══════════════════════════════════════");
+            log("🔍 ANALYZING WITH AI [Queue: " + getQueueSize() + " remaining]");
+            log("URL: " + url);
+            log("Content-Type: " + task.transaction.getContentType());
+            log("═══════════════════════════════════════");
+            
+            // Perform actual AI analysis
             List<TrafficFinding> findings = analyzer.analyzeTransaction(task.transaction);
             
             // Mark as analyzed
@@ -251,7 +284,7 @@ public class AnalysisQueueManager {
             long duration = System.currentTimeMillis() - startTime;
             
             log("═══════════════════════════════════════");
-            log("✅ COMPLETED in " + duration + "ms");
+            log("✅ AI ANALYSIS COMPLETED in " + duration + "ms");
             log("Findings: " + (findings != null ? findings.size() : 0));
             log("═══════════════════════════════════════");
             
