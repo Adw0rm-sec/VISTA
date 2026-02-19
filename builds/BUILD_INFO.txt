@@ -1,11 +1,11 @@
 VISTA Build Information
 =======================
-Version: 2.10.24
-Commit: 6c352f7
-Build Date: 20260219-132547
+Version: 2.10.25
+Commit: ca3ffb0
+Build Date: 20260219-141945
 Branch: main
 Workflow: Auto Build and Commit
-Run Number: 10
+Run Number: 11
 
 Installation:
 1. Download vista-latest.jar

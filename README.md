@@ -485,4 +485,4 @@ Copyright (c) 2026 Adw0rm-sec
 
 </div>
 
-<!-- BUILD_INFO --> **Latest Build:** 20260219-132547 | **Version:** 2.10.24 | **Commit:** 6c352f7
+<!-- BUILD_INFO --> **Latest Build:** 20260219-141945 | **Version:** 2.10.25 | **Commit:** ca3ffb0
