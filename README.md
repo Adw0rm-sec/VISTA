@@ -21,7 +21,7 @@
 
 **VISTA** (Vulnerability Insight & Strategic Test Assistant) is a professional Burp Suite extension that enhances your security testing workflow with AI-powered intelligence. It combines real-time traffic analysis, interactive AI guidance, and practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.10.23 | **Status:** Production Ready | **Size:** ~515KB
+**Version:** 2.10.24 | **Status:** Production Ready | **Size:** ~511KB
 
 ### Why VISTA?
 
@@ -32,7 +32,9 @@
 - 🎯 **Payload Library** — 80+ pre-built payloads across 8 categories with AI integration
 - 🛡️ **WAF Detection** — Automatically detect and bypass 8 major WAFs
 - 🎯 **Scope-Aware** — Define target scope, only analyze what matters
-- 🚀 **Zero Dependencies** — Pure Java, no external libraries required
+- � **Data Persistence** — Auto-save traffic, findings, and sessions across Burp restarts
+- 📦 **Backup & Restore** — Export/import all VISTA data to any location
+- �🚀 **Zero Dependencies** — Pure Java, no external libraries required
 
 ---
 
@@ -134,7 +136,7 @@ VISTA features a clean, streamlined UI with a professional status bar:
 | 🌐 **Traffic Monitor** | Real-time traffic analysis with AI-powered findings |
 | 📝 **Prompt Templates** | Custom AI prompt management (4 expert built-in) |
 | 🎯 **Payload Library** | Payload organization with AI integration (80+) |
-| ⚙️ **Settings** | AI provider configuration and connection testing |
+| ⚙️ **Settings** | AI provider configuration, connection testing, data backup & restore |
 
 **Context Menu Integration:**
 - Right-click any request → **"💡 Send to VISTA AI Advisor"**
@@ -154,7 +156,7 @@ VISTA features a clean, streamlined UI with a professional status bar:
 **Option 1: Download from Releases**
 
 1. Visit [Latest Release](https://github.com/Adw0rm-sec/VISTA/releases/latest)
-2. Download `vista-2.10.23.jar` from Assets
+2. Download `vista-2.10.24.jar` from Assets
 3. In Burp Suite: **Extensions → Add → Java → Select JAR**
 4. VISTA tab appears in Burp with status bar
 
@@ -162,7 +164,7 @@ VISTA features a clean, streamlined UI with a professional status bar:
 
 ```bash
 # Download latest release
-curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10.23.jar
+curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10.24.jar
 ```
 
 ### Build from Source
@@ -171,7 +173,7 @@ curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
 mvn clean package -DskipTests
-# JAR will be in target/vista-2.10.23.jar
+# JAR will be in target/vista-2.10.24.jar
 ```
 
 ---
@@ -313,13 +315,25 @@ VISTA supports **OpenRouter** — giving you access to powerful AI models **comp
 
 ### Local Data Storage
 
+VISTA persists all data locally with auto-save (every 60s), shutdown hooks, and atomic writes:
+
 ```
 ~/.vista/
-├── templates/      # Custom prompt templates
-├── payloads/       # Payload libraries
-├── sessions/       # Chat session history
-└── config.json     # AI configuration
+├── data/               # Auto-saved data
+│   ├── traffic.json        # HTTP traffic transactions
+│   ├── findings.json       # Exploit findings
+│   └── traffic-findings.json # Traffic analysis findings
+├── prompts/
+│   ├── built-in/           # Built-in prompt templates
+│   └── custom/             # User-created templates
+├── payloads/
+│   ├── built-in/           # Built-in payload libraries
+│   └── custom/             # User-created payloads
+├── sessions/           # Chat conversation history
+~/.vista-ai-config.json # AI provider configuration
 ```
+
+**Backup & Restore:** Use **Settings → Export Backup** to save all data to any folder. Restore anytime with **Import Backup**.
 
 ---
 
@@ -332,9 +346,9 @@ VISTA supports **OpenRouter** — giving you access to powerful AI models **comp
 - **API:** Burp Suite Extension API
 - **Dependencies:** Zero external dependencies (Pure Java + Burp API)
 - **Build Tool:** Maven
-- **JAR Size:** ~515KB
-- **Total Files:** 90+ Java files
-- **Lines of Code:** 29,000+
+- **JAR Size:** ~511KB
+- **Total Files:** 87 Java source files
+- **Lines of Code:** 28,000+
 
 ### Project Structure
 
@@ -346,6 +360,7 @@ src/main/java/
     ├── core/                             # Core functionality
     │   ├── AIConfigManager.java          # AI configuration management
     │   ├── IntelligentTrafficAnalyzer.java # AI traffic analysis engine
+    │   ├── VistaPersistenceManager.java  # Data persistence (auto-save, backup/restore)
     │   ├── TrafficBufferManager.java     # Traffic capture & buffering
     │   ├── TrafficMonitorService.java    # Monitoring orchestration
     │   ├── ScopeManager.java            # Target scope management
@@ -365,6 +380,7 @@ src/main/java/
     │   ├── AzureAIService.java          # Azure OpenAI integration
     │   └── OpenRouterService.java       # OpenRouter integration
     └── ui/                               # User interface
+        ├── VistaTheme.java              # Centralized theme & styling
         ├── TrafficMonitorPanel.java     # Traffic Monitor tab
         ├── TrafficFindingsTreePanel.java # Hierarchical findings view
         ├── FindingDetailsPanel.java     # Finding detail viewer
@@ -372,7 +388,7 @@ src/main/java/
         ├── PromptTemplatePanel.java     # Prompt Templates tab
         ├── PromptCustomizationDialog.java # Template editor dialog
         ├── PayloadLibraryPanel.java     # Payload Library tab
-        ├── SettingsPanel.java           # Settings tab
+        ├── SettingsPanel.java           # Settings tab (config + backup/restore)
         └── HttpMessageViewer.java       # Request/Response viewer
 ```
 
@@ -404,8 +420,8 @@ Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 ```bash
 git clone https://github.com/Adw0rm-sec/VISTA.git
 cd VISTA
-mvn clean package
-# JAR → target/vista-2.10.23.jar
+mvn clean package -DskipTests
+# JAR → target/vista-2.10.24.jar
 ```
 
 ---

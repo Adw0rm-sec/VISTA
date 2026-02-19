@@ -61,7 +61,7 @@ cd VISTA
 # Build with Maven
 mvn clean package
 
-# JAR will be in target/vista-1.0.0-MVP.jar
+# JAR will be in target/vista-2.10.24.jar
 ```
 
 ## Requirements
