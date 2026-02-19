@@ -17,11 +17,16 @@ import java.util.List;
 public class OpenAIService implements AIService {
     
     private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
     
     private static final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
+            .executor(java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r, "VISTA-OpenAI-HTTP");
+                t.setDaemon(true);
+                return t;
+            }))
             .build();
     
     private final Configuration config;
@@ -75,7 +80,7 @@ public class OpenAIService implements AIService {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         
         if (response.statusCode() >= 300) {
-            return "HTTP " + response.statusCode() + ": " + truncate(response.body(), 400);
+            throw new Exception("HTTP " + response.statusCode() + ": " + truncate(response.body(), 400));
         }
         
         String content = extractContent(response.body());

@@ -5,7 +5,7 @@
 
     <groupId>com.burpraj</groupId>
     <artifactId>vista</artifactId>
-    <version>2.10.23</version>
+    <version>2.10.24</version>
     <name>VISTA</name>
     <description>VISTA - Vulnerability Insight &amp; Strategic Test Assistant (Azure AI / OpenAI)</description>
     <url>https://github.com/Adw0rm-sec/vista</url>

@@ -13,17 +13,20 @@ import java.util.function.Consumer;
  * 
  * Features:
  * - Single-threaded sequential processing (one request at a time)
- * - URL deduplication (skip already analyzed URLs)
+ * - URL deduplication (skip already analyzed URLs) with bounded LRU cache
  * - Callback-based result notification
  * - Non-blocking queue submission
  * - Graceful shutdown support
  */
 public class AnalysisQueueManager {
     
+    private static final int MAX_ANALYZED_URLS = 10000; // Cap to prevent unbounded memory growth
+    
     private static AnalysisQueueManager instance;
     
     private final ExecutorService analysisExecutor;
     private final BlockingQueue<AnalysisTask> analysisQueue;
+    // Bounded LRU set - automatically evicts oldest entries when full
     private final Set<String> analyzedUrls;
     private final Set<String> pendingUrls; // URLs currently in queue
     
@@ -74,7 +77,15 @@ public class AnalysisQueueManager {
     
     private AnalysisQueueManager() {
         this.analysisQueue = new LinkedBlockingQueue<>(1000); // Max 1000 pending
-        this.analyzedUrls = ConcurrentHashMap.newKeySet();
+        // Bounded LRU set to prevent unbounded memory growth
+        this.analyzedUrls = java.util.Collections.synchronizedSet(
+            java.util.Collections.newSetFromMap(new java.util.LinkedHashMap<String, Boolean>(MAX_ANALYZED_URLS, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, Boolean> eldest) {
+                    return size() > MAX_ANALYZED_URLS;
+                }
+            })
+        );
         this.pendingUrls = ConcurrentHashMap.newKeySet();
         
         // Single-threaded executor for sequential processing

@@ -274,8 +274,7 @@ public class PromptTemplateManager {
     }
     
     private void loadBuiltInTemplates() {
-        // Clean up ALL old templates first (fresh start)
-        cleanupAllOldTemplates();
+        // NOTE: Do NOT call cleanupAllOldTemplates() - it destroys user custom templates!
         
         // Keep only the optimized DOM XSS template (already good)
         PromptTemplate xssDom = createXssDomBased();
@@ -295,9 +294,6 @@ public class PromptTemplateManager {
         PromptTemplate xssExpert = createXssReflectedExpert();
         markAsBuiltIn(xssExpert);
         templates.add(xssExpert);
-        
-        // Clean up any built-in templates that were accidentally saved to disk
-        cleanupBuiltInDuplicates();
     }
     
     /**
@@ -331,7 +327,6 @@ public class PromptTemplateManager {
                         templates.add(template);
                     } else {
                         // Delete the duplicate file
-                        System.out.println("Removing duplicate built-in template: " + file.getName());
                         file.delete();
                     }
                 } catch (Exception e) {
@@ -353,62 +348,6 @@ public class PromptTemplateManager {
             }
         }
         return false;
-    }
-    
-    /**
-     * Clean up ALL old templates from custom directory (fresh start).
-     */
-    private void cleanupAllOldTemplates() {
-        try {
-            File customDirFile = new File(customDir);
-            if (!customDirFile.exists()) return;
-            
-            File[] files = customDirFile.listFiles((dir, name) -> name.endsWith(".json"));
-            if (files == null) return;
-            
-            System.out.println("Cleaning up old templates from custom directory...");
-            for (File file : files) {
-                try {
-                    System.out.println("Deleting old template: " + file.getName());
-                    file.delete();
-                } catch (Exception e) {
-                    System.err.println("Failed to delete: " + file.getName());
-                }
-            }
-            System.out.println("Old templates cleanup complete.");
-        } catch (Exception e) {
-            System.err.println("Error during old templates cleanup: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Clean up any built-in templates that were accidentally saved to custom directory.
-     */
-    private void cleanupBuiltInDuplicates() {
-        try {
-            File customDirFile = new File(customDir);
-            if (!customDirFile.exists()) return;
-            
-            File[] files = customDirFile.listFiles((dir, name) -> name.endsWith(".json"));
-            if (files == null) return;
-            
-            for (File file : files) {
-                try {
-                    String json = Files.readString(file.toPath());
-                    PromptTemplate template = PromptTemplate.fromJson(json);
-                    
-                    // If this matches a built-in template name, delete it
-                    if (isDuplicateOfBuiltIn(template)) {
-                        System.out.println("Cleaning up duplicate built-in template: " + file.getName());
-                        file.delete();
-                    }
-                } catch (Exception e) {
-                    // Ignore errors during cleanup
-                }
-            }
-        } catch (Exception e) {
-            // Ignore errors during cleanup
-        }
     }
     
     private String sanitizeFilename(String name) {

@@ -291,17 +291,54 @@ public class PromptTemplate {
     
     // JSON parsing helpers
     private static String extractJsonString(String json, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.DOTALL).matcher(json);
-        return m.find() ? unescapeJson(m.group(1)) : "";
+        // Escaped-quote-aware string extraction
+        String keyPattern = "\"" + key + "\"\\s*:\\s*\"";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(keyPattern, java.util.regex.Pattern.DOTALL).matcher(json);
+        if (m.find()) {
+            int start = m.end();
+            StringBuilder sb = new StringBuilder();
+            for (int i = start; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (c == '\\' && i + 1 < json.length()) {
+                    sb.append(c);
+                    sb.append(json.charAt(i + 1));
+                    i++;
+                } else if (c == '"') {
+                    break;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return unescapeJson(sb.toString());
+        }
+        return "";
     }
     
     private static String extractJsonStringOrNull(String json, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*(null|\"([^\"]*)\")";
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern).matcher(json);
+        // Check for null first
+        String nullPattern = "\"" + key + "\"\\s*:\\s*null";
+        java.util.regex.Matcher nullM = java.util.regex.Pattern.compile(nullPattern).matcher(json);
+        if (nullM.find()) return null;
+        
+        // Escaped-quote-aware string extraction
+        String keyPattern = "\"" + key + "\"\\s*:\\s*\"";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(keyPattern).matcher(json);
         if (m.find()) {
-            String value = m.group(1);
-            return "null".equals(value) ? null : unescapeJson(m.group(2));
+            int start = m.end();
+            StringBuilder sb = new StringBuilder();
+            for (int i = start; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (c == '\\' && i + 1 < json.length()) {
+                    sb.append(c);
+                    sb.append(json.charAt(i + 1));
+                    i++;
+                } else if (c == '"') {
+                    break;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return unescapeJson(sb.toString());
         }
         return null;
     }

@@ -6,6 +6,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
+import static com.vista.security.ui.VistaTheme.*;
+
 /**
  * Panel for displaying detailed information about a selected finding.
  * Shows all fields including parameter, description, impact, and remediation.
@@ -19,24 +21,23 @@ public class FindingDetailsPanel extends JPanel {
     
     public FindingDetailsPanel() {
         setLayout(new BorderLayout());
-        setBorder(new EmptyBorder(10, 10, 10, 10));
+        setBackground(VistaTheme.BG_CARD);
+        setBorder(new EmptyBorder(12, 14, 12, 14));
         
         // Title
         JLabel titleLabel = new JLabel("Finding Details");
-        titleLabel.setFont(new Font("Dialog", Font.BOLD, 14));
+        titleLabel.setFont(VistaTheme.FONT_HEADING);
+        titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
         
         // Details text area (top section)
         detailsArea = new JTextArea();
         detailsArea.setEditable(false);
-        detailsArea.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        detailsArea.setLineWrap(true);
-        detailsArea.setWrapStyleWord(true);
+        VistaTheme.styleTextArea(detailsArea);
         detailsArea.setText("Select a finding to view details");
         detailsArea.setRows(12);
         
-        JScrollPane detailsScroll = new JScrollPane(detailsArea);
-        detailsScroll.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        JScrollPane detailsScroll = VistaTheme.styledScrollPane(detailsArea);
         
         // HTTP message viewer (bottom section - side-by-side)
         httpViewer = new HttpMessageViewer();
@@ -54,13 +55,15 @@ public class FindingDetailsPanel extends JPanel {
         add(mainPanel, BorderLayout.CENTER);
         
         // Action buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        buttonPanel.setOpaque(false);
+        buttonPanel.setBorder(new EmptyBorder(8, 0, 0, 0));
         
-        JButton copyButton = new JButton("Copy Details");
+        JButton copyButton = VistaTheme.secondaryButton("Copy Details");
         copyButton.addActionListener(e -> copyToClipboard());
         buttonPanel.add(copyButton);
         
-        JButton exportButton = new JButton("Export Finding");
+        JButton exportButton = VistaTheme.secondaryButton("Export Finding");
         exportButton.addActionListener(e -> exportFinding());
         buttonPanel.add(exportButton);
         
@@ -74,25 +77,10 @@ public class FindingDetailsPanel extends JPanel {
         this.currentFinding = finding;
         
         if (finding == null) {
-            System.out.println("[Finding Details] ℹ️ Cleared (no finding selected)");
             detailsArea.setText("Select a finding to view details");
             httpViewer.clear();
             return;
         }
-        
-        System.out.println("[Finding Details] ═══════════════════════════════════════");
-        System.out.println("[Finding Details] 📋 Displaying Finding Details");
-        System.out.println("[Finding Details]    Type: " + finding.getType());
-        System.out.println("[Finding Details]    Severity: " + finding.getSeverity());
-        System.out.println("[Finding Details]    URL: " + finding.getSourceTransaction().getUrl());
-        System.out.println("[Finding Details]    Has parameter: " + (finding.getAffectedParameter() != null && !finding.getAffectedParameter().isEmpty()));
-        System.out.println("[Finding Details]    Has description: " + (finding.getDescription() != null && !finding.getDescription().isEmpty()));
-        System.out.println("[Finding Details]    Has detailedDescription: " + (finding.getDetailedDescription() != null && !finding.getDetailedDescription().isEmpty()));
-        System.out.println("[Finding Details]    Description value: " + (finding.getDescription() != null ? finding.getDescription().substring(0, Math.min(50, finding.getDescription().length())) + "..." : "null"));
-        System.out.println("[Finding Details]    Has impact: " + (finding.getImpact() != null && !finding.getImpact().isEmpty()));
-        System.out.println("[Finding Details]    Has remediation: " + (finding.getRemediation() != null && !finding.getRemediation().isEmpty()));
-        System.out.println("[Finding Details]    Has decoded data: " + finding.hasDecodedData());
-        System.out.println("[Finding Details] ═══════════════════════════════════════");
         
         StringBuilder details = new StringBuilder();
         
@@ -193,11 +181,11 @@ public class FindingDetailsPanel extends JPanel {
      */
     private String getSeverityWithEmoji(String severity) {
         return switch (severity.toUpperCase()) {
-            case "CRITICAL" -> "🔴 CRITICAL";
-            case "HIGH" -> "🟠 HIGH";
-            case "MEDIUM" -> "🟡 MEDIUM";
-            case "LOW" -> "🔵 LOW";
-            case "INFO" -> "⚪ INFO";
+            case "CRITICAL" -> "[!] CRITICAL";
+            case "HIGH" -> "[!] HIGH";
+            case "MEDIUM" -> "[*] MEDIUM";
+            case "LOW" -> "[-] LOW";
+            case "INFO" -> "[i] INFO";
             default -> severity;
         };
     }

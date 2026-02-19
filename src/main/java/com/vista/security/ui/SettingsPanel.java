@@ -2,13 +2,17 @@ package com.vista.security.ui;
 
 import burp.IBurpExtenderCallbacks;
 import com.vista.security.core.AIConfigManager;
+import com.vista.security.core.VistaPersistenceManager;
 import com.vista.security.service.AzureAIService;
 import com.vista.security.service.OpenAIService;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.io.File;
 import java.util.List;
+
+import static com.vista.security.ui.VistaTheme.*;
 
 /**
  * Centralized Settings Panel for VISTA.
@@ -37,12 +41,18 @@ public class SettingsPanel extends JPanel {
     private JPanel azurePanel;
     private JPanel openRouterPanel;
 
+    // Action buttons (promoted to fields for enable/disable logic)
+    private JButton saveBtn;
+    private JButton testBtn;
+    private boolean testPassed = false;
+
     public SettingsPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
         this.config = AIConfigManager.getInstance();
         
         setLayout(new BorderLayout());
-        setBorder(new EmptyBorder(20, 20, 20, 20));
+        setBackground(VistaTheme.BG_PANEL);
+        setBorder(new EmptyBorder(0, 0, 0, 0));
         
         buildUI();
         loadConfig();
@@ -52,15 +62,18 @@ public class SettingsPanel extends JPanel {
     private void buildUI() {
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBackground(VistaTheme.BG_PANEL);
+        mainPanel.setMaximumSize(new Dimension(650, Integer.MAX_VALUE));
 
-        // Header - centered
+        // Header
         JLabel headerLabel = new JLabel("AI Configuration");
-        headerLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        headerLabel.setFont(VistaTheme.FONT_TITLE);
+        headerLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         headerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         JLabel subLabel = new JLabel("Configure your AI provider. Settings are shared across all VISTA features.");
-        subLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        subLabel.setForeground(Color.GRAY);
+        subLabel.setFont(VistaTheme.FONT_SUBTITLE);
+        subLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         // Provider selection
@@ -76,8 +89,7 @@ public class SettingsPanel extends JPanel {
         openaiPanel = createSection("OpenAI Configuration");
         
         JPanel openaiKeyRow = createRow("API Key:", apiKeyField);
-        JButton showKeyBtn = new JButton("Show");
-        showKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        JButton showKeyBtn = VistaTheme.compactButton("Show");
         showKeyBtn.addActionListener(e -> {
             if (apiKeyField.getEchoChar() == '•') {
                 apiKeyField.setEchoChar((char) 0);
@@ -95,8 +107,8 @@ public class SettingsPanel extends JPanel {
         modelField.setToolTipText("e.g., gpt-4o-mini, gpt-4o, gpt-3.5-turbo");
         
         JLabel openaiInfo = new JLabel("Get API key at platform.openai.com/api-keys");
-        openaiInfo.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        openaiInfo.setForeground(Color.GRAY);
+        openaiInfo.setFont(VistaTheme.FONT_SMALL);
+        openaiInfo.setForeground(VistaTheme.TEXT_MUTED);
         JPanel openaiInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
         openaiInfoPanel.add(openaiInfo);
         openaiPanel.add(openaiInfoPanel);
@@ -105,8 +117,7 @@ public class SettingsPanel extends JPanel {
         azurePanel = createSection("Azure AI Configuration");
         
         JPanel azureKeyRow = createRow("API Key:", azureApiKeyField);
-        JButton showAzureKeyBtn = new JButton("Show");
-        showAzureKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        JButton showAzureKeyBtn = VistaTheme.compactButton("Show");
         showAzureKeyBtn.addActionListener(e -> {
             if (azureApiKeyField.getEchoChar() == '•') {
                 azureApiKeyField.setEchoChar((char) 0);
@@ -126,8 +137,8 @@ public class SettingsPanel extends JPanel {
         deploymentField.setToolTipText("Your Azure deployment name");
         
         JLabel azureInfo = new JLabel("Configure in Azure Portal > Azure OpenAI Service");
-        azureInfo.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        azureInfo.setForeground(Color.GRAY);
+        azureInfo.setFont(VistaTheme.FONT_SMALL);
+        azureInfo.setForeground(VistaTheme.TEXT_MUTED);
         JPanel azureInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
         azureInfoPanel.add(azureInfo);
         azurePanel.add(azureInfoPanel);
@@ -136,8 +147,7 @@ public class SettingsPanel extends JPanel {
         openRouterPanel = createSection("OpenRouter Configuration");
         
         JPanel openRouterKeyRow = createRow("API Key:", openRouterApiKeyField);
-        JButton showOpenRouterKeyBtn = new JButton("Show");
-        showOpenRouterKeyBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        JButton showOpenRouterKeyBtn = VistaTheme.compactButton("Show");
         showOpenRouterKeyBtn.addActionListener(e -> {
             if (openRouterApiKeyField.getEchoChar() == '•') {
                 openRouterApiKeyField.setEchoChar((char) 0);
@@ -160,16 +170,18 @@ public class SettingsPanel extends JPanel {
         openRouterPanel.add(modelRow);
         
         JLabel openRouterInfo1 = new JLabel("2 verified free models: Llama 3.3 70B & DeepSeek R1T2 Chimera");
-        openRouterInfo1.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        openRouterInfo1.setForeground(Color.GRAY);
+        openRouterInfo1.setFont(VistaTheme.FONT_SMALL);
+        openRouterInfo1.setForeground(VistaTheme.TEXT_MUTED);
         JPanel infoPanel1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        infoPanel1.setOpaque(false);
         infoPanel1.add(openRouterInfo1);
         openRouterPanel.add(infoPanel1);
         
         JLabel openRouterInfo2 = new JLabel("Get free API key at openrouter.ai/keys (no credit card needed)");
-        openRouterInfo2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        openRouterInfo2.setForeground(Color.GRAY);
+        openRouterInfo2.setFont(VistaTheme.FONT_SMALL);
+        openRouterInfo2.setForeground(VistaTheme.TEXT_MUTED);
         JPanel infoPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        infoPanel2.setOpaque(false);
         infoPanel2.add(openRouterInfo2);
         openRouterPanel.add(infoPanel2);
 
@@ -187,24 +199,77 @@ public class SettingsPanel extends JPanel {
         tempRow.add(new JLabel("(Lower = more focused, Higher = more creative)"));
         advancedPanel.add(tempRow);
 
-        // Buttons - centered alignment
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // ── Data Backup & Restore ──
+        JPanel backupPanel = createSection("Data Backup & Restore");
+        backupPanel.setMaximumSize(new Dimension(600, 280));
         
-        JButton saveBtn = new JButton("Save Configuration");
-        saveBtn.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        JLabel backupInfo = new JLabel("<html>Export all VISTA data (traffic, findings, templates, payloads, sessions, AI config) to a backup folder, or restore from a previous backup.</html>");
+        backupInfo.setFont(VistaTheme.FONT_SMALL);
+        backupInfo.setForeground(VistaTheme.TEXT_SECONDARY);
+        JPanel backupInfoRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        backupInfoRow.setOpaque(false);
+        backupInfoRow.add(backupInfo);
+        backupPanel.add(backupInfoRow);
+        
+        JPanel backupBtnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 8));
+        backupBtnRow.setOpaque(false);
+        
+        JButton exportBtn = VistaTheme.primaryButton("📦 Export Backup");
+        exportBtn.setToolTipText("Save all VISTA data to a folder of your choice");
+        exportBtn.addActionListener(e -> exportBackup());
+        
+        JButton importBtn = VistaTheme.secondaryButton("📥 Import Backup");
+        importBtn.setToolTipText("Restore VISTA data from a previous backup");
+        importBtn.addActionListener(e -> importBackup());
+        
+        backupBtnRow.add(exportBtn);
+        backupBtnRow.add(Box.createHorizontalStrut(8));
+        backupBtnRow.add(importBtn);
+        backupPanel.add(backupBtnRow);
+        
+        JLabel backupNote = new JLabel("<html><i>💡 Backups include: traffic logs, exploit findings, custom templates,<br>&nbsp;&nbsp;&nbsp;&nbsp;payload libraries, chat sessions, and AI configuration.</i></html>");
+        backupNote.setFont(VistaTheme.FONT_SMALL);
+        backupNote.setForeground(VistaTheme.TEXT_MUTED);
+        JPanel backupNoteRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
+        backupNoteRow.setOpaque(false);
+        backupNoteRow.add(backupNote);
+        backupPanel.add(backupNoteRow);
+
+        // Buttons - centered alignment
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
+        buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        buttonPanel.setOpaque(false);
+        
+        testBtn = VistaTheme.primaryButton("Test Connection");
+        testBtn.setEnabled(false);
+        testBtn.addActionListener(e -> testConnection());
+        
+        saveBtn = VistaTheme.secondaryButton("Save Configuration");
+        saveBtn.setEnabled(false);
         saveBtn.addActionListener(e -> {
             saveConfig();
             JOptionPane.showMessageDialog(this, "Configuration saved!", "Saved", JOptionPane.INFORMATION_MESSAGE);
         });
         
-        JButton testBtn = new JButton("Test Connection");
-        testBtn.addActionListener(e -> testConnection());
-        
-        buttonPanel.add(saveBtn);
         buttonPanel.add(testBtn);
+        buttonPanel.add(saveBtn);
         buttonPanel.add(Box.createHorizontalStrut(20));
         buttonPanel.add(statusLabel);
+        
+        // Add listeners to enable Test Connection when API key + model are provided
+        javax.swing.event.DocumentListener fieldChangeListener = new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { onFieldsChanged(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { onFieldsChanged(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { onFieldsChanged(); }
+        };
+        apiKeyField.getDocument().addDocumentListener(fieldChangeListener);
+        modelField.getDocument().addDocumentListener(fieldChangeListener);
+        azureApiKeyField.getDocument().addDocumentListener(fieldChangeListener);
+        endpointField.getDocument().addDocumentListener(fieldChangeListener);
+        deploymentField.getDocument().addDocumentListener(fieldChangeListener);
+        openRouterApiKeyField.getDocument().addDocumentListener(fieldChangeListener);
+        providerCombo.addActionListener(e -> onFieldsChanged());
+        openRouterModelCombo.addActionListener(e -> onFieldsChanged());
 
         // Add all sections
         mainPanel.add(headerLabel);
@@ -220,16 +285,21 @@ public class SettingsPanel extends JPanel {
         mainPanel.add(openRouterPanel);
         mainPanel.add(Box.createVerticalStrut(15));
         mainPanel.add(advancedPanel);
+        mainPanel.add(Box.createVerticalStrut(15));
+        mainPanel.add(backupPanel);
         mainPanel.add(Box.createVerticalStrut(20));
         mainPanel.add(buttonPanel);
 
         // Create a centered wrapper panel to center content horizontally
         JPanel centeredWrapper = new JPanel(new GridBagLayout());
+        centeredWrapper.setBackground(VistaTheme.BG_PANEL);
         centeredWrapper.add(mainPanel);
 
         // Wrap in scroll pane
         JScrollPane scrollPane = new JScrollPane(centeredWrapper);
         scrollPane.setBorder(null);
+        scrollPane.setBackground(VistaTheme.BG_PANEL);
+        scrollPane.getViewport().setBackground(VistaTheme.BG_PANEL);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         
         add(scrollPane, BorderLayout.CENTER);
@@ -240,7 +310,8 @@ public class SettingsPanel extends JPanel {
     private JPanel createSection(String title) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createTitledBorder(title));
+        panel.setBackground(VistaTheme.BG_CARD);
+        panel.setBorder(VistaTheme.sectionBorder(title));
         panel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.setMaximumSize(new Dimension(600, 200));
         return panel;
@@ -248,7 +319,10 @@ public class SettingsPanel extends JPanel {
 
     private JPanel createRow(String label, JComponent field) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        row.setOpaque(false);
         JLabel lbl = new JLabel(label);
+        lbl.setFont(VistaTheme.FONT_LABEL);
+        lbl.setForeground(VistaTheme.TEXT_SECONDARY);
         lbl.setPreferredSize(new Dimension(100, 25));
         row.add(lbl);
         row.add(field);
@@ -268,6 +342,36 @@ public class SettingsPanel extends JPanel {
         
         revalidate();
         repaint();
+    }
+
+    /**
+     * Called whenever a configuration field changes.
+     * Enables Test Connection if required fields are filled for the current provider.
+     * Resets test passed state and disables Save until re-tested.
+     */
+    private void onFieldsChanged() {
+        testPassed = false;
+        saveBtn.setEnabled(false);
+        
+        String provider = (String) providerCombo.getSelectedItem();
+        boolean hasRequiredFields = false;
+        
+        if ("OpenAI".equals(provider)) {
+            String key = new String(apiKeyField.getPassword()).trim();
+            String model = modelField.getText().trim();
+            hasRequiredFields = !key.isEmpty() && !model.isEmpty();
+        } else if ("Azure AI".equals(provider)) {
+            String key = new String(azureApiKeyField.getPassword()).trim();
+            String endpoint = endpointField.getText().trim();
+            String deployment = deploymentField.getText().trim();
+            hasRequiredFields = !key.isEmpty() && !endpoint.isEmpty() && !deployment.isEmpty();
+        } else if ("OpenRouter".equals(provider)) {
+            String key = new String(openRouterApiKeyField.getPassword()).trim();
+            Object model = openRouterModelCombo.getSelectedItem();
+            hasRequiredFields = !key.isEmpty() && model != null && !model.toString().trim().isEmpty();
+        }
+        
+        testBtn.setEnabled(hasRequiredFields);
     }
 
     private void loadConfig() {
@@ -296,6 +400,9 @@ public class SettingsPanel extends JPanel {
         temperatureSlider.setValue((int) (config.getTemperature() * 100));
         tempValueLabel.setText(String.format("%.2f", config.getTemperature()));
         updateProviderVisibility();
+        
+        // Update button states based on loaded config
+        onFieldsChanged();
     }
 
     private void saveConfig() {
@@ -317,11 +424,13 @@ public class SettingsPanel extends JPanel {
 
     private void updateStatus() {
         if (config.isConfigured()) {
-            statusLabel.setText("✓ " + config.getProvider() + " configured");
-            statusLabel.setForeground(new Color(0, 150, 0));
+            statusLabel.setText("● " + config.getProvider() + " configured");
+            statusLabel.setForeground(VistaTheme.STATUS_SUCCESS);
+            statusLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
         } else {
-            statusLabel.setText("⚠ " + config.getStatusMessage());
-            statusLabel.setForeground(new Color(200, 100, 0));
+            statusLabel.setText("● " + config.getStatusMessage());
+            statusLabel.setForeground(VistaTheme.STATUS_WARNING);
+            statusLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
         }
     }
 
@@ -336,7 +445,8 @@ public class SettingsPanel extends JPanel {
         }
 
         statusLabel.setText("Testing connection...");
-        statusLabel.setForeground(Color.BLUE);
+        statusLabel.setForeground(VistaTheme.PRIMARY);
+        testBtn.setEnabled(false);
 
         new Thread(() -> {
             try {
@@ -366,8 +476,11 @@ public class SettingsPanel extends JPanel {
                 }
 
                 SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText("✓ Connection successful!");
-                    statusLabel.setForeground(new Color(0, 150, 0));
+                    testPassed = true;
+                    saveBtn.setEnabled(true);
+                    testBtn.setEnabled(true);
+                    statusLabel.setText("● Connection successful!");
+                    statusLabel.setForeground(VistaTheme.STATUS_SUCCESS);
                     JOptionPane.showMessageDialog(this, 
                         "Connection successful!\n\nAI Response: " + truncate(response, 100),
                         "Success", JOptionPane.INFORMATION_MESSAGE);
@@ -376,23 +489,27 @@ public class SettingsPanel extends JPanel {
             } catch (Exception e) {
                 final String errorMessage = e.getMessage();
                 SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText("✗ Connection failed");
-                    statusLabel.setForeground(Color.RED);
+                    testPassed = false;
+                    saveBtn.setEnabled(false);
+                    testBtn.setEnabled(true);
+                    statusLabel.setText("● Connection failed");
+                    statusLabel.setForeground(VistaTheme.STATUS_ERROR);
                     
                     // Create a detailed error panel with scrollable text
                     String errorDetails = parseConnectionError(errorMessage, config.getProvider());
                     
                     JTextArea errorArea = new JTextArea(errorDetails);
                     errorArea.setEditable(false);
-                    errorArea.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+                    errorArea.setFont(VistaTheme.FONT_BODY);
                     errorArea.setLineWrap(true);
                     errorArea.setWrapStyleWord(true);
-                    errorArea.setBackground(new Color(255, 250, 250));
-                    errorArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+                    errorArea.setBackground(VistaTheme.SEVERITY_CRITICAL_BG);
+                    errorArea.setForeground(VistaTheme.TEXT_PRIMARY);
+                    errorArea.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
                     
                     JScrollPane scrollPane = new JScrollPane(errorArea);
                     scrollPane.setPreferredSize(new Dimension(450, 200));
-                    scrollPane.setBorder(BorderFactory.createLineBorder(new Color(220, 100, 100)));
+                    scrollPane.setBorder(BorderFactory.createLineBorder(VistaTheme.SEVERITY_CRITICAL));
                     
                     JOptionPane.showMessageDialog(this, 
                         scrollPane,
@@ -486,6 +603,90 @@ public class SettingsPanel extends JPanel {
         }
         
         return details.toString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Backup Export / Import
+    // ═══════════════════════════════════════════════════════════════
+    
+    private void exportBackup() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Choose Backup Destination");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setApproveButtonText("Export Here");
+        
+        int result = chooser.showSaveDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) return;
+        
+        File destDir = chooser.getSelectedFile();
+        
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        new Thread(() -> {
+            try {
+                File backupDir = VistaPersistenceManager.getInstance().exportBackup(destDir);
+                SwingUtilities.invokeLater(() -> {
+                    setCursor(Cursor.getDefaultCursor());
+                    JOptionPane.showMessageDialog(this,
+                            "✅ Backup exported successfully!\n\n" +
+                            "Location:\n" + backupDir.getAbsolutePath() + "\n\n" +
+                            "You can restore this backup anytime using 'Import Backup'.",
+                            "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    setCursor(Cursor.getDefaultCursor());
+                    JOptionPane.showMessageDialog(this,
+                            "❌ Export failed:\n" + e.getMessage(),
+                            "Export Error", JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
+    }
+    
+    private void importBackup() {
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "⚠️ Importing a backup will overwrite your current VISTA data.\n\n" +
+                "This includes: traffic logs, findings, templates, payloads,\n" +
+                "chat sessions, and AI configuration.\n\n" +
+                "Do you want to continue?",
+                "Confirm Import", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        
+        if (confirm != JOptionPane.YES_OPTION) return;
+        
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Select VISTA Backup Folder");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setApproveButtonText("Import");
+        
+        int result = chooser.showOpenDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) return;
+        
+        File backupDir = chooser.getSelectedFile();
+        
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        new Thread(() -> {
+            try {
+                int restored = VistaPersistenceManager.getInstance().importBackup(backupDir);
+                
+                // Reload AI config into the UI
+                SwingUtilities.invokeLater(() -> {
+                    setCursor(Cursor.getDefaultCursor());
+                    loadConfig();
+                    JOptionPane.showMessageDialog(this,
+                            "✅ Backup imported successfully!\n\n" +
+                            restored + " data section(s) restored.\n\n" +
+                            "Note: Restart Burp Suite for all changes to take full effect.",
+                            "Import Complete", JOptionPane.INFORMATION_MESSAGE);
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    setCursor(Cursor.getDefaultCursor());
+                    JOptionPane.showMessageDialog(this,
+                            "❌ Import failed:\n" + e.getMessage(),
+                            "Import Error", JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
     }
 
     private String truncate(String s, int max) {

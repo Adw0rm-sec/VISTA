@@ -41,7 +41,7 @@ public class ChatSessionManager {
      * @param systemPrompt The initial system prompt (from template)
      * @return The new session
      */
-    public synchronized ChatSession createSession(String requestUrl, String systemPrompt) {
+    public ChatSession createSession(String requestUrl, String systemPrompt) {
         // Cleanup old sessions if needed
         cleanupInactiveSessions();
         
@@ -124,7 +124,7 @@ public class ChatSessionManager {
     /**
      * Clear all sessions.
      */
-    public synchronized void clearAllSessions() {
+    public void clearAllSessions() {
         sessions.clear();
         activeSessionId = null;
     }

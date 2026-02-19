@@ -18,6 +18,8 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.List;
 
+import static com.vista.security.ui.VistaTheme.*;
+
 /**
  * Simplified Payload Library Panel - Easy to use, immediate value.
  */
@@ -43,7 +45,8 @@ public class PayloadLibraryPanel extends JPanel {
         this.manager = PayloadLibraryManager.getInstance();
         
         setLayout(new BorderLayout(10, 10));
-        setBorder(new EmptyBorder(15, 15, 15, 15));
+        setBackground(VistaTheme.BG_PANEL);
+        setBorder(new EmptyBorder(16, 16, 16, 16));
         
         // Initialize manager
         initializeManager();
@@ -74,12 +77,14 @@ public class PayloadLibraryPanel extends JPanel {
         
         // Title and stats
         JPanel titlePanel = new JPanel(new BorderLayout());
-        JLabel titleLabel = new JLabel("🎯 Payload Library");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        JLabel titleLabel = new JLabel("Payload Library");
+        titleLabel.setFont(VistaTheme.FONT_TITLE);
+        titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         titlePanel.add(titleLabel, BorderLayout.WEST);
         
         statsLabel = new JLabel(manager.getStatsSummary());
-        statsLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        statsLabel.setFont(VistaTheme.FONT_MONO_SMALL);
+        statsLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         titlePanel.add(statsLabel, BorderLayout.EAST);
         
         panel.add(titlePanel, BorderLayout.NORTH);
@@ -120,24 +125,22 @@ public class PayloadLibraryPanel extends JPanel {
         // Right: Quick actions
         JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 5));
         
-        JButton addPayloadBtn = new JButton("➕ Add Payload");
-        addPayloadBtn.setFont(new Font("Arial", Font.BOLD, 12));
+        JButton addPayloadBtn = VistaTheme.primaryButton("Add Payload");
         addPayloadBtn.setToolTipText("Add a single payload");
         addPayloadBtn.addActionListener(e -> addPayload());
         actionsPanel.add(addPayloadBtn);
         
-        JButton bulkImportBtn = new JButton("📋 Bulk Import");
-        bulkImportBtn.setFont(new Font("Arial", Font.BOLD, 12));
+        JButton bulkImportBtn = VistaTheme.secondaryButton("Bulk Import");
         bulkImportBtn.setToolTipText("Paste multiple payloads at once");
         bulkImportBtn.addActionListener(e -> bulkImportPayloads());
         actionsPanel.add(bulkImportBtn);
         
-        JButton importBtn = new JButton("📥 Import File");
+        JButton importBtn = VistaTheme.compactButton("Import File");
         importBtn.setToolTipText("Import from JSON file");
         importBtn.addActionListener(e -> importLibrary());
         actionsPanel.add(importBtn);
         
-        JButton refreshBtn = new JButton("🔄");
+        JButton refreshBtn = VistaTheme.compactButton("↻");
         refreshBtn.setToolTipText("Refresh");
         refreshBtn.addActionListener(e -> {
             manager.initialize();
@@ -181,6 +184,8 @@ public class PayloadLibraryPanel extends JPanel {
         };
         
         payloadsTable = new JTable(tableModel);
+        VistaTheme.styleTable(payloadsTable);
+        payloadsTable.setFont(VistaTheme.FONT_MONO_SMALL);
         payloadsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         payloadsTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -250,30 +255,30 @@ public class PayloadLibraryPanel extends JPanel {
     
     private JPanel createDetailsPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("Payload Details"));
+        panel.setBorder(VistaTheme.sectionBorder("Payload Details"));
         
         // Details area
         payloadDetailsArea = new JTextArea();
         payloadDetailsArea.setEditable(false);
-        payloadDetailsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        VistaTheme.styleCodeArea(payloadDetailsArea);
         payloadDetailsArea.setLineWrap(true);
         payloadDetailsArea.setWrapStyleWord(true);
         
-        JScrollPane scrollPane = new JScrollPane(payloadDetailsArea);
+        JScrollPane scrollPane = VistaTheme.styledScrollPane(payloadDetailsArea);
         panel.add(scrollPane, BorderLayout.CENTER);
         
         // Action buttons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 5));
         
-        JButton copyBtn = new JButton("📋 Copy");
+        JButton copyBtn = VistaTheme.compactButton("Copy");
         copyBtn.addActionListener(e -> copySelectedPayload());
         buttonPanel.add(copyBtn);
         
-        JButton markSuccessBtn = new JButton("✓ Success");
+        JButton markSuccessBtn = VistaTheme.compactButton("Success");
         markSuccessBtn.addActionListener(e -> markPayloadResult(true));
         buttonPanel.add(markSuccessBtn);
         
-        JButton markFailBtn = new JButton("✗ Failure");
+        JButton markFailBtn = VistaTheme.compactButton("Failure");
         markFailBtn.addActionListener(e -> markPayloadResult(false));
         buttonPanel.add(markFailBtn);
         

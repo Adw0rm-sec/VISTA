@@ -16,6 +16,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Notifies registered listeners of buffer changes.
  */
 public class TrafficBufferManager {
+    private static TrafficBufferManager globalInstance;
+    
     private final int maxCapacity;
     private final Deque<HttpTransaction> buffer;
     private final ReadWriteLock lock;
@@ -37,6 +39,20 @@ public class TrafficBufferManager {
         this.lock = new ReentrantReadWriteLock();
         this.listeners = new CopyOnWriteArrayList<>();
         this.totalDataVolume = 0;
+    }
+    
+    /**
+     * Sets this instance as the global instance for persistence access.
+     */
+    public void registerAsGlobal() {
+        globalInstance = this;
+    }
+    
+    /**
+     * Returns the global TrafficBufferManager instance (set by registerAsGlobal).
+     */
+    public static TrafficBufferManager getGlobalInstance() {
+        return globalInstance;
     }
     
     /**
@@ -69,8 +85,39 @@ public class TrafficBufferManager {
             lock.writeLock().unlock();
         }
         
+        // Mark data as dirty for auto-save
+        try {
+            VistaPersistenceManager.getInstance().markDirty();
+        } catch (Exception ignored) {}
+        
         // Notify listeners outside of lock
         notifyListeners(transaction);
+    }
+    
+    /**
+     * Adds a transaction to the buffer WITHOUT notifying listeners.
+     * Used during data restore from persistence to avoid triggering UI updates.
+     * 
+     * @param transaction The transaction to add
+     */
+    public void addTransactionSilently(HttpTransaction transaction) {
+        if (transaction == null) {
+            return;
+        }
+        
+        lock.writeLock().lock();
+        try {
+            if (buffer.size() >= maxCapacity) {
+                HttpTransaction removed = buffer.removeFirst();
+                if (removed != null) {
+                    totalDataVolume -= removed.getResponseSize();
+                }
+            }
+            buffer.addLast(transaction);
+            totalDataVolume += transaction.getResponseSize();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
     
     /**

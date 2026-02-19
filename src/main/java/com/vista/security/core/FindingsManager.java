@@ -49,7 +49,21 @@ public class FindingsManager {
      */
     public void addFinding(ExploitFinding finding) {
         findings.add(0, finding); // Add to front (newest first)
+        
+        // Mark data as dirty for auto-save
+        try {
+            VistaPersistenceManager.getInstance().markDirty();
+        } catch (Exception ignored) {}
+        
         notifyListeners(finding);
+    }
+    
+    /**
+     * Add a finding WITHOUT notifying listeners.
+     * Used during data restore from persistence to avoid triggering UI updates.
+     */
+    public void addFindingSilently(ExploitFinding finding) {
+        findings.add(finding); // Add to back (preserve persisted order)
     }
     
     /**

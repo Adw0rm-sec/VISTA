@@ -3,7 +3,10 @@ package com.vista.security.model;
 import burp.IHttpRequestResponse;
 
 import java.text.SimpleDateFormat;
+import java.util.Base64;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -255,6 +258,176 @@ public class HttpTransaction {
         if (mimeType.equals("text/xml")) return "XML";
         
         return mimeType;
+    }
+    
+    /**
+     * Serializes this HttpTransaction to a JSON string for persistence.
+     * byte[] fields are Base64-encoded. IHttpRequestResponse is not serialized.
+     */
+    public String toJson() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"id\": ").append(jsonString(id)).append(",\n");
+        sb.append("  \"timestamp\": ").append(timestamp).append(",\n");
+        sb.append("  \"method\": ").append(jsonString(method)).append(",\n");
+        sb.append("  \"url\": ").append(jsonString(url)).append(",\n");
+        sb.append("  \"contentType\": ").append(jsonString(contentType)).append(",\n");
+        sb.append("  \"statusCode\": ").append(statusCode).append(",\n");
+        sb.append("  \"responseSize\": ").append(responseSize).append(",\n");
+        sb.append("  \"request\": ").append(request != null ? jsonString(Base64.getEncoder().encodeToString(request)) : "null").append(",\n");
+        sb.append("  \"response\": ").append(response != null ? jsonString(Base64.getEncoder().encodeToString(response)) : "null").append("\n");
+        sb.append("}");
+        return sb.toString();
+    }
+    
+    /**
+     * Deserializes an HttpTransaction from a JSON string.
+     * Returns null if parsing fails.
+     */
+    public static HttpTransaction fromJson(String json) {
+        try {
+            Map<String, String> fields = parseJsonObject(json);
+            if (fields == null || !fields.containsKey("id")) return null;
+            
+            String id = fields.get("id");
+            long timestamp = Long.parseLong(fields.getOrDefault("timestamp", "0"));
+            String method = fields.getOrDefault("method", "GET");
+            String url = fields.getOrDefault("url", "");
+            String contentType = fields.getOrDefault("contentType", "unknown");
+            int statusCode = Integer.parseInt(fields.getOrDefault("statusCode", "0"));
+            long responseSize = Long.parseLong(fields.getOrDefault("responseSize", "0"));
+            
+            byte[] request = null;
+            String reqB64 = fields.get("request");
+            if (reqB64 != null && !reqB64.equals("null") && !reqB64.isEmpty()) {
+                request = Base64.getDecoder().decode(reqB64);
+            }
+            
+            byte[] response = null;
+            String respB64 = fields.get("response");
+            if (respB64 != null && !respB64.equals("null") && !respB64.isEmpty()) {
+                response = Base64.getDecoder().decode(respB64);
+            }
+            
+            return new HttpTransaction(id, timestamp, method, url, contentType,
+                    statusCode, responseSize, request, response, null);
+        } catch (Exception e) {
+            System.err.println("[VISTA] Error deserializing HttpTransaction: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Escapes a string for JSON output.
+     */
+    private static String jsonString(String s) {
+        if (s == null) return "null";
+        return "\"" + s.replace("\\", "\\\\")
+                       .replace("\"", "\\\"")
+                       .replace("\n", "\\n")
+                       .replace("\r", "\\r")
+                       .replace("\t", "\\t") + "\"";
+    }
+    
+    /**
+     * Parses a flat JSON object into a Map of key-value pairs.
+     * Hand-rolled parser for simple JSON (no nested objects except null values).
+     */
+    static Map<String, String> parseJsonObject(String json) {
+        if (json == null || json.trim().isEmpty()) return null;
+        Map<String, String> map = new LinkedHashMap<>();
+        json = json.trim();
+        if (json.startsWith("{")) json = json.substring(1);
+        if (json.endsWith("}")) json = json.substring(0, json.length() - 1);
+        
+        int i = 0;
+        while (i < json.length()) {
+            // Find key
+            int keyStart = json.indexOf('"', i);
+            if (keyStart < 0) break;
+            int keyEnd = json.indexOf('"', keyStart + 1);
+            if (keyEnd < 0) break;
+            String key = json.substring(keyStart + 1, keyEnd);
+            
+            // Find colon
+            int colon = json.indexOf(':', keyEnd + 1);
+            if (colon < 0) break;
+            
+            // Find value
+            int valueStart = colon + 1;
+            while (valueStart < json.length() && json.charAt(valueStart) == ' ') valueStart++;
+            
+            if (valueStart >= json.length()) break;
+            
+            String value;
+            int nextPos;
+            
+            if (json.charAt(valueStart) == '"') {
+                // String value - handle escaped quotes
+                StringBuilder sb = new StringBuilder();
+                int vi = valueStart + 1;
+                while (vi < json.length()) {
+                    char c = json.charAt(vi);
+                    if (c == '\\' && vi + 1 < json.length()) {
+                        char next = json.charAt(vi + 1);
+                        switch (next) {
+                            case '"': sb.append('"'); break;
+                            case '\\': sb.append('\\'); break;
+                            case 'n': sb.append('\n'); break;
+                            case 'r': sb.append('\r'); break;
+                            case 't': sb.append('\t'); break;
+                            default: sb.append('\\').append(next); break;
+                        }
+                        vi += 2;
+                    } else if (c == '"') {
+                        break;
+                    } else {
+                        sb.append(c);
+                        vi++;
+                    }
+                }
+                value = sb.toString();
+                nextPos = vi + 1;
+            } else if (json.substring(valueStart).startsWith("null")) {
+                value = null;
+                nextPos = valueStart + 4;
+            } else if (json.substring(valueStart).startsWith("true")) {
+                value = "true";
+                nextPos = valueStart + 4;
+            } else if (json.substring(valueStart).startsWith("false")) {
+                value = "false";
+                nextPos = valueStart + 5;
+            } else if (json.charAt(valueStart) == '{') {
+                // Nested object - find matching brace
+                int depth = 1;
+                int vi = valueStart + 1;
+                while (vi < json.length() && depth > 0) {
+                    if (json.charAt(vi) == '{') depth++;
+                    else if (json.charAt(vi) == '}') depth--;
+                    vi++;
+                }
+                value = json.substring(valueStart, vi);
+                nextPos = vi;
+            } else {
+                // Number value
+                int end = valueStart;
+                while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}' && json.charAt(end) != '\n') {
+                    end++;
+                }
+                value = json.substring(valueStart, end).trim();
+                nextPos = end;
+            }
+            
+            map.put(key, value);
+            
+            // Skip to next field
+            i = nextPos;
+            while (i < json.length() && (json.charAt(i) == ',' || json.charAt(i) == ' ' || json.charAt(i) == '\n' || json.charAt(i) == '\r')) {
+                i++;
+            }
+        }
+        
+        return map;
     }
     
     @Override

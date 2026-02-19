@@ -17,11 +17,16 @@ import java.util.List;
  */
 public class AzureAIService implements AIService {
     
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
     
     private static final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
+            .executor(java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r, "VISTA-Azure-HTTP");
+                t.setDaemon(true);
+                return t;
+            }))
             .build();
     
     private final Configuration config;
@@ -74,13 +79,20 @@ public class AzureAIService implements AIService {
     
     @Override
     public String testConnection() throws Exception {
+        // Validate API key first to avoid wasting time on bad requests
+        String apiKey = config.getApiKey();
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IllegalStateException("Azure API key is not configured or is empty");
+        }
+        apiKey = apiKey.trim();
+        
         String url = buildUrl();
         String body = buildRequestBody("You are a short responder.", "Say 'ok'", 0.1);
         
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
-                .header("api-key", config.getApiKey())
+                .timeout(Duration.ofSeconds(20))
+                .header("api-key", apiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
@@ -89,7 +101,7 @@ public class AzureAIService implements AIService {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         
         if (response.statusCode() >= 300) {
-            return "HTTP " + response.statusCode() + ": " + truncate(response.body(), 400);
+            throw new Exception("HTTP " + response.statusCode() + ": " + truncate(response.body(), 400));
         }
         
         String content = extractContent(response.body());
@@ -116,13 +128,20 @@ public class AzureAIService implements AIService {
         long startTime = System.currentTimeMillis();
         
         try {
+            // Validate API key
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                throw new IllegalStateException("Azure API key is not configured or is empty");
+            }
+            apiKey = apiKey.trim();
+            
             String url = buildUrl();
             String body = buildRequestBody(systemPrompt, userPrompt, config.getTemperature());
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(REQUEST_TIMEOUT)
-                    .header("api-key", config.getApiKey())
+                    .header("api-key", apiKey)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
@@ -163,13 +182,20 @@ public class AzureAIService implements AIService {
         long startTime = System.currentTimeMillis();
         
         try {
+            // Validate API key
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                throw new IllegalStateException("Azure API key is not configured or is empty");
+            }
+            apiKey = apiKey.trim();
+            
             String url = buildUrl();
             String body = buildRequestBodyWithHistory(messages, config.getTemperature());
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(REQUEST_TIMEOUT)
-                    .header("api-key", config.getApiKey())
+                    .header("api-key", apiKey)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();

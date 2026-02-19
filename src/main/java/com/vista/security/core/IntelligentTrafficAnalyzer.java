@@ -7,6 +7,7 @@ import com.vista.security.service.AIService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -17,7 +18,7 @@ import java.util.Set;
  * Features:
  * - AI-only analysis (no pattern detection)
  * - Enhanced security prompts for comprehensive detection
- * - URL deduplication to avoid repetitive analysis
+ * - URL deduplication to avoid repetitive analysis (bounded LRU cache to prevent memory leaks)
  * - AI request/response logging
  * - Validation for "None Detected" and missing evidence
  * - Content-type filtering (HTML/JavaScript only)
@@ -25,10 +26,20 @@ import java.util.Set;
  */
 public class IntelligentTrafficAnalyzer {
     
+    private static final int MAX_ANALYZED_URLS = 10000; // Cap to prevent unbounded memory growth
+    
     private final AIService aiService;
     private final FindingsManager findingsManager;
     private com.vista.security.core.ScopeManager scopeManager;
-    private final Set<String> analyzedUrls = Collections.synchronizedSet(new HashSet<>()); // Track analyzed URLs for deduplication
+    // Bounded LRU set - automatically evicts oldest entries when full to prevent memory leaks
+    private final Set<String> analyzedUrls = Collections.synchronizedSet(
+        Collections.newSetFromMap(new java.util.LinkedHashMap<String, Boolean>(MAX_ANALYZED_URLS, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<String, Boolean> eldest) {
+                return size() > MAX_ANALYZED_URLS;
+            }
+        })
+    );
     
     
     // Default unified template - sent as system prompt for ALL HTTP traffic analysis (JS, HTML, etc.)
@@ -116,32 +127,24 @@ public class IntelligentTrafficAnalyzer {
     
     private boolean shouldUseAI(String url) {
         if (scopeManager == null) {
-            System.out.println("[Traffic Monitor] 💰 AI DISABLED (scope manager not configured)");
             return false;
         }
         
         if (!scopeManager.isScopeEnabled()) {
-            System.out.println("[Traffic Monitor] 💰 AI DISABLED (scope not enabled)");
             return false;
         }
         
         if (scopeManager.size() == 0) {
-            System.out.println("[Traffic Monitor] 💰 AI DISABLED (no domains in scope)");
             return false;
         }
         
-        boolean inScope = scopeManager.isInScope(url);
-        if (!inScope) {
-            System.out.println("[Traffic Monitor] 💰 AI SKIPPED (out of scope): " + url);
-        }
-        return inScope;
+        return scopeManager.isInScope(url);
     }
     
     private boolean isAIExcludedExtension(String url) {
         String lowerUrl = url.toLowerCase();
         for (String ext : AI_EXCLUDED_EXTENSIONS) {
             if (lowerUrl.endsWith(ext)) {
-                System.out.println("[Traffic Monitor] 💰 AI SKIPPED (excluded extension): " + url);
                 return true;
             }
         }
@@ -158,10 +161,6 @@ public class IntelligentTrafficAnalyzer {
                           lowerContentType.contains("text/javascript") ||
                           lowerContentType.contains("application/javascript") ||
                           lowerContentType.contains("application/x-javascript");
-        
-        if (!eligible) {
-            System.out.println("[Traffic Monitor] ⏭️ Content-Type not eligible: " + contentType);
-        }
         
         return eligible;
     }
@@ -184,20 +183,15 @@ public class IntelligentTrafficAnalyzer {
     public List<TrafficFinding> analyzeTransaction(HttpTransaction transaction) {
         List<TrafficFinding> findings = new ArrayList<>();
         
-        // Debug logging for null checks
+        // Null checks
         if (transaction == null) {
-            System.out.println("[Traffic Monitor] ❌ analyzeTransaction: transaction is NULL");
             return findings;
         }
         
         byte[] response = transaction.getResponse();
         if (response == null) {
-            System.out.println("[Traffic Monitor] ❌ analyzeTransaction: response is NULL for " + transaction.getUrl());
-            System.out.println("[Traffic Monitor] ❓ Transaction has request bytes: " + (transaction.getRequest() != null ? "YES" : "NO"));
             return findings;
         }
-        
-        System.out.println("[Traffic Monitor] ✓ analyzeTransaction: response size = " + response.length + " bytes for " + transaction.getUrl());
         
         String contentType = transaction.getContentType();
         if (contentType == null) {
@@ -212,8 +206,6 @@ public class IntelligentTrafficAnalyzer {
             findings.addAll(analyzeHtmlResponse(transaction));
         } else if (lowerContentType.contains("application/json")) {
             findings.addAll(analyzeJsonResponse(transaction));
-        } else {
-            System.out.println("[Traffic Monitor] ⏭️ Skipping content-type: " + contentType);
         }
         
         return findings;
@@ -228,8 +220,6 @@ public class IntelligentTrafficAnalyzer {
         }
         
         String jsContent = new String(response);
-        
-        System.out.println("[Traffic Monitor] 📜 Analyzing JavaScript");
         
         if (!isAIEligibleContentType(transaction.getContentType())) {
             return findings;
@@ -247,11 +237,9 @@ public class IntelligentTrafficAnalyzer {
             // URL deduplication check
             String url = transaction.getUrl();
             if (analyzedUrls.contains(url)) {
-                System.out.println("[Traffic Monitor] ⏭️ SKIPPED (already analyzed): " + url);
                 return findings;
             }
             
-            System.out.println("[Traffic Monitor] 🤖 Running AI analysis...");
             findings.addAll(analyzeJavaScriptWithAI(transaction, jsContent));
             
             // Mark URL as analyzed
@@ -290,7 +278,6 @@ public class IntelligentTrafficAnalyzer {
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                 findings.addAll(parseAIFindings(transaction, aiResponse));
-                System.out.println("[Traffic Monitor] 🤖 AI found " + findings.size() + " issues");
             }
         } catch (Exception e) {
             System.err.println("[Traffic Monitor] AI error: " + e.getMessage());
@@ -301,7 +288,6 @@ public class IntelligentTrafficAnalyzer {
     }
     
     private List<TrafficFinding> analyzeJsonResponse(HttpTransaction transaction) {
-        System.out.println("[Traffic Monitor] ⏭️ Skipping JSON (AI-only mode)");
         return new ArrayList<>();
     }
     
@@ -315,8 +301,6 @@ public class IntelligentTrafficAnalyzer {
         
         String htmlContent = new String(response);
         
-        System.out.println("[Traffic Monitor] 🌐 Analyzing HTML");
-        
         if (!isAIEligibleContentType(transaction.getContentType())) {
             return findings;
         }
@@ -328,12 +312,10 @@ public class IntelligentTrafficAnalyzer {
         // URL deduplication check
         String url = transaction.getUrl();
         if (analyzedUrls.contains(url)) {
-            System.out.println("[Traffic Monitor] ⏭️ SKIPPED (already analyzed): " + url);
             return findings;
         }
         
         if (htmlContent.length() < 100_000) {
-            System.out.println("[Traffic Monitor] 🤖 Running AI analysis...");
             findings.addAll(analyzeHtmlWithAI(transaction, htmlContent));
             
             // Mark URL as analyzed
@@ -372,7 +354,6 @@ public class IntelligentTrafficAnalyzer {
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                 findings.addAll(parseAIFindings(transaction, aiResponse));
-                System.out.println("[Traffic Monitor] 🤖 AI found " + findings.size() + " issues");
             }
         } catch (Exception e) {
             System.err.println("[Traffic Monitor] AI error: " + e.getMessage());
@@ -411,7 +392,6 @@ public class IntelligentTrafficAnalyzer {
             if (trimmedResponse.equals("NO_FINDINGS") || 
                 trimmedResponse.startsWith("NO_FINDINGS") ||
                 trimmedResponse.contains("NO_FINDINGS")) {
-                System.out.println("[Traffic Monitor] ℹ️ AI returned NO_FINDINGS - skipping parse");
                 return findings;
             }
             
@@ -424,7 +404,6 @@ public class IntelligentTrafficAnalyzer {
                 (lowerResponse.contains("nothing") && lowerResponse.contains("found"))) {
                 // Check if there's actually a Type: field - if not, skip
                 if (!aiResponse.contains("Type:") && !aiResponse.contains("type:")) {
-                    System.out.println("[Traffic Monitor] ℹ️ AI indicated no issues - skipping parse");
                     return findings;
                 }
             }
@@ -598,11 +577,8 @@ public class IntelligentTrafficAnalyzer {
             type = type.replaceAll("[\\[\\]\\(\\)]", "").trim();
         }
         
-        System.out.println("[Traffic Monitor] 🤖 AI TYPE: " + type);
-        
         // Validate type is not empty or indicates "none found"
         if (type == null || type.isEmpty()) {
-            System.out.println("[Traffic Monitor] ❌ REJECTED: Empty type");
             return null;
         }
         
@@ -614,18 +590,15 @@ public class IntelligentTrafficAnalyzer {
             lowerType.contains("no ") ||
             lowerType.equals("null") ||
             lowerType.equals("-")) {
-            System.out.println("[Traffic Monitor] ❌ REJECTED: 'None found' type: " + type);
             return null;
         }
         
         if ("HIDDEN_URL".equalsIgnoreCase(type)) {
-            System.out.println("[Traffic Monitor] ❌ BLOCKED HIDDEN_URL");
             return null;
         }
         
         // Block DEBUG_CODE - not required to be reported
         if ("DEBUG_CODE".equalsIgnoreCase(type) || lowerType.contains("debug")) {
-            System.out.println("[Traffic Monitor] ❌ BLOCKED DEBUG_CODE: " + type);
             return null;
         }
         
@@ -666,13 +639,11 @@ public class IntelligentTrafficAnalyzer {
                 lowerEvidence.contains("no security") ||
                 lowerEvidence.contains("no private ip") ||
                 lowerEvidence.contains("no hidden"))) {
-                System.out.println("[Traffic Monitor] ❌ REJECTED: Evidence indicates 'no finding': " + evidence.substring(0, Math.min(50, evidence.length())) + "...");
                 return null;
             }
         }
         
         if (evidence == null || evidence.isEmpty()) {
-            System.out.println("[Traffic Monitor] ❌ REJECTED: Missing evidence for " + type);
             return null;
         }
         
@@ -688,7 +659,6 @@ public class IntelligentTrafficAnalyzer {
         
         // Block NONE severity findings - not required in UI
         if ("NONE".equalsIgnoreCase(severity) || "INFO".equalsIgnoreCase(severity)) {
-            System.out.println("[Traffic Monitor] ❌ REJECTED: NONE/INFO severity for " + type);
             return null;
         }
         
@@ -713,13 +683,9 @@ public class IntelligentTrafficAnalyzer {
                 lowerDesc.contains("does not show") ||
                 lowerDesc.contains("does not contain") ||
                 lowerDesc.startsWith("no ")) {
-                System.out.println("[Traffic Monitor] ❌ REJECTED: Description indicates 'no finding': " + description.substring(0, Math.min(50, description.length())) + "...");
                 return null;
             }
         }
-        
-        System.out.println("[Traffic Monitor] ✅ AI ADDED: " + type + " (" + severity + ")");
-        System.out.println("[Traffic Monitor]    📝 Description: " + (description != null ? description.substring(0, Math.min(60, description.length())) + "..." : "null"));
         
         return new TrafficFinding(
             type,
@@ -779,7 +745,6 @@ public class IntelligentTrafficAnalyzer {
      */
     public void clearAnalyzedUrls() {
         analyzedUrls.clear();
-        System.out.println("[Traffic Monitor] 🗑️ Cleared analyzed URLs cache");
     }
 
     /**
@@ -797,8 +762,6 @@ public class IntelligentTrafficAnalyzer {
      */
     public void setCustomTemplate(String template) {
         this.customTemplate = template;
-        System.out.println("[Traffic Monitor] Analysis template " + 
-            (template == null ? "reset to default" : "updated (" + template.length() + " chars)"));
     }
     
     /**

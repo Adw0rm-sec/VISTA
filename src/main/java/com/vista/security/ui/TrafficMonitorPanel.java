@@ -7,11 +7,16 @@ import com.vista.security.model.HttpTransaction;
 import com.vista.security.model.TrafficFinding;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static com.vista.security.ui.VistaTheme.*;
 
 /**
  * TrafficMonitorPanel displays intelligent findings from automatic HTTP traffic analysis.
@@ -55,11 +60,20 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     // Data
     private final List<TrafficFinding> allFindings;
+    // Fast duplicate detection set: type+url keys for O(1) lookup instead of O(n) list scan
+    private final java.util.Set<String> findingKeys = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Timer updateTimer;
+    private Timer warningTimer; // Store reference for cleanup
     private int requestCounter = 0; // NEW: Request numbering
     private boolean firstStart = true; // Track first monitoring start
     private com.vista.security.service.AIService cachedAIService; // Cache AI service to avoid recreating
     private int lastFindingsCount = 0; // Track findings count to avoid unnecessary tree updates
+    
+    // Sort order toggle: true = descending (newest first), false = ascending (original)
+    private boolean sortDescending = false;
+    
+    // Row highlighting: maps request # → highlight color
+    private final Map<Integer, Color> highlightedRows = new HashMap<>();
     
     public TrafficMonitorPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
@@ -74,6 +88,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Initialize core components
         this.bufferManager = new TrafficBufferManager(10000); // Increased from 1000 to 10000
+        this.bufferManager.registerAsGlobal(); // Register for persistence access
         this.filterEngine = new TrafficFilterEngine();
         this.scopeManager = new ScopeManager();
         
@@ -112,25 +127,54 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         setLayout(new BorderLayout());
         initializeUI();
         
-        // Start update timer for batch UI updates
-        this.updateTimer = new Timer(1000, e -> refreshUI());
+        // Start update timer for batch UI updates (2s interval balances responsiveness vs EDT load)
+        this.updateTimer = new Timer(2000, e -> refreshUI());
+        updateTimer.setCoalesce(true); // Coalesce multiple pending events into one
         updateTimer.start();
         
         callbacks.printOutput("[Traffic Monitor] Panel initialized with AI integration and scope management");
     }
     
+    /**
+     * Restores persisted data (traffic transactions and findings) into the panel.
+     * Called by VistaPersistenceManager after data is loaded from disk.
+     */
+    public void restorePersistedData() {
+        // Restore traffic findings from persistence holder
+        List<TrafficFinding> persistedFindings = com.vista.security.core.TrafficFindingsHolder.getInstance().getFindings();
+        if (persistedFindings != null && !persistedFindings.isEmpty()) {
+            synchronized (allFindings) {
+                for (TrafficFinding finding : persistedFindings) {
+                    allFindings.add(finding);
+                    // Also register in duplicate detection set
+                    String url = finding.getSourceTransaction() != null ? finding.getSourceTransaction().getUrl() : "";
+                    findingKeys.add(finding.getType() + "|" + url);
+                }
+            }
+            callbacks.printOutput("[Traffic Monitor] ✓ Restored " + persistedFindings.size() + " persisted findings");
+        }
+        
+        // Refresh UI to show restored data
+        SwingUtilities.invokeLater(() -> {
+            updateTrafficTable();
+            updateStats();
+            updateFindingsTree();
+        });
+    }
+    
     private void initializeUI() {
         // Create tabbed pane for Traffic and Findings views
         contentTabbedPane = new JTabbedPane();
-        contentTabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        contentTabbedPane.setFont(VistaTheme.FONT_TAB);
+        contentTabbedPane.setBackground(VistaTheme.BG_PANEL);
         
         // Traffic tab (primary view - selected by default)
         JPanel trafficPanel = createTrafficPanel();
-        contentTabbedPane.addTab("  📊 Traffic  ", trafficPanel);
+        contentTabbedPane.addTab("  Traffic  ", trafficPanel);
         
         // Findings tab (shows count when findings exist)
         JPanel findingsPanel = createFindingsPanel();
-        contentTabbedPane.addTab("  🔍 Findings  ", findingsPanel);
+        contentTabbedPane.addTab("  Findings  ", findingsPanel);
         
         // Add to main panel
         add(contentTabbedPane, BorderLayout.CENTER);
@@ -145,7 +189,11 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     private JPanel createControlsPanel() {
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new GridBagLayout());
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        mainPanel.setBackground(VistaTheme.BG_CARD);
+        mainPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER),
+            BorderFactory.createEmptyBorder(8, 12, 8, 12)
+        ));
         
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(2, 5, 2, 5);
@@ -155,8 +203,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         // Start/Stop button
         gbc.gridx = 0;
         gbc.gridy = 0;
-        startStopButton = new JButton("▶ Start Monitoring");
-        startStopButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        startStopButton = VistaTheme.primaryButton("▶ Start Monitoring");
         startStopButton.addActionListener(e -> toggleMonitoring());
         mainPanel.add(startStopButton, gbc);
         
@@ -169,7 +216,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         // Enable Scope checkbox
         gbc.gridx = 2;
         scopeEnabledCheckbox = new JCheckBox("Enable Scope", false);
-        scopeEnabledCheckbox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        scopeEnabledCheckbox.setFont(VistaTheme.FONT_BODY);
+        scopeEnabledCheckbox.setForeground(VistaTheme.TEXT_PRIMARY);
+        scopeEnabledCheckbox.setOpaque(false);
         scopeEnabledCheckbox.setToolTipText("Enable to analyze ONLY in-scope domains");
         scopeEnabledCheckbox.addActionListener(e -> {
             boolean enabled = scopeEnabledCheckbox.isSelected();
@@ -206,8 +255,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Manage Scope button
         gbc.gridx = 3;
-        manageScopeButton = new JButton("⚙️ Manage Scope");
-        manageScopeButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        manageScopeButton = VistaTheme.compactButton("Manage Scope");
         manageScopeButton.setToolTipText("Add/remove in-scope domains");
         manageScopeButton.addActionListener(e -> showScopeManager());
         mainPanel.add(manageScopeButton, gbc);
@@ -220,15 +268,13 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Clear button
         gbc.gridx = 5;
-        clearButton = new JButton("🗑 Clear");
-        clearButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        clearButton = VistaTheme.compactButton("Clear");
         clearButton.addActionListener(e -> clearAll());
         mainPanel.add(clearButton, gbc);
         
         // Export button
         gbc.gridx = 6;
-        exportButton = new JButton("📤 Export");
-        exportButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        exportButton = VistaTheme.compactButton("Export");
         exportButton.addActionListener(e -> exportFindings());
         mainPanel.add(exportButton, gbc);
         
@@ -240,8 +286,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Customize Template button
         gbc.gridx = 8;
-        JButton customizePromptsButton = new JButton("✏️ Edit Template");
-        customizePromptsButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        JButton customizePromptsButton = VistaTheme.compactButton("Edit Template");
         customizePromptsButton.setToolTipText("Customize the AI analysis template for HTTP traffic monitoring");
         customizePromptsButton.addActionListener(e -> showPromptCustomizationDialog());
         mainPanel.add(customizePromptsButton, gbc);
@@ -305,10 +350,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         };
         
         trafficTable = new JTable(trafficTableModel);
-        trafficTable.setFont(new Font("Consolas", Font.PLAIN, 11));
-        trafficTable.setRowHeight(22);
+        VistaTheme.styleTable(trafficTable);
+        trafficTable.setFont(VistaTheme.FONT_MONO_SMALL);
         trafficTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        trafficTable.setAutoCreateRowSorter(true); // Enable sorting
         trafficTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 displayTrafficDetails();
@@ -351,11 +395,64 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         trafficTable.getColumnModel().getColumn(9).setPreferredWidth(200);  // Title
         trafficTable.getColumnModel().getColumn(10).setPreferredWidth(100); // Time
         
+        // ── Custom cell renderer for row highlighting ──
+        DefaultTableCellRenderer highlightRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
+                if (!isSelected) {
+                    // Get the request # from column 0 to check highlight map
+                    try {
+                        int modelRow = table.convertRowIndexToModel(row);
+                        Object reqNum = table.getModel().getValueAt(modelRow, 0);
+                        if (reqNum instanceof Integer) {
+                            Color hlColor = highlightedRows.get((Integer) reqNum);
+                            if (hlColor != null) {
+                                c.setBackground(hlColor);
+                                // Use dark text for light backgrounds, white for dark
+                                int brightness = (hlColor.getRed() * 299 + hlColor.getGreen() * 587 + hlColor.getBlue() * 114) / 1000;
+                                c.setForeground(brightness > 140 ? Color.BLACK : Color.WHITE);
+                            } else {
+                                c.setBackground(table.getBackground());
+                                c.setForeground(table.getForeground());
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        c.setBackground(table.getBackground());
+                        c.setForeground(table.getForeground());
+                    }
+                }
+                return c;
+            }
+        };
+        // Apply the renderer to all columns
+        for (int i = 0; i < trafficTable.getColumnCount(); i++) {
+            trafficTable.getColumnModel().getColumn(i).setCellRenderer(highlightRenderer);
+        }
+        
+        // ── Header double-click listener: toggle sort on "#" column ──
+        trafficTable.getTableHeader().addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int col = trafficTable.columnAtPoint(e.getPoint());
+                    if (col == 0) { // "#" column
+                        sortDescending = !sortDescending;
+                        updateTrafficTable();
+                        callbacks.printOutput("[Traffic Monitor] Sort order: " + 
+                            (sortDescending ? "Newest first (descending)" : "Oldest first (ascending)"));
+                    }
+                }
+            }
+        });
+        
         // Add right-click context menu for scope management
         JPopupMenu contextMenu = createTrafficContextMenu();
         trafficTable.setComponentPopupMenu(contextMenu);
         
-        // Also add mouse listener to ensure selection before popup
+        // Mouse listener for: right-click popup + double-click on # cell for color highlight
         trafficTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
@@ -368,6 +465,17 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             public void mouseReleased(java.awt.event.MouseEvent e) {
                 if (e.isPopupTrigger()) {
                     handlePopup(e);
+                }
+            }
+            
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int row = trafficTable.rowAtPoint(e.getPoint());
+                    int col = trafficTable.columnAtPoint(e.getPoint());
+                    if (col == 0 && row >= 0) { // Double-click on "#" column cell
+                        showColorPickerForRow(row);
+                    }
                 }
             }
             
@@ -400,11 +508,16 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     private JPanel createStatsPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        panel.setBackground(VistaTheme.BG_CARD);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, VistaTheme.BORDER),
+            BorderFactory.createEmptyBorder(6, 14, 6, 14)
+        ));
         
         // Stats label on the left
         statsLabel = new JLabel("Ready");
-        statsLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        statsLabel.setFont(VistaTheme.FONT_SMALL);
+        statsLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         panel.add(statsLabel, BorderLayout.WEST);
         
         // Warning panel on the right (initially hidden)
@@ -412,8 +525,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // Clickable warning label
         JLabel warningLabel = new JLabel();
-        warningLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        warningLabel.setForeground(new Color(200, 100, 0));
+        warningLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
+        warningLabel.setForeground(VistaTheme.STATUS_WARNING);
         warningLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
         warningLabel.setToolTipText("Click to configure");
         
@@ -435,8 +548,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         warningPanel.add(warningLabel);
         panel.add(warningPanel, BorderLayout.EAST);
         
-        // Update warning based on scope and AI status
-        Timer warningTimer = new Timer(1000, e -> {
+        // Update warning based on scope and AI status (3s is sufficient for status checks)
+        warningTimer = new Timer(3000, e -> {
             boolean aiConfigured = isAIConfigured();
             boolean scopeEnabled = scopeManager.isScopeEnabled();
             int domainsCount = scopeManager.size();
@@ -558,6 +671,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         if (result == JOptionPane.YES_OPTION) {
             allFindings.clear();
+            findingKeys.clear(); // Clear duplicate detection cache
             bufferManager.clear();
             if (analyzer != null) {
                 analyzer.clearAnalyzedUrls(); // Clear URL deduplication cache
@@ -581,19 +695,26 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             return;
         }
         
+        // Convert view row to model row (handles sorting)
+        int modelRow = selectedRow;
+        try {
+            modelRow = trafficTable.convertRowIndexToModel(selectedRow);
+        } catch (Exception ignored) {}
+        
         // Get the URL from the DISPLAYED table, not from transactions directly
         // because the table may be filtered
-        if (selectedRow >= trafficTableModel.getRowCount()) {
+        if (modelRow >= trafficTableModel.getRowCount()) {
             return;
         }
         
-        String selectedUrl = (String) trafficTableModel.getValueAt(selectedRow, 3); // URL column
+        String selectedUrl = (String) trafficTableModel.getValueAt(modelRow, 3); // URL column
+        if (selectedUrl == null) return;
         
         // Find the transaction with this URL
         List<HttpTransaction> transactions = bufferManager.getAllTransactions();
         HttpTransaction transaction = null;
         for (HttpTransaction tx : transactions) {
-            if (tx.getUrl().equals(selectedUrl)) {
+            if (selectedUrl.equals(tx.getUrl())) {
                 transaction = tx;
                 break;
             }
@@ -628,14 +749,12 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         // SKIP ANALYSIS ENTIRELY if scope is enabled and URL is out of scope
         if (scopeEnabled && hasScopeDomains && !inScope) {
-            callbacks.printOutput("[Traffic Monitor] ⏭️ SKIPPING out-of-scope: " + transaction.getUrl());
             return; // EARLY RETURN - no analysis at all
         }
         
         // Check if AI is configured
         boolean aiConfigured = isAIConfigured();
         if (!aiConfigured) {
-            callbacks.printOutput("[Traffic Monitor] ⚠️ AI not configured, skipping: " + transaction.getUrl());
             return;
         }
         
@@ -681,6 +800,8 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     // Check for duplicates before adding
                     if (!isDuplicateFinding(finding)) {
                         allFindings.add(finding);
+                        // Also register with persistence holder
+                        com.vista.security.core.TrafficFindingsHolder.getInstance().addFinding(finding);
                         addedCount++;
                         callbacks.printOutput("[Traffic Monitor] ➕ ADDED: " + finding.getType() + 
                             " (" + finding.getSeverity() + ") - " + truncateUrl(finding.getSourceTransaction().getUrl(), 50));
@@ -723,33 +844,14 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     /**
      * Check if a finding is a duplicate of an existing one.
-     * Duplicate = same type + same URL + similar evidence
+     * Uses O(1) hash set lookup instead of O(n) list scan for performance.
+     * Duplicate = same type + same URL
      */
     private boolean isDuplicateFinding(TrafficFinding newFinding) {
         String newType = newFinding.getType();
         String newUrl = newFinding.getSourceTransaction() != null ? newFinding.getSourceTransaction().getUrl() : "";
-        String newEvidence = newFinding.getEvidence() != null ? newFinding.getEvidence() : "";
-        
-        for (TrafficFinding existing : allFindings) {
-            String existingType = existing.getType();
-            String existingUrl = existing.getSourceTransaction() != null ? existing.getSourceTransaction().getUrl() : "";
-            String existingEvidence = existing.getEvidence() != null ? existing.getEvidence() : "";
-            
-            // Same type and URL
-            if (newType.equals(existingType) && newUrl.equals(existingUrl)) {
-                return true; // Duplicate - same type on same URL
-            }
-            
-            // Same type and very similar evidence (first 100 chars match)
-            if (newType.equals(existingType)) {
-                String newEvidencePrefix = newEvidence.length() > 100 ? newEvidence.substring(0, 100) : newEvidence;
-                String existingEvidencePrefix = existingEvidence.length() > 100 ? existingEvidence.substring(0, 100) : existingEvidence;
-                if (newEvidencePrefix.equals(existingEvidencePrefix) && !newEvidencePrefix.isEmpty()) {
-                    return true; // Duplicate - same evidence
-                }
-            }
-        }
-        return false;
+        String key = newType + "|" + newUrl;
+        return !findingKeys.add(key); // returns false if already present = duplicate
     }
     
     /**
@@ -826,16 +928,14 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
     
     private void updateTrafficTable() {
         SwingUtilities.invokeLater(() -> {
-            // Don't update if user is actively selecting/viewing (prevents selection jumping)
-            if (trafficTable.getSelectedRow() >= 0 && trafficTable.hasFocus()) {
-                return; // Skip update to preserve user selection
-            }
-            
-            // Save current selection by URL (more reliable than row index)
+            // Save current selection by request # (stable across sort changes)
             int selectedRow = trafficTable.getSelectedRow();
-            String selectedUrl = null;
+            Integer selectedReqNum = null;
             if (selectedRow >= 0 && selectedRow < trafficTableModel.getRowCount()) {
-                selectedUrl = (String) trafficTableModel.getValueAt(selectedRow, 3); // URL column
+                Object val = trafficTableModel.getValueAt(selectedRow, 0); // # column
+                if (val instanceof Integer) {
+                    selectedReqNum = (Integer) val;
+                }
             }
             
             // Clear table
@@ -844,28 +944,36 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             List<HttpTransaction> transactions = bufferManager.getAllTransactions();
             String urlFilter = urlFilterField != null ? urlFilterField.getText().trim() : "";
             
-            int requestNumber = 1;
-            int rowToSelect = -1;
-            int currentRow = 0;
-            
+            // Build filtered list first
+            List<HttpTransaction> filteredTransactions = new ArrayList<>();
             for (HttpTransaction tx : transactions) {
                 // Apply scope filter if enabled
                 if (scopeManager.isScopeEnabled() && scopeManager.size() > 0) {
                     if (!scopeManager.isInScope(tx.getUrl())) {
-                        // Skip out-of-scope traffic when scope is enabled
                         continue;
                     }
                 }
-                
                 // Apply URL filter
                 if (!urlFilter.isEmpty()) {
                     if (!tx.getUrl().toLowerCase().contains(urlFilter.toLowerCase())) {
                         continue;
                     }
                 }
+                filteredTransactions.add(tx);
+            }
+            
+            int totalFiltered = filteredTransactions.size();
+            int rowToSelect = -1;
+            int currentRow = 0;
+            
+            for (int i = 0; i < totalFiltered; i++) {
+                // When descending, iterate from the end so newest appears at top
+                int idx = sortDescending ? (totalFiltered - 1 - i) : i;
+                HttpTransaction tx = filteredTransactions.get(idx);
+                int requestNumber = idx + 1; // Original sequential number
                 
                 trafficTableModel.addRow(new Object[]{
-                    requestNumber++,
+                    requestNumber,
                     tx.getHost(),
                     tx.getMethod(),
                     tx.getUrl(),
@@ -878,17 +986,16 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                     tx.getFormattedTimestamp()
                 });
                 
-                // Check if this was the selected row (match by URL)
-                if (selectedUrl != null && tx.getUrl().equals(selectedUrl)) {
+                // Restore selection by request #
+                if (selectedReqNum != null && requestNumber == selectedReqNum) {
                     rowToSelect = currentRow;
                 }
                 currentRow++;
             }
             
-            // Restore selection only if we found the same URL
+            // Restore selection if the same request # is still visible
             if (rowToSelect >= 0 && rowToSelect < trafficTableModel.getRowCount()) {
                 final int finalRowToSelect = rowToSelect;
-                // Use invokeLater to ensure table is fully updated before selecting
                 SwingUtilities.invokeLater(() -> {
                     trafficTable.setRowSelectionInterval(finalRowToSelect, finalRowToSelect);
                 });
@@ -915,6 +1022,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         synchronized (allFindings) {
             allFindings.clear();
         }
+        findingKeys.clear(); // Clear duplicate detection cache
         
         // Update findings tree (will show empty)
         updateFindingsTree();
@@ -923,6 +1031,103 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         clearFindingDetailsPanel();
         
         callbacks.printOutput("[Traffic Monitor] 🗑️ Cleared analyzed URLs cache and findings - scope changed");
+    }
+    
+    /**
+     * Shows a color picker popup when user double-clicks on the "#" column cell.
+     * Allows highlighting specific rows with chosen colors.
+     */
+    private void showColorPickerForRow(int viewRow) {
+        try {
+            int modelRow = trafficTable.convertRowIndexToModel(viewRow);
+            Object reqNumObj = trafficTableModel.getValueAt(modelRow, 0);
+            if (!(reqNumObj instanceof Integer)) return;
+            int reqNum = (Integer) reqNumObj;
+            
+            // Create a popup with color swatches
+            JPopupMenu colorMenu = new JPopupMenu();
+            
+            // Title label
+            JLabel titleLabel = new JLabel("  Highlight Row #" + reqNum + "  ");
+            titleLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
+            titleLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+            titleLabel.setBorder(BorderFactory.createEmptyBorder(6, 4, 4, 4));
+            colorMenu.add(titleLabel);
+            colorMenu.addSeparator();
+            
+            // Color swatches panel
+            JPanel swatchPanel = new JPanel(new GridLayout(2, 5, 3, 3));
+            swatchPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+            swatchPanel.setOpaque(false);
+            
+            Color[] colors = {
+                new Color(254, 226, 226),  // Red light
+                new Color(255, 237, 213),  // Orange light
+                new Color(254, 249, 195),  // Yellow light
+                new Color(220, 252, 231),  // Green light
+                new Color(219, 234, 254),  // Blue light
+                new Color(239, 68, 68),    // Red
+                new Color(249, 115, 22),   // Orange
+                new Color(234, 179, 8),    // Yellow
+                new Color(34, 197, 94),    // Green
+                new Color(59, 130, 246),   // Blue
+            };
+            String[] colorNames = {
+                "Light Red", "Light Orange", "Light Yellow", "Light Green", "Light Blue",
+                "Red", "Orange", "Yellow", "Green", "Blue"
+            };
+            
+            for (int i = 0; i < colors.length; i++) {
+                final Color color = colors[i];
+                JButton swatch = new JButton();
+                swatch.setPreferredSize(new Dimension(26, 26));
+                swatch.setBackground(color);
+                swatch.setOpaque(true);
+                swatch.setBorderPainted(true);
+                swatch.setBorder(BorderFactory.createLineBorder(color.darker(), 1));
+                swatch.setToolTipText(colorNames[i]);
+                swatch.setFocusPainted(false);
+                swatch.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                swatch.addActionListener(e -> {
+                    highlightedRows.put(reqNum, color);
+                    trafficTable.repaint();
+                    colorMenu.setVisible(false);
+                });
+                swatchPanel.add(swatch);
+            }
+            
+            colorMenu.add(swatchPanel);
+            
+            // "Remove Highlight" option
+            if (highlightedRows.containsKey(reqNum)) {
+                colorMenu.addSeparator();
+                JMenuItem removeItem = new JMenuItem("Remove Highlight");
+                removeItem.setFont(VistaTheme.FONT_SMALL);
+                removeItem.addActionListener(e -> {
+                    highlightedRows.remove(reqNum);
+                    trafficTable.repaint();
+                });
+                colorMenu.add(removeItem);
+            }
+            
+            // "Clear All Highlights" option
+            if (!highlightedRows.isEmpty()) {
+                JMenuItem clearAllItem = new JMenuItem("Clear All Highlights");
+                clearAllItem.setFont(VistaTheme.FONT_SMALL);
+                clearAllItem.addActionListener(e -> {
+                    highlightedRows.clear();
+                    trafficTable.repaint();
+                });
+                colorMenu.add(clearAllItem);
+            }
+            
+            // Show popup near the cell
+            Rectangle cellRect = trafficTable.getCellRect(viewRow, 0, true);
+            colorMenu.show(trafficTable, cellRect.x + cellRect.width, cellRect.y);
+            
+        } catch (Exception ex) {
+            callbacks.printError("[Traffic Monitor] Error showing color picker: " + ex.getMessage());
+        }
     }
     
     /**
@@ -991,9 +1196,16 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         if (updateTimer != null) {
             updateTimer.stop();
         }
+        if (warningTimer != null) {
+            warningTimer.stop();
+        }
         if (monitorService != null) {
             monitorService.stop();
         }
+        // Shutdown analysis queue
+        try {
+            AnalysisQueueManager.getInstance().shutdown();
+        } catch (Exception ignored) {}
     }
     
     /**
@@ -1288,10 +1500,11 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
         JLabel titleLabel = new JLabel("In-Scope Domains");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setFont(VistaTheme.FONT_HEADING);
+        titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         JLabel subtitleLabel = new JLabel("Add domains to filter traffic. Supports wildcards (*.example.com)");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        subtitleLabel.setForeground(Color.GRAY);
+        subtitleLabel.setFont(VistaTheme.FONT_SMALL);
+        subtitleLabel.setForeground(VistaTheme.TEXT_MUTED);
         headerPanel.add(titleLabel, BorderLayout.NORTH);
         headerPanel.add(subtitleLabel, BorderLayout.SOUTH);
         
@@ -1301,7 +1514,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             listModel.addElement(scope);
         }
         JList<String> scopeList = new JList<>(listModel);
-        scopeList.setFont(new Font("Consolas", Font.PLAIN, 12));
+        scopeList.setFont(VistaTheme.FONT_MONO);
         JScrollPane scrollPane = new JScrollPane(scopeList);
         
         // Add/Remove panel
@@ -1311,7 +1524,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         JPanel addPanel = new JPanel(new BorderLayout(5, 0));
         JTextField addField = new JTextField();
         addField.setToolTipText("Enter domain (e.g., example.com or *.example.com)");
-        JButton addButton = new JButton("➕ Add");
+        JButton addButton = VistaTheme.primaryButton("Add");
         addButton.addActionListener(e -> {
             String domain = addField.getText().trim();
             if (!domain.isEmpty()) {
@@ -1326,7 +1539,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         addPanel.add(addButton, BorderLayout.EAST);
         
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton removeButton = new JButton("➖ Remove Selected");
+        JButton removeButton = VistaTheme.secondaryButton("Remove Selected");
         removeButton.addActionListener(e -> {
             String selected = scopeList.getSelectedValue();
             if (selected != null) {
@@ -1336,7 +1549,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             }
         });
         
-        JButton clearButton = new JButton("🗑 Clear All");
+        JButton clearButton = VistaTheme.secondaryButton("Clear All");
         clearButton.addActionListener(e -> {
             int result = JOptionPane.showConfirmDialog(
                 dialog,
@@ -1351,7 +1564,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             }
         });
         
-        JButton closeButton = new JButton("Close");
+        JButton closeButton = VistaTheme.compactButton("Close");
         closeButton.addActionListener(e -> {
             // Clear cache to allow re-analysis with any scope changes
             if (scopeManager.size() > 0 && scopeManager.isScopeEnabled()) {
@@ -1380,8 +1593,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             "• Enable 'Enable Scope' checkbox to activate filtering"
         );
         infoArea.setEditable(false);
-        infoArea.setBackground(new Color(245, 245, 245));
-        infoArea.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        infoArea.setBackground(VistaTheme.BG_PANEL);
+        infoArea.setFont(VistaTheme.FONT_SMALL);
+        infoArea.setForeground(VistaTheme.TEXT_SECONDARY);
         infoPanel.add(infoArea, BorderLayout.CENTER);
         
         dialog.add(headerPanel, BorderLayout.NORTH);
@@ -1462,15 +1676,15 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
             
             // Title
-            JLabel titleLabel = new JLabel("ℹ️ How Traffic Monitor Works");
-            titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-            titleLabel.setForeground(new Color(0, 100, 200));
+            JLabel titleLabel = new JLabel("How Traffic Monitor Works");
+            titleLabel.setFont(VistaTheme.FONT_HEADING);
+            titleLabel.setForeground(VistaTheme.PRIMARY);
             
             // Message
             JTextArea messageArea = new JTextArea();
             messageArea.setEditable(false);
             messageArea.setBackground(panel.getBackground());
-            messageArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            messageArea.setFont(VistaTheme.FONT_BODY);
             messageArea.setLineWrap(true);
             messageArea.setWrapStyleWord(true);
             
@@ -1516,8 +1730,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             
             // Buttons
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            JButton manageScopeBtn = new JButton("⚙️ Manage Scope");
-            manageScopeBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            JButton manageScopeBtn = VistaTheme.primaryButton("Manage Scope");
             manageScopeBtn.addActionListener(e -> {
                 Window window = SwingUtilities.getWindowAncestor(panel);
                 if (window != null) {
@@ -1557,15 +1770,15 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
             
             // Title
-            JLabel titleLabel = new JLabel("⚠️ Scope Configuration Required");
-            titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-            titleLabel.setForeground(new Color(200, 100, 0));
+            JLabel titleLabel = new JLabel("Scope Configuration Required");
+            titleLabel.setFont(VistaTheme.FONT_HEADING);
+            titleLabel.setForeground(VistaTheme.STATUS_WARNING);
             
             // Message
             JTextArea messageArea = new JTextArea();
             messageArea.setEditable(false);
             messageArea.setBackground(panel.getBackground());
-            messageArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            messageArea.setFont(VistaTheme.FONT_BODY);
             messageArea.setLineWrap(true);
             messageArea.setWrapStyleWord(true);
             
@@ -1596,8 +1809,7 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             
             // Buttons
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            JButton manageScopeBtn = new JButton("⚙️ Manage Scope Now");
-            manageScopeBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            JButton manageScopeBtn = VistaTheme.primaryButton("Manage Scope Now");
             manageScopeBtn.addActionListener(e -> {
                 Window window = SwingUtilities.getWindowAncestor(panel);
                 if (window != null) {
@@ -1691,9 +1903,6 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
             
             // Also update saved copy for config change preservation
             savedCustomTemplate = template;
-            
-            System.out.println("[Traffic Monitor] ✅ Analysis template updated");
-            System.out.println("[Traffic Monitor] 📝 Template length: " + template.length() + " chars (~" + (template.length() / 4) + " tokens)");
         }
     }
     

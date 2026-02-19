@@ -13,6 +13,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.vista.security.ui.VistaTheme.*;
+
 /**
  * UI Panel for managing AI prompt templates.
  * Allows users to create, edit, import/export, and organize templates.
@@ -55,14 +57,19 @@ public class PromptTemplatePanel extends JPanel {
     private void buildUI() {
         // Header
         JPanel headerPanel = new JPanel(new BorderLayout(8, 8));
-        headerPanel.setBorder(new EmptyBorder(12, 12, 8, 12));
+        headerPanel.setBackground(VistaTheme.BG_CARD);
+        headerPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER),
+            new EmptyBorder(14, 16, 10, 16)
+        ));
         
         JLabel titleLabel = new JLabel("AI Prompt Templates");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setFont(VistaTheme.FONT_TITLE);
+        titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         
         JLabel subtitleLabel = new JLabel("Create and manage custom AI prompts for different testing scenarios");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
-        subtitleLabel.setForeground(new Color(100, 100, 110));
+        subtitleLabel.setFont(VistaTheme.FONT_SMALL);
+        subtitleLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         
         JPanel titleStack = new JPanel();
         titleStack.setLayout(new BoxLayout(titleStack, BoxLayout.Y_AXIS));
@@ -74,9 +81,14 @@ public class PromptTemplatePanel extends JPanel {
         
         // Search and filter bar
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        filterPanel.setBackground(VistaTheme.BG_CARD);
         
-        filterPanel.add(new JLabel("🔍 Search:"));
+        JLabel searchLabel = new JLabel("Search:");
+        searchLabel.setFont(VistaTheme.FONT_LABEL);
+        searchLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        filterPanel.add(searchLabel);
         searchField = new JTextField(20);
+        VistaTheme.styleTextField(searchField);
         searchField.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyReleased(java.awt.event.KeyEvent e) {
                 filterTemplates();
@@ -85,8 +97,12 @@ public class PromptTemplatePanel extends JPanel {
         filterPanel.add(searchField);
         
         filterPanel.add(Box.createHorizontalStrut(12));
-        filterPanel.add(new JLabel("Category:"));
+        JLabel catLabel = new JLabel("Category:");
+        catLabel.setFont(VistaTheme.FONT_LABEL);
+        catLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        filterPanel.add(catLabel);
         categoryFilter = new JComboBox<>();
+        VistaTheme.styleComboBox(categoryFilter);
         categoryFilter.addItem("All Categories");
         categoryFilter.addActionListener(e -> filterTemplates());
         filterPanel.add(categoryFilter);
@@ -114,8 +130,8 @@ public class PromptTemplatePanel extends JPanel {
         // Table
         tableModel = new TemplateTableModel();
         templateTable = new JTable(tableModel);
+        VistaTheme.styleTable(templateTable);
         templateTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        templateTable.setRowHeight(24);
         templateTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 loadSelectedTemplate();
@@ -133,25 +149,25 @@ public class PromptTemplatePanel extends JPanel {
         templateTable.getColumnModel().getColumn(2).setCellRenderer(centerRenderer);
         
         JScrollPane tableScroll = new JScrollPane(templateTable);
-        tableScroll.setBorder(BorderFactory.createTitledBorder("Templates"));
+        tableScroll.setBorder(VistaTheme.sectionBorder("Templates"));
         
         // Buttons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
         
-        newButton = new JButton("➕ New");
+        newButton = VistaTheme.primaryButton("New");
         newButton.setToolTipText("Create new template");
         newButton.addActionListener(e -> createNewTemplate());
         
-        copyButton = new JButton("📋 Copy");
+        copyButton = VistaTheme.compactButton("Copy");
         copyButton.setToolTipText("Copy selected template");
         copyButton.addActionListener(e -> copySelectedTemplate());
         copyButton.setEnabled(false);
         
-        JButton importBtn = new JButton("📥 Import");
+        JButton importBtn = VistaTheme.compactButton("Import");
         importBtn.setToolTipText("Import template from file");
         importBtn.addActionListener(e -> importTemplate());
         
-        JButton exportBtn = new JButton("📤 Export");
+        JButton exportBtn = VistaTheme.compactButton("Export");
         exportBtn.setToolTipText("Export selected template");
         exportBtn.addActionListener(e -> exportSelectedTemplate());
         exportBtn.setEnabled(false);
@@ -176,6 +192,7 @@ public class PromptTemplatePanel extends JPanel {
 
     private JPanel buildEditorPanel() {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBackground(VistaTheme.BG_PANEL);
         panel.setBorder(new EmptyBorder(8, 4, 8, 8));
         
         // Editor form
@@ -185,15 +202,22 @@ public class PromptTemplatePanel extends JPanel {
         // Basic info section
         JPanel basicInfoPanel = new JPanel();
         basicInfoPanel.setLayout(new BoxLayout(basicInfoPanel, BoxLayout.Y_AXIS));
-        basicInfoPanel.setBorder(BorderFactory.createTitledBorder("Template Information"));
+        basicInfoPanel.setBorder(VistaTheme.sectionBorder("Template Information"));
         
         nameField = new JTextField(30);
+        VistaTheme.styleTextField(nameField);
         descriptionField = new JTextField(30);
+        VistaTheme.styleTextField(descriptionField);
         categoryCombo = new JComboBox<>(new String[]{"Exploitation", "Reconnaissance", "Bypass", "General"});
+        VistaTheme.styleComboBox(categoryCombo);
         tagsField = new JTextField(30);
+        VistaTheme.styleTextField(tagsField);
         activeCheckbox = new JCheckBox("Active", true);
+        activeCheckbox.setFont(VistaTheme.FONT_BODY);
+        activeCheckbox.setForeground(VistaTheme.TEXT_PRIMARY);
         usageCountLabel = new JLabel("Usage: 0 times");
-        usageCountLabel.setFont(new Font("Segoe UI", Font.ITALIC, 10));
+        usageCountLabel.setFont(VistaTheme.FONT_SMALL);
+        usageCountLabel.setForeground(VistaTheme.TEXT_MUTED);
         
         basicInfoPanel.add(createFormRow("Name:", nameField));
         basicInfoPanel.add(createFormRow("Description:", descriptionField));
@@ -206,29 +230,32 @@ public class PromptTemplatePanel extends JPanel {
         
         // System prompt section
         JPanel systemPromptPanel = new JPanel(new BorderLayout(4, 4));
-        systemPromptPanel.setBorder(BorderFactory.createTitledBorder("System Prompt"));
+        systemPromptPanel.setBorder(VistaTheme.sectionBorder("System Prompt"));
         
         systemPromptArea = new JTextArea(6, 50);
-        systemPromptArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        VistaTheme.styleCodeArea(systemPromptArea);
         systemPromptArea.setLineWrap(true);
         systemPromptArea.setWrapStyleWord(true);
-        JScrollPane systemScroll = new JScrollPane(systemPromptArea);
+        JScrollPane systemScroll = VistaTheme.styledScrollPane(systemPromptArea);
         
         JPanel systemToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        systemToolbar.add(new JLabel("💡 Define AI's role and expertise"));
+        JLabel systemHint = new JLabel("Define AI's role and expertise");
+        systemHint.setFont(VistaTheme.FONT_SMALL);
+        systemHint.setForeground(VistaTheme.TEXT_MUTED);
+        systemToolbar.add(systemHint);
         
         systemPromptPanel.add(systemToolbar, BorderLayout.NORTH);
         systemPromptPanel.add(systemScroll, BorderLayout.CENTER);
         
         // User prompt section
         JPanel userPromptPanel = new JPanel(new BorderLayout(4, 4));
-        userPromptPanel.setBorder(BorderFactory.createTitledBorder("User Prompt (with Variables)"));
+        userPromptPanel.setBorder(VistaTheme.sectionBorder("User Prompt (with Variables)"));
         
         userPromptArea = new JTextArea(12, 50);
-        userPromptArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        VistaTheme.styleCodeArea(userPromptArea);
         userPromptArea.setLineWrap(true);
         userPromptArea.setWrapStyleWord(true);
-        JScrollPane userScroll = new JScrollPane(userPromptArea);
+        JScrollPane userScroll = VistaTheme.styledScrollPane(userPromptArea);
         
         JPanel userToolbar = buildVariableToolbar();
         
@@ -248,16 +275,15 @@ public class PromptTemplatePanel extends JPanel {
         // Action buttons
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         
-        saveButton = new JButton("💾 Save Template");
-        saveButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        saveButton = VistaTheme.primaryButton("Save Template");
         saveButton.addActionListener(e -> saveCurrentTemplate());
         saveButton.setEnabled(false);
         
-        deleteButton = new JButton("🗑️ Delete");
+        deleteButton = VistaTheme.secondaryButton("Delete");
         deleteButton.addActionListener(e -> deleteCurrentTemplate());
         deleteButton.setEnabled(false);
         
-        JButton cancelBtn = new JButton("Cancel");
+        JButton cancelBtn = VistaTheme.compactButton("Cancel");
         cancelBtn.addActionListener(e -> cancelEdit());
         
         actionPanel.add(cancelBtn);
@@ -273,7 +299,10 @@ public class PromptTemplatePanel extends JPanel {
     private JPanel buildVariableToolbar() {
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
         
-        toolbar.add(new JLabel("💡 Insert variables:"));
+        JLabel varHint = new JLabel("Insert variables:");
+        varHint.setFont(VistaTheme.FONT_SMALL);
+        varHint.setForeground(VistaTheme.TEXT_MUTED);
+        toolbar.add(varHint);
         
         String[] commonVars = {
             "USER_QUERY", "REQUEST", "RESPONSE", "PARAMETERS_LIST", "REFLECTION_ANALYSIS",
@@ -281,22 +310,18 @@ public class PromptTemplatePanel extends JPanel {
         };
         
         for (String var : commonVars) {
-            JButton varBtn = new JButton("{{" + var + "}}");
-            varBtn.setFont(new Font("Segoe UI", Font.PLAIN, 9));
-            varBtn.setMargin(new Insets(2, 4, 2, 4));
+            JButton varBtn = VistaTheme.pillButton("{{" + var + "}}");
             varBtn.setToolTipText("Insert " + var + " variable");
             if (var.equals("USER_QUERY")) {
-                varBtn.setForeground(new Color(0, 100, 200));
-                varBtn.setFont(new Font("Segoe UI", Font.BOLD, 9));
+                varBtn.setForeground(VistaTheme.PRIMARY);
+                varBtn.setFont(VistaTheme.FONT_SMALL_BOLD);
                 varBtn.setToolTipText("Insert USER_QUERY - User's actual question (IMPORTANT!)");
             }
             varBtn.addActionListener(e -> insertVariable(var));
             toolbar.add(varBtn);
         }
         
-        JButton moreBtn = new JButton("More...");
-        moreBtn.setFont(new Font("Segoe UI", Font.PLAIN, 9));
-        moreBtn.setMargin(new Insets(2, 6, 2, 6));
+        JButton moreBtn = VistaTheme.pillButton("More...");
         moreBtn.addActionListener(e -> showAllVariables());
         toolbar.add(moreBtn);
         
@@ -307,6 +332,8 @@ public class PromptTemplatePanel extends JPanel {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         if (!label.isEmpty()) {
             JLabel lbl = new JLabel(label);
+            lbl.setFont(VistaTheme.FONT_LABEL);
+            lbl.setForeground(VistaTheme.TEXT_SECONDARY);
             lbl.setPreferredSize(new Dimension(100, 25));
             row.add(lbl);
         } else {
@@ -351,7 +378,7 @@ public class PromptTemplatePanel extends JPanel {
         
         JTextArea textArea = new JTextArea(help.toString(), 20, 40);
         textArea.setEditable(false);
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        VistaTheme.styleCodeArea(textArea);
         
         JScrollPane scrollPane = new JScrollPane(textArea);
         JOptionPane.showMessageDialog(this, scrollPane, "Available Variables", JOptionPane.INFORMATION_MESSAGE);

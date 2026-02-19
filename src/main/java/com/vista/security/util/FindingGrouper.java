@@ -60,18 +60,10 @@ public class FindingGrouper {
     public static Map<String, Map<String, Map<String, List<TrafficFinding>>>> createHierarchy(
             List<TrafficFinding> findings) {
         
-        System.out.println("[Finding Grouper] ═══════════════════════════════════════");
-        System.out.println("[Finding Grouper] 📊 Starting Hierarchical Grouping");
-        System.out.println("[Finding Grouper]    Input findings: " + findings.size());
-        
         Map<String, Map<String, Map<String, List<TrafficFinding>>>> hierarchy = new LinkedHashMap<>();
         
         // Group by type first
         Map<String, List<TrafficFinding>> byType = groupByType(findings);
-        System.out.println("[Finding Grouper]    Level 1 - Types: " + byType.size());
-        
-        int totalUrls = 0;
-        int totalParams = 0;
         
         // For each type, group by URL
         for (Map.Entry<String, List<TrafficFinding>> typeEntry : byType.entrySet()) {
@@ -80,7 +72,6 @@ public class FindingGrouper {
             
             Map<String, Map<String, List<TrafficFinding>>> urlMap = new LinkedHashMap<>();
             Map<String, List<TrafficFinding>> byUrl = groupByUrl(typeFindings);
-            totalUrls += byUrl.size();
             
             // For each URL, group by parameter
             for (Map.Entry<String, List<TrafficFinding>> urlEntry : byUrl.entrySet()) {
@@ -88,17 +79,11 @@ public class FindingGrouper {
                 List<TrafficFinding> urlFindings = urlEntry.getValue();
                 
                 Map<String, List<TrafficFinding>> paramMap = groupByParameter(urlFindings);
-                totalParams += paramMap.size();
                 urlMap.put(url, paramMap);
             }
             
             hierarchy.put(type, urlMap);
         }
-        
-        System.out.println("[Finding Grouper]    Level 2 - URLs: " + totalUrls);
-        System.out.println("[Finding Grouper]    Level 3 - Parameters: " + totalParams);
-        System.out.println("[Finding Grouper] ✅ Grouping Complete");
-        System.out.println("[Finding Grouper] ═══════════════════════════════════════");
         
         return hierarchy;
     }

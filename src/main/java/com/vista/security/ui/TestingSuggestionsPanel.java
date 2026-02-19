@@ -16,6 +16,11 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import static com.vista.security.ui.VistaTheme.*;
 
 /**
  * Testing Suggestions Panel - AI provides methodology and guidance without automatic testing.
@@ -77,6 +82,14 @@ public class TestingSuggestionsPanel extends JPanel {
     // NOTE: testingSteps is now stored per-session in ChatSession, not globally
     private String currentTestingPlan = null; // For interactive mode
     private int currentStep = 0; // Track current step in interactive mode
+    
+    // Thread pool for AI tasks - prevents unbounded thread creation
+    private final ExecutorService aiExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "VISTA-AI-Advisor");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile Future<?> currentAITask; // Track current AI task for cancellation
 
     public TestingSuggestionsPanel(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
@@ -108,20 +121,27 @@ public class TestingSuggestionsPanel extends JPanel {
 
     private JPanel buildHeaderPanel() {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
-        panel.setBorder(new EmptyBorder(12, 12, 8, 12));
+        panel.setBackground(VistaTheme.BG_CARD);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER),
+            new EmptyBorder(14, 16, 10, 16)
+        ));
 
         JPanel titleRow = new JPanel(new BorderLayout());
+        titleRow.setOpaque(false);
         
         JLabel titleLabel = new JLabel("AI Security Advisor");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setFont(VistaTheme.FONT_TITLE);
+        titleLabel.setForeground(VistaTheme.TEXT_PRIMARY);
         
         JLabel subtitleLabel = new JLabel("Interactive testing guidance with WAF bypass intelligence");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
-        subtitleLabel.setForeground(new Color(100, 100, 110));
+        subtitleLabel.setFont(VistaTheme.FONT_SMALL);
+        subtitleLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         
-        configStatusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        configStatusLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
         
         JPanel titleStack = new JPanel();
+        titleStack.setOpaque(false);
         titleStack.setLayout(new BoxLayout(titleStack, BoxLayout.Y_AXIS));
         titleStack.add(titleLabel);
         titleStack.add(Box.createVerticalStrut(2));
@@ -132,11 +152,15 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Template selector row
         JPanel templateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        templateRow.add(new JLabel("📝 Template:"));
+        templateRow.setOpaque(false);
+        JLabel templateLabel = new JLabel("Template:");
+        templateLabel.setFont(VistaTheme.FONT_LABEL);
+        templateLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        templateRow.add(templateLabel);
         
         templateSelector = new JComboBox<>();
-        templateSelector.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        templateSelector.setPreferredSize(new Dimension(250, 25));
+        VistaTheme.styleComboBox(templateSelector);
+        templateSelector.setPreferredSize(new Dimension(250, 28));
         templateSelector.addItem("-- Default (No Template) --");
         
         // Load active templates
@@ -146,20 +170,15 @@ public class TestingSuggestionsPanel extends JPanel {
         
         templateRow.add(templateSelector);
         
-        JButton manageTemplatesBtn = new JButton("⚙️ Manage");
-        manageTemplatesBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        JButton manageTemplatesBtn = VistaTheme.compactButton("Manage");
         manageTemplatesBtn.setToolTipText("Open Prompt Templates tab");
-        manageTemplatesBtn.setFocusPainted(false);
-        manageTemplatesBtn.setMargin(new Insets(2, 8, 2, 8));
         manageTemplatesBtn.addActionListener(e -> {
-            // Switch to Prompt Templates tab
             Container parent = getParent();
             while (parent != null && !(parent instanceof JTabbedPane)) {
                 parent = parent.getParent();
             }
             if (parent instanceof JTabbedPane) {
                 JTabbedPane tabbedPane = (JTabbedPane) parent;
-                // Find the Prompt Templates tab (should be index 4)
                 for (int i = 0; i < tabbedPane.getTabCount(); i++) {
                     if (tabbedPane.getTitleAt(i).contains("Prompt Templates")) {
                         tabbedPane.setSelectedIndex(i);
@@ -169,35 +188,30 @@ public class TestingSuggestionsPanel extends JPanel {
             }
         });
         templateRow.add(manageTemplatesBtn);
-        
-        JLabel templateHint = new JLabel("(Select a template for specialized testing)");
-        templateHint.setFont(new Font("Segoe UI", Font.ITALIC, 9));
-        templateHint.setForeground(new Color(120, 120, 125));
-        templateRow.add(templateHint);
 
         JPanel queryRow = new JPanel(new BorderLayout(8, 0));
+        queryRow.setOpaque(false);
         
-        queryField.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        queryField.setFont(VistaTheme.FONT_BODY);
+        queryField.setBackground(VistaTheme.BG_INPUT);
+        queryField.setForeground(VistaTheme.TEXT_PRIMARY);
         queryField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(180, 180, 185)),
-            new EmptyBorder(8, 10, 8, 10)));
+            BorderFactory.createLineBorder(VistaTheme.BORDER, 1),
+            new EmptyBorder(8, 12, 8, 12)));
         installPlaceholder(queryField, "Ask: 'How to test for XSS?' or 'Bypass this WAF'");
 
-        JButton askBtn = new JButton("Send");
-        askBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        askBtn.setFocusPainted(false);
+        JButton askBtn = VistaTheme.primaryButton("Send");
         askBtn.addActionListener(e -> getSuggestions());
 
-        JButton clearBtn = new JButton("Clear");
-        clearBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        JButton clearBtn = VistaTheme.secondaryButton("Clear");
         clearBtn.addActionListener(e -> clearConversation());
         
-        JButton newSessionBtn = new JButton("🆕 New Chat");
-        newSessionBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        JButton newSessionBtn = VistaTheme.secondaryButton("New Chat");
         newSessionBtn.setToolTipText("Start fresh conversation (keeps current request)");
         newSessionBtn.addActionListener(e -> startNewSession());
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        btnPanel.setOpaque(false);
         btnPanel.add(newSessionBtn);
         btnPanel.add(clearBtn);
         btnPanel.add(askBtn);
@@ -205,7 +219,8 @@ public class TestingSuggestionsPanel extends JPanel {
         queryRow.add(queryField, BorderLayout.CENTER);
         queryRow.add(btnPanel, BorderLayout.EAST);
 
-        JPanel quickPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        JPanel quickPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        quickPanel.setOpaque(false);
         String[] quickQueries = {"XSS Testing", "SQLi Testing", "SSTI Testing", "Command Injection", "SSRF Testing", "Bypass WAF"};
         for (String query : quickQueries) {
             JButton btn = createQuickButton(query);
@@ -213,9 +228,10 @@ public class TestingSuggestionsPanel extends JPanel {
         }
 
         JPanel topSection = new JPanel();
+        topSection.setOpaque(false);
         topSection.setLayout(new BoxLayout(topSection, BoxLayout.Y_AXIS));
         topSection.add(titleRow);
-        topSection.add(Box.createVerticalStrut(4));
+        topSection.add(Box.createVerticalStrut(6));
         topSection.add(templateRow);
         topSection.add(Box.createVerticalStrut(8));
 
@@ -227,9 +243,7 @@ public class TestingSuggestionsPanel extends JPanel {
     }
     
     private JButton createQuickButton(String label) {
-        JButton btn = new JButton(label);
-        btn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        btn.setFocusPainted(false);
+        JButton btn = VistaTheme.pillButton(label);
         btn.addActionListener(e -> {
             queryField.setText("How to test for " + label + "?");
             getSuggestions();
@@ -240,41 +254,47 @@ public class TestingSuggestionsPanel extends JPanel {
     private JSplitPane buildMainContent() {
         // Left: Request/Response tabs with search
         JTabbedPane leftTabs = new JTabbedPane();
-        leftTabs.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        leftTabs.setFont(VistaTheme.FONT_SMALL_BOLD);
+        leftTabs.setBackground(VistaTheme.BG_PANEL);
         
-        Font monoFont = new Font(Font.MONOSPACED, Font.PLAIN, 12);
-        requestArea.setFont(monoFont);
+        requestArea.setFont(VistaTheme.FONT_MONO);
         requestArea.setEditable(false);
+        requestArea.setBackground(VistaTheme.BG_CODE);
+        requestArea.setForeground(VistaTheme.TEXT_PRIMARY);
+        requestArea.setMargin(new Insets(8, 10, 8, 10));
         
-        responseArea.setFont(monoFont);
+        responseArea.setFont(VistaTheme.FONT_MONO);
         responseArea.setEditable(false);
+        responseArea.setBackground(VistaTheme.BG_CODE);
+        responseArea.setForeground(VistaTheme.TEXT_PRIMARY);
+        responseArea.setMargin(new Insets(8, 10, 8, 10));
 
         JPanel requestPanel = createSearchablePanel(requestArea, requestSearchField, requestMatchLabel);
         JPanel responsePanel = createSearchablePanel(responseArea, responseSearchField, responseMatchLabel);
 
-        leftTabs.addTab("Request", requestPanel);
-        leftTabs.addTab("Response", responsePanel);
+        leftTabs.addTab("  Request  ", requestPanel);
+        leftTabs.addTab("  Response  ", responsePanel);
 
         // Right: Suggestions area with interactive chat
         JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.setBackground(VistaTheme.BG_CARD);
         
-        suggestionsArea.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        VistaTheme.styleTextArea(suggestionsArea);
         suggestionsArea.setEditable(false);
-        suggestionsArea.setLineWrap(true);
-        suggestionsArea.setWrapStyleWord(true);
         
-        JScrollPane suggestionsScroll = new JScrollPane(suggestionsArea);
-        suggestionsScroll.setBorder(BorderFactory.createTitledBorder("AI Conversation"));
+        JScrollPane suggestionsScroll = VistaTheme.styledScrollPane(suggestionsArea);
+        suggestionsScroll.setBorder(VistaTheme.sectionBorder("AI Conversation"));
         
         // Loading indicator (initially hidden)
         loadingLabel = new JLabel();
-        loadingLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        loadingLabel.setForeground(new Color(0, 120, 215));
+        loadingLabel.setFont(VistaTheme.FONT_HEADING);
+        loadingLabel.setForeground(VistaTheme.PRIMARY);
         loadingLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        loadingLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        loadingLabel.setBorder(new EmptyBorder(12, 12, 12, 12));
         loadingLabel.setVisible(false);
         
         JPanel suggestionsPanel = new JPanel(new BorderLayout());
+        suggestionsPanel.setBackground(VistaTheme.BG_CARD);
         suggestionsPanel.add(suggestionsScroll, BorderLayout.CENTER);
         suggestionsPanel.add(loadingLabel, BorderLayout.SOUTH);
 
@@ -287,59 +307,59 @@ public class TestingSuggestionsPanel extends JPanel {
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftTabs, rightPanel);
         mainSplit.setResizeWeight(0.4);
+        mainSplit.setDividerSize(6);
+        mainSplit.setBorder(null);
 
         return mainSplit;
     }
     
     private JPanel buildInteractiveChatPanel() {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBackground(VistaTheme.BG_PANEL);
         panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(2, 0, 0, 0, new Color(200, 200, 205)),
-            new EmptyBorder(12, 12, 12, 12)
+            BorderFactory.createMatteBorder(1, 0, 0, 0, VistaTheme.BORDER),
+            new EmptyBorder(12, 14, 12, 14)
         ));
         
         // Top section with multi-request management and dropdown
         JPanel topSection = new JPanel(new BorderLayout(8, 4));
+        topSection.setOpaque(false);
         
         // Multi-request info panel
         JPanel multiRequestPanel = new JPanel(new BorderLayout(8, 0));
+        multiRequestPanel.setOpaque(false);
         multiRequestLabel = new JLabel("No requests attached");
-        multiRequestLabel.setFont(new Font("Segoe UI", Font.ITALIC, 10));
-        multiRequestLabel.setForeground(new Color(120, 120, 125));
+        multiRequestLabel.setFont(VistaTheme.FONT_SMALL);
+        multiRequestLabel.setForeground(VistaTheme.TEXT_MUTED);
         
-        manageRequestsButton = new JButton("📎 Manage Requests (0)");
-        manageRequestsButton.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        manageRequestsButton = VistaTheme.compactButton("Manage Requests (0)");
         manageRequestsButton.setToolTipText("View, add, or remove attached requests");
-        manageRequestsButton.setFocusPainted(false);
-        manageRequestsButton.setMargin(new Insets(2, 8, 2, 8));
         manageRequestsButton.addActionListener(e -> showMultiRequestManager());
         
         multiRequestPanel.add(multiRequestLabel, BorderLayout.CENTER);
         multiRequestPanel.add(manageRequestsButton, BorderLayout.EAST);
         
         // Dropdown for recent Repeater requests
-        JPanel dropdownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        JLabel dropdownLabel = new JLabel("Quick attach from Repeater:");
-        dropdownLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        JPanel dropdownPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        dropdownPanel.setOpaque(false);
+        JLabel dropdownLabel = new JLabel("Quick attach:");
+        dropdownLabel.setFont(VistaTheme.FONT_SMALL);
+        dropdownLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         
         JComboBox<String> repeaterDropdown = new JComboBox<>();
-        repeaterDropdown.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        VistaTheme.styleComboBox(repeaterDropdown);
         repeaterDropdown.setPrototypeDisplayValue("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
         repeaterDropdown.addItem("-- Select recent Repeater request --");
         repeaterDropdown.addActionListener(e -> {
             int selectedIndex = repeaterDropdown.getSelectedIndex();
-            if (selectedIndex > 0) { // 0 is the placeholder
+            if (selectedIndex > 0) {
                 attachFromRepeaterHistory(selectedIndex - 1);
-                repeaterDropdown.setSelectedIndex(0); // Reset to placeholder
+                repeaterDropdown.setSelectedIndex(0);
             }
         });
         
-        // Refresh button to update dropdown
-        JButton refreshBtn = new JButton("🔄");
-        refreshBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        JButton refreshBtn = VistaTheme.compactButton("↻");
         refreshBtn.setToolTipText("Refresh Repeater request list");
-        refreshBtn.setFocusPainted(false);
-        refreshBtn.setMargin(new Insets(2, 6, 2, 6));
         refreshBtn.addActionListener(e -> updateRepeaterDropdown(repeaterDropdown));
         
         dropdownPanel.add(dropdownLabel);
@@ -351,20 +371,22 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Input row
         JPanel inputRow = new JPanel(new BorderLayout(8, 0));
+        inputRow.setOpaque(false);
         
         interactiveChatField = new JTextField();
-        interactiveChatField.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        interactiveChatField.setFont(VistaTheme.FONT_BODY);
+        interactiveChatField.setBackground(VistaTheme.BG_INPUT);
+        interactiveChatField.setForeground(VistaTheme.TEXT_PRIMARY);
         interactiveChatField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(180, 180, 185)),
-            new EmptyBorder(8, 10, 8, 10)));
+            BorderFactory.createLineBorder(VistaTheme.BORDER, 1),
+            new EmptyBorder(8, 12, 8, 12)));
         installPlaceholder(interactiveChatField, "Report what you observed or ask for bypass suggestions...");
         
         // Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        buttonPanel.setOpaque(false);
         
-        JButton sendBtn = new JButton("Send");
-        sendBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        sendBtn.setFocusPainted(false);
+        JButton sendBtn = VistaTheme.primaryButton("Send");
         sendBtn.addActionListener(e -> sendInteractiveMessage());
         
         buttonPanel.add(sendBtn);
@@ -544,28 +566,28 @@ public class TestingSuggestionsPanel extends JPanel {
         
         if (count == 0) {
             multiRequestLabel.setText("No requests attached");
-            multiRequestLabel.setForeground(new Color(120, 120, 125));
-            multiRequestLabel.setFont(new Font("Segoe UI", Font.ITALIC, 10));
+            multiRequestLabel.setForeground(VistaTheme.TEXT_MUTED);
+            multiRequestLabel.setFont(VistaTheme.FONT_SMALL);
         } else if (count == 1) {
-            multiRequestLabel.setText("✓ 1 request attached");
-            multiRequestLabel.setForeground(new Color(0, 150, 0));
-            multiRequestLabel.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            multiRequestLabel.setText("● 1 request attached");
+            multiRequestLabel.setForeground(VistaTheme.STATUS_SUCCESS);
+            multiRequestLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
         } else {
-            multiRequestLabel.setText("✓ " + count + " requests attached");
-            multiRequestLabel.setForeground(new Color(0, 150, 0));
-            multiRequestLabel.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            multiRequestLabel.setText("● " + count + " requests attached");
+            multiRequestLabel.setForeground(VistaTheme.STATUS_SUCCESS);
+            multiRequestLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
         }
         
         if (manageRequestsButton != null) {
-            manageRequestsButton.setText("📎 Manage Requests (" + count + ")");
+            manageRequestsButton.setText("Manage Requests (" + count + ")");
         }
         
         // Update chat field background
         if (interactiveChatField != null) {
             if (count > 0) {
-                interactiveChatField.setBackground(new Color(230, 255, 230)); // Light green
+                interactiveChatField.setBackground(new Color(240, 253, 244)); // Green-50
             } else {
-                interactiveChatField.setBackground(Color.WHITE);
+                interactiveChatField.setBackground(VistaTheme.BG_INPUT);
             }
         }
     }
@@ -706,8 +728,12 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Process with AI (testingSteps will be used in handleInteractiveAssistant)
         statusLabel.setText("Processing your observation...");
-        callbacks.printOutput("[VISTA] Starting AI processing thread");
-        new Thread(() -> handleInteractiveAssistant(message), "VISTA-Interactive").start();
+        callbacks.printOutput("[VISTA] Starting AI processing task");
+        // Cancel any previous pending AI task to prevent queue buildup
+        if (currentAITask != null && !currentAITask.isDone()) {
+            currentAITask.cancel(true);
+        }
+        currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(message));
     }
 
     private JPanel createSearchablePanel(JTextArea textArea, JTextField searchField, JLabel matchLabel) {
@@ -813,9 +839,17 @@ public class TestingSuggestionsPanel extends JPanel {
 
     private JPanel buildFooterPanel() {
         JPanel panel = new JPanel(new BorderLayout(8, 0));
-        panel.setBorder(new EmptyBorder(8, 12, 8, 12));
+        panel.setBackground(VistaTheme.BG_PANEL);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, VistaTheme.BORDER),
+            new EmptyBorder(8, 16, 8, 16)
+        ));
+
+        statusLabel.setFont(VistaTheme.FONT_SMALL);
+        statusLabel.setForeground(VistaTheme.TEXT_SECONDARY);
 
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftPanel.setOpaque(false);
         leftPanel.add(statusLabel);
 
         panel.add(leftPanel, BorderLayout.WEST);
@@ -826,11 +860,11 @@ public class TestingSuggestionsPanel extends JPanel {
     private void updateConfigStatus() {
         AIConfigManager config = AIConfigManager.getInstance();
         if (config.isConfigured()) {
-            configStatusLabel.setText("✓ " + config.getProvider() + " ready");
-            configStatusLabel.setForeground(new Color(0, 150, 0));
+            configStatusLabel.setText("● " + config.getProvider() + " ready");
+            configStatusLabel.setForeground(VistaTheme.STATUS_SUCCESS);
         } else {
-            configStatusLabel.setText("⚠ Configure AI in Settings tab");
-            configStatusLabel.setForeground(new Color(255, 180, 100));
+            configStatusLabel.setText("● Configure AI in Settings tab");
+            configStatusLabel.setForeground(VistaTheme.STATUS_WARNING);
         }
     }
 
@@ -986,7 +1020,11 @@ public class TestingSuggestionsPanel extends JPanel {
         
         // Always use Interactive Assistant mode
         statusLabel.setText("Processing your request...");
-        new Thread(() -> handleInteractiveAssistant(userQuery), "VISTA-Interactive").start();
+        // Cancel any previous pending AI task to prevent queue buildup
+        if (currentAITask != null && !currentAITask.isDone()) {
+            currentAITask.cancel(true);
+        }
+        currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(userQuery));
         
         // Show interactive chat panel after first query
         if (interactiveChatPanel != null) {
@@ -1023,6 +1061,11 @@ public class TestingSuggestionsPanel extends JPanel {
     
     private void handleInteractiveAssistant(String userQuery) {
         try {
+            // Check if this task was cancelled before starting expensive work
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+            
             // Show loading indicator
             showLoadingIndicator(true);
             
@@ -1715,13 +1758,13 @@ public class TestingSuggestionsPanel extends JPanel {
     private void appendSuggestion(String sender, String message) {
         SwingUtilities.invokeLater(() -> {
             String prefix = switch (sender) {
-                case "YOU" -> "👤 You: ";
-                case "VISTA" -> "🤖 VISTA: ";
-                case "SYSTEM" -> "ℹ️ ";
+                case "YOU" -> "▸ You: ";
+                case "VISTA" -> "◆ VISTA: ";
+                case "SYSTEM" -> "● ";
                 default -> sender + ": ";
             };
             suggestionsArea.append(prefix + message + "\n\n");
-            suggestionsArea.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+            suggestionsArea.append("─────────────────────────────────────────────────────────────\n\n");
             suggestionsArea.setCaretPosition(suggestionsArea.getDocument().getLength());
         });
     }

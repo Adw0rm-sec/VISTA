@@ -12,6 +12,8 @@ import java.awt.*;
 import java.util.List;
 import java.util.Map;
 
+import static com.vista.security.ui.VistaTheme.*;
+
 /**
  * Hierarchical tree view for traffic findings.
  * Groups findings by: Type -> URL -> Parameter
@@ -25,6 +27,7 @@ public class TrafficFindingsTreePanel extends JPanel {
     
     public TrafficFindingsTreePanel() {
         setLayout(new BorderLayout());
+        setBackground(VistaTheme.BG_CARD);
         
         // Create tree
         rootNode = new DefaultMutableTreeNode("Findings (0)");
@@ -32,6 +35,9 @@ public class TrafficFindingsTreePanel extends JPanel {
         findingsTree = new JTree(treeModel);
         findingsTree.setRootVisible(true);
         findingsTree.setShowsRootHandles(true);
+        findingsTree.setFont(VistaTheme.FONT_BODY);
+        findingsTree.setRowHeight(24);
+        findingsTree.setBackground(VistaTheme.BG_CARD);
         
         // Custom renderer for severity colors
         findingsTree.setCellRenderer(new FindingTreeCellRenderer());
@@ -61,19 +67,21 @@ public class TrafficFindingsTreePanel extends JPanel {
      * Create toolbar with filter and expand/collapse buttons.
      */
     private JPanel createToolbar() {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        toolbar.setBackground(VistaTheme.BG_PANEL);
+        toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER));
         
-        JButton expandAllButton = new JButton("Expand All");
+        JButton expandAllButton = VistaTheme.compactButton("Expand All");
         expandAllButton.addActionListener(e -> expandAll());
         toolbar.add(expandAllButton);
         
-        JButton collapseAllButton = new JButton("Collapse All");
+        JButton collapseAllButton = VistaTheme.compactButton("Collapse All");
         collapseAllButton.addActionListener(e -> collapseAll());
         toolbar.add(collapseAllButton);
         
-        toolbar.add(new JSeparator(SwingConstants.VERTICAL));
+        toolbar.add(Box.createHorizontalStrut(8));
         
-        JButton clearButton = new JButton("Clear");
+        JButton clearButton = VistaTheme.compactButton("Clear");
         clearButton.addActionListener(e -> clearFindings());
         toolbar.add(clearButton);
         
@@ -84,9 +92,6 @@ public class TrafficFindingsTreePanel extends JPanel {
      * Update tree with new findings.
      */
     public void updateFindings(List<TrafficFinding> findings) {
-        System.out.println("[Findings Tree] ═══════════════════════════════════════");
-        System.out.println("[Findings Tree] 🌳 Building Tree Structure");
-        System.out.println("[Findings Tree]    Input findings: " + findings.size());
         
         // Save current expansion state by storing node labels (not TreePath objects)
         java.util.Set<String> expandedNodeLabels = new java.util.HashSet<>();
@@ -108,8 +113,6 @@ public class TrafficFindingsTreePanel extends JPanel {
         if (findings.isEmpty()) {
             rootNode.setUserObject("Findings (0)");
             treeModel.reload();
-            System.out.println("[Findings Tree] ℹ️ No findings to display");
-            System.out.println("[Findings Tree] ═══════════════════════════════════════");
             return;
         }
         
@@ -211,13 +214,6 @@ public class TrafficFindingsTreePanel extends JPanel {
             }
         }
         
-        System.out.println("[Findings Tree] ✅ Tree Build Complete");
-        System.out.println("[Findings Tree]    Root label: " + rootLabel);
-        System.out.println("[Findings Tree]    Type nodes: " + typeNodeCount);
-        System.out.println("[Findings Tree]    URL nodes: " + urlNodeCount);
-        System.out.println("[Findings Tree]    Parameter nodes: " + paramNodeCount);
-        System.out.println("[Findings Tree]    Expanded nodes restored: " + expandedNodeLabels.size());
-        System.out.println("[Findings Tree] ═══════════════════════════════════════");
     }
     
     /**
@@ -356,24 +352,17 @@ public class TrafficFindingsTreePanel extends JPanel {
         
         private String getSeverityEmoji(String severity) {
             return switch (severity.toUpperCase()) {
-                case "CRITICAL" -> "🔴";
-                case "HIGH" -> "🟠";
-                case "MEDIUM" -> "🟡";
-                case "LOW" -> "🔵";
-                case "INFO" -> "⚪";
-                default -> "⚫";
+                case "CRITICAL" -> "●";
+                case "HIGH" -> "●";
+                case "MEDIUM" -> "●";
+                case "LOW" -> "●";
+                case "INFO" -> "○";
+                default -> "○";
             };
         }
         
         private Color getSeverityColor(String severity) {
-            return switch (severity.toUpperCase()) {
-                case "CRITICAL" -> new Color(220, 20, 60);  // Crimson
-                case "HIGH" -> new Color(255, 140, 0);      // Dark Orange
-                case "MEDIUM" -> new Color(255, 215, 0);    // Gold
-                case "LOW" -> new Color(70, 130, 180);      // Steel Blue
-                case "INFO" -> new Color(128, 128, 128);    // Gray
-                default -> Color.BLACK;
-            };
+            return VistaTheme.getSeverityColor(severity);
         }
     }
 }

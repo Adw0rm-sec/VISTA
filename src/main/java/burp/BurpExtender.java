@@ -4,6 +4,7 @@ import com.vista.security.ui.TestingSuggestionsPanel;
 import com.vista.security.ui.SettingsPanel;
 import com.vista.security.ui.PromptTemplatePanel;
 import com.vista.security.ui.PayloadLibraryPanel;
+import com.vista.security.ui.VistaTheme;
 import com.vista.security.core.AIConfigManager;
 
 import javax.swing.*;
@@ -16,13 +17,13 @@ import java.util.List;
  * VISTA - AI-Powered Security Testing Assistant
  * Professional-grade Burp Suite extension for intelligent vulnerability exploitation.
  * 
- * @version 2.10.23
+ * @version 2.10.24
  * @author VISTA Security Team
  */
 public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     
     private static final String EXTENSION_NAME = "VISTA";
-    private static final String VERSION = "2.10.23";
+    private static final String VERSION = "2.10.24";
     
     private IBurpExtenderCallbacks callbacks;
     private TestingSuggestionsPanel testingSuggestionsPanel;
@@ -35,6 +36,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     private JLabel aiStatusDot;
     private JLabel aiStatusText;
     private JLabel aiModelText;
+    private Timer statusTimer; // Store reference for proper cleanup
 
     @Override
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
@@ -92,15 +94,15 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     // Create modern tabbed interface
                     callbacks.printOutput("[VISTA] Creating tabbed pane...");
                     this.tabbedPane = new JTabbedPane();
-                    tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                    VistaTheme.styleTabbedPane(tabbedPane);
                     
-                    // Add tabs with icons
+                    // Add tabs with clean labels (no emoji in tabs - professional look)
                     callbacks.printOutput("[VISTA] Adding tabs...");
-                    tabbedPane.addTab("  💡 AI Advisor  ", testingSuggestionsPanel);
-                    tabbedPane.addTab("  🌐 Traffic Monitor  ", trafficMonitorPanel);
-                    tabbedPane.addTab("  📝 Prompt Templates  ", promptTemplatePanel);
-                    tabbedPane.addTab("  🎯 Payload Library  ", payloadLibraryPanel);
-                    tabbedPane.addTab("  ⚙️ Settings  ", settingsPanel);
+                    tabbedPane.addTab("  AI Advisor  ", testingSuggestionsPanel);
+                    tabbedPane.addTab("  Traffic Monitor  ", trafficMonitorPanel);
+                    tabbedPane.addTab("  Prompt Templates  ", promptTemplatePanel);
+                    tabbedPane.addTab("  Payload Library  ", payloadLibraryPanel);
+                    tabbedPane.addTab("  Settings  ", settingsPanel);
                     callbacks.printOutput("[VISTA] ✓ All tabs added to tabbed pane");
                     
                     // Build root panel: status bar + tabs
@@ -108,8 +110,9 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     rootPanel.add(createStatusBar(), BorderLayout.NORTH);
                     rootPanel.add(tabbedPane, BorderLayout.CENTER);
                     
-                    // Start AI status polling
-                    Timer statusTimer = new Timer(2000, ev -> refreshAIStatus());
+                    // Start AI status polling (every 5s is sufficient - reduces EDT load)
+                    statusTimer = new Timer(5000, ev -> refreshAIStatus());
+                    statusTimer.setRepeats(true);
                     statusTimer.start();
                     refreshAIStatus(); // initial
                     
@@ -123,6 +126,16 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     callbacks.printOutput("[VISTA] Registering context menu factory...");
                     callbacks.registerContextMenuFactory(BurpExtender.this);
                     callbacks.printOutput("[VISTA] ✓ Context menu factory registered");
+                    
+                    // Initialize data persistence - load all saved data
+                    callbacks.printOutput("[VISTA] Initializing data persistence...");
+                    com.vista.security.core.VistaPersistenceManager.getInstance().initialize();
+                    callbacks.printOutput("[VISTA] ✓ Data persistence initialized - previous data restored");
+                    
+                    // Restore persisted data into the traffic monitor panel
+                    if (trafficMonitorPanel instanceof com.vista.security.ui.TrafficMonitorPanel) {
+                        ((com.vista.security.ui.TrafficMonitorPanel) trafficMonitorPanel).restorePersistedData();
+                    }
                     
                     callbacks.printOutput("");
                     callbacks.printOutput("═══════════════════════════════════════════════════════════");
@@ -277,75 +290,75 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
      */
     private JPanel createStatusBar() {
         JPanel bar = new JPanel(new BorderLayout());
-        bar.setBackground(new Color(15, 23, 42));  // slate-900
+        bar.setBackground(VistaTheme.BG_DARK);
         bar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(51, 65, 85)),  // slate-700 bottom border
-            new EmptyBorder(8, 16, 8, 16)
+            BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER_DARK),
+            new EmptyBorder(10, 20, 10, 20)
         ));
-        bar.setPreferredSize(new Dimension(0, 42));
+        bar.setPreferredSize(new Dimension(0, 48));
 
         // Left: VISTA branding
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         leftPanel.setOpaque(false);
 
         JLabel logo = new JLabel("VISTA");
-        logo.setFont(new Font("Segoe UI", Font.BOLD, 15));
-        logo.setForeground(new Color(96, 165, 250));  // blue-400
+        logo.setFont(new Font("Segoe UI", Font.BOLD, 17));
+        logo.setForeground(VistaTheme.PRIMARY_LIGHT);
         leftPanel.add(logo);
 
         JLabel version = new JLabel("  v" + VERSION);
-        version.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        version.setForeground(new Color(148, 163, 184)); // slate-400
+        version.setFont(VistaTheme.FONT_SMALL);
+        version.setForeground(VistaTheme.TEXT_MUTED);
         leftPanel.add(version);
 
         JLabel separator = new JLabel("   │   ");
-        separator.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        separator.setForeground(new Color(51, 65, 85));   // slate-700
+        separator.setFont(VistaTheme.FONT_SMALL);
+        separator.setForeground(VistaTheme.BORDER_DARK);
         leftPanel.add(separator);
 
         JLabel tagline = new JLabel("AI-Powered Security Testing");
-        tagline.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        tagline.setForeground(new Color(148, 163, 184)); // slate-400
+        tagline.setFont(VistaTheme.FONT_SMALL);
+        tagline.setForeground(VistaTheme.TEXT_MUTED);
         leftPanel.add(tagline);
 
         bar.add(leftPanel, BorderLayout.WEST);
 
         // Right: AI status indicator
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         rightPanel.setOpaque(false);
 
         aiStatusDot = new JLabel("●");
         aiStatusDot.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        aiStatusDot.setForeground(new Color(239, 68, 68)); // red initially
+        aiStatusDot.setForeground(VistaTheme.STATUS_ERROR);
 
         aiStatusText = new JLabel("AI: Not Configured");
-        aiStatusText.setFont(new Font("Segoe UI", Font.BOLD, 11));
-        aiStatusText.setForeground(new Color(148, 163, 184));
+        aiStatusText.setFont(VistaTheme.FONT_SMALL_BOLD);
+        aiStatusText.setForeground(VistaTheme.TEXT_MUTED);
 
         aiModelText = new JLabel("");
-        aiModelText.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        aiModelText.setForeground(new Color(148, 163, 184));
+        aiModelText.setFont(VistaTheme.FONT_SMALL);
+        aiModelText.setForeground(VistaTheme.TEXT_MUTED);
 
         // Clickable → jump to Settings
         JLabel settingsLink = new JLabel("  ⚙");
-        settingsLink.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        settingsLink.setForeground(new Color(148, 163, 184));
+        settingsLink.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        settingsLink.setForeground(VistaTheme.TEXT_MUTED);
         settingsLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
         settingsLink.setToolTipText("Open Settings");
         settingsLink.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (tabbedPane != null) {
-                    tabbedPane.setSelectedIndex(4); // Settings tab
+                    tabbedPane.setSelectedIndex(4);
                 }
             }
             @Override
             public void mouseEntered(java.awt.event.MouseEvent e) {
-                settingsLink.setForeground(new Color(96, 165, 250)); // blue-400
+                settingsLink.setForeground(VistaTheme.PRIMARY_LIGHT);
             }
             @Override
             public void mouseExited(java.awt.event.MouseEvent e) {
-                settingsLink.setForeground(new Color(148, 163, 184));
+                settingsLink.setForeground(VistaTheme.TEXT_MUTED);
             }
         });
 
@@ -363,25 +376,65 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
      * Refreshes the AI status indicator in the status bar.
      */
     private void refreshAIStatus() {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                AIConfigManager config = AIConfigManager.getInstance();
-                if (config.isConfigured()) {
-                    aiStatusDot.setForeground(new Color(34, 197, 94));     // green-500
-                    aiStatusText.setText("AI: Ready");
-                    aiStatusText.setForeground(new Color(34, 197, 94));
-                    String model = config.getModel();
-                    String provider = config.getProvider();
-                    aiModelText.setText("(" + provider + (model != null && !model.isEmpty() ? " / " + model : "") + ")");
-                } else {
-                    aiStatusDot.setForeground(new Color(239, 68, 68));     // red-500
-                    aiStatusText.setText("AI: Not Configured");
-                    aiStatusText.setForeground(new Color(250, 204, 21));   // yellow-400
-                    aiModelText.setText("— click ⚙ to set up");
-                }
-            } catch (Exception ignored) {
-                // Safely ignore during init
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::refreshAIStatus);
+            return;
+        }
+        try {
+            if (aiStatusDot == null || aiStatusText == null || aiModelText == null) return;
+            AIConfigManager config = AIConfigManager.getInstance();
+            if (config.isConfigured()) {
+                aiStatusDot.setForeground(VistaTheme.STATUS_READY);
+                aiStatusText.setText("AI: Ready");
+                aiStatusText.setForeground(VistaTheme.STATUS_READY);
+                String model = config.getModel();
+                String provider = config.getProvider();
+                aiModelText.setText("(" + provider + (model != null && !model.isEmpty() ? " / " + model : "") + ")");
+            } else {
+                aiStatusDot.setForeground(VistaTheme.STATUS_ERROR);
+                aiStatusText.setText("AI: Not Configured");
+                aiStatusText.setForeground(VistaTheme.STATUS_WARNING);
+                aiModelText.setText("— click ⚙ to set up");
             }
-        });
+        } catch (Exception ignored) {
+            // Safely ignore during init
+        }
+    }
+
+    /**
+     * Called by Burp when the extension is unloaded.
+     * Cleans up all timers, thread pools, and resources to prevent hangs.
+     */
+    public void extensionUnloaded() {
+        try {
+            // Save all data before unloading
+            callbacks.printOutput("[VISTA] Saving all data before unload...");
+            try {
+                com.vista.security.core.VistaPersistenceManager.getInstance().shutdown();
+                callbacks.printOutput("[VISTA] ✓ All data saved successfully");
+            } catch (Exception e) {
+                callbacks.printError("[VISTA] Error saving data: " + e.getMessage());
+            }
+            
+            // Stop the AI status polling timer
+            if (statusTimer != null) {
+                statusTimer.stop();
+                statusTimer = null;
+            }
+            
+            // Cleanup Traffic Monitor resources
+            if (trafficMonitorPanel instanceof com.vista.security.ui.TrafficMonitorPanel) {
+                ((com.vista.security.ui.TrafficMonitorPanel) trafficMonitorPanel).cleanup();
+            }
+            
+            // Shutdown the analysis queue manager
+            try {
+                com.vista.security.core.AnalysisQueueManager.getInstance().shutdown();
+            } catch (Exception ignored) {}
+            
+            callbacks.printOutput("[VISTA] Extension unloaded - all resources cleaned up");
+        } catch (Exception e) {
+            callbacks.printError("[VISTA] Error during cleanup: " + e.getMessage());
+        }
     }
 }

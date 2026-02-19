@@ -1,5 +1,6 @@
 package com.vista.security.model;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -315,6 +316,137 @@ public class TrafficFinding {
         } catch (Exception e) {
             return "/";
         }
+    }
+    
+    /**
+     * Private constructor for deserialization.
+     */
+    private TrafficFinding(String id, String type, String severity, String title, String description,
+                          String evidence, HttpTransaction sourceTransaction, long timestamp,
+                          String category, String detectionEngine, FindingCategory findingCategory,
+                          FindingType findingType, String location, String decodedData,
+                          String encodingType, String domain, String affectedParameter,
+                          String detailedDescription, String impact, String remediation) {
+        this.id = id;
+        this.type = type;
+        this.severity = severity;
+        this.title = title;
+        this.description = description;
+        this.evidence = evidence;
+        this.sourceTransaction = sourceTransaction;
+        this.timestamp = timestamp;
+        this.category = category;
+        this.detectionEngine = detectionEngine;
+        this.findingCategory = findingCategory;
+        this.findingType = findingType;
+        this.location = location;
+        this.decodedData = decodedData;
+        this.encodingType = encodingType;
+        this.domain = domain;
+        this.affectedParameter = affectedParameter;
+        this.detailedDescription = detailedDescription;
+        this.impact = impact;
+        this.remediation = remediation;
+    }
+    
+    /**
+     * Serializes this TrafficFinding to a JSON string for persistence.
+     * The nested HttpTransaction is serialized inline.
+     */
+    public String toJson() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"id\": ").append(jsonStr(id)).append(",\n");
+        sb.append("  \"type\": ").append(jsonStr(type)).append(",\n");
+        sb.append("  \"severity\": ").append(jsonStr(severity)).append(",\n");
+        sb.append("  \"title\": ").append(jsonStr(title)).append(",\n");
+        sb.append("  \"description\": ").append(jsonStr(description)).append(",\n");
+        sb.append("  \"evidence\": ").append(jsonStr(evidence)).append(",\n");
+        sb.append("  \"timestamp\": ").append(timestamp).append(",\n");
+        sb.append("  \"category\": ").append(jsonStr(category)).append(",\n");
+        sb.append("  \"detectionEngine\": ").append(jsonStr(detectionEngine)).append(",\n");
+        sb.append("  \"findingCategory\": ").append(jsonStr(findingCategory != null ? findingCategory.name() : null)).append(",\n");
+        sb.append("  \"findingType\": ").append(jsonStr(findingType != null ? findingType.name() : null)).append(",\n");
+        sb.append("  \"location\": ").append(jsonStr(location)).append(",\n");
+        sb.append("  \"decodedData\": ").append(jsonStr(decodedData)).append(",\n");
+        sb.append("  \"encodingType\": ").append(jsonStr(encodingType)).append(",\n");
+        sb.append("  \"domain\": ").append(jsonStr(domain)).append(",\n");
+        sb.append("  \"affectedParameter\": ").append(jsonStr(affectedParameter)).append(",\n");
+        sb.append("  \"detailedDescription\": ").append(jsonStr(detailedDescription)).append(",\n");
+        sb.append("  \"impact\": ").append(jsonStr(impact)).append(",\n");
+        sb.append("  \"remediation\": ").append(jsonStr(remediation)).append(",\n");
+        sb.append("  \"sourceTransaction\": ").append(sourceTransaction != null ? sourceTransaction.toJson() : "null").append("\n");
+        sb.append("}");
+        return sb.toString();
+    }
+    
+    /**
+     * Deserializes a TrafficFinding from a JSON string.
+     */
+    public static TrafficFinding fromJson(String json) {
+        try {
+            Map<String, String> f = HttpTransaction.parseJsonObject(json);
+            if (f == null || !f.containsKey("id")) return null;
+            
+            String id = f.get("id");
+            String type = f.getOrDefault("type", "");
+            String severity = f.getOrDefault("severity", "INFO");
+            String title = f.getOrDefault("title", "");
+            String description = f.getOrDefault("description", "");
+            String evidence = f.getOrDefault("evidence", "");
+            long timestamp = Long.parseLong(f.getOrDefault("timestamp", "0"));
+            String category = f.getOrDefault("category", "");
+            String detectionEngine = f.getOrDefault("detectionEngine", "Pattern");
+            
+            FindingCategory findingCategory = FindingCategory.GENERAL;
+            try {
+                String fcStr = f.get("findingCategory");
+                if (fcStr != null && !fcStr.isEmpty()) {
+                    findingCategory = FindingCategory.valueOf(fcStr);
+                }
+            } catch (Exception ignored) {}
+            
+            FindingType findingType = FindingType.OTHER;
+            try {
+                String ftStr = f.get("findingType");
+                if (ftStr != null && !ftStr.isEmpty()) {
+                    findingType = FindingType.valueOf(ftStr);
+                }
+            } catch (Exception ignored) {}
+            
+            String location = f.getOrDefault("location", "Unknown");
+            String decodedData = f.get("decodedData");
+            String encodingType = f.get("encodingType");
+            String domain = f.getOrDefault("domain", "unknown");
+            String affectedParameter = f.get("affectedParameter");
+            String detailedDescription = f.get("detailedDescription");
+            String impact = f.get("impact");
+            String remediation = f.get("remediation");
+            
+            // Deserialize nested HttpTransaction
+            HttpTransaction tx = null;
+            String txJson = f.get("sourceTransaction");
+            if (txJson != null && !txJson.equals("null") && txJson.startsWith("{")) {
+                tx = HttpTransaction.fromJson(txJson);
+            }
+            
+            return new TrafficFinding(id, type, severity, title, description, evidence,
+                    tx, timestamp, category, detectionEngine, findingCategory, findingType,
+                    location, decodedData, encodingType, domain, affectedParameter,
+                    detailedDescription, impact, remediation);
+        } catch (Exception e) {
+            System.err.println("[VISTA] Error deserializing TrafficFinding: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    private static String jsonStr(String s) {
+        if (s == null) return "null";
+        return "\"" + s.replace("\\", "\\\\")
+                       .replace("\"", "\\\"")
+                       .replace("\n", "\\n")
+                       .replace("\r", "\\r")
+                       .replace("\t", "\\t") + "\"";
     }
     
     @Override

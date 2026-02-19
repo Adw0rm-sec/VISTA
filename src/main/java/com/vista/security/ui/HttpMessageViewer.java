@@ -7,6 +7,8 @@ import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.vista.security.ui.VistaTheme.*;
+
 /**
  * Professional HTTP message viewer with side-by-side Request/Response display
  * and syntax highlighting similar to Burp Suite.
@@ -100,17 +102,18 @@ public class HttpMessageViewer extends JPanel {
      */
     private JPanel createSearchPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 3));
-        panel.setBackground(new Color(240, 240, 240));
-        panel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
+        panel.setBackground(VistaTheme.BG_CARD);
+        panel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, VistaTheme.BORDER));
         
         // Search label
-        JLabel searchLabel = new JLabel("🔍 Search:");
-        searchLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        JLabel searchLabel = new JLabel("Search:");
+        searchLabel.setFont(VistaTheme.FONT_LABEL);
+        searchLabel.setForeground(VistaTheme.TEXT_SECONDARY);
         panel.add(searchLabel);
         
         // Search field
         searchField = new JTextField(20);
-        searchField.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        VistaTheme.styleTextField(searchField);
         searchField.addActionListener(e -> performSearch());
         searchField.addKeyListener(new KeyAdapter() {
             @Override
@@ -124,29 +127,28 @@ public class HttpMessageViewer extends JPanel {
         
         // Case sensitive checkbox
         caseSensitiveCheckbox = new JCheckBox("Match case");
-        caseSensitiveCheckbox.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        caseSensitiveCheckbox.setFont(VistaTheme.FONT_SMALL);
+        caseSensitiveCheckbox.setForeground(VistaTheme.TEXT_SECONDARY);
         caseSensitiveCheckbox.setBackground(panel.getBackground());
         caseSensitiveCheckbox.addActionListener(e -> performSearch());
         panel.add(caseSensitiveCheckbox);
         
         // Previous button
-        prevButton = new JButton("◀ Prev");
-        prevButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        prevButton = VistaTheme.compactButton("< Prev");
         prevButton.setFocusable(false);
         prevButton.addActionListener(e -> navigateToPrevious());
         panel.add(prevButton);
         
         // Next button
-        nextButton = new JButton("Next ▶");
-        nextButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        nextButton = VistaTheme.compactButton("Next >");
         nextButton.setFocusable(false);
         nextButton.addActionListener(e -> navigateToNext());
         panel.add(nextButton);
         
         // Result label
         searchResultLabel = new JLabel("");
-        searchResultLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        searchResultLabel.setForeground(new Color(100, 100, 100));
+        searchResultLabel.setFont(VistaTheme.FONT_SMALL);
+        searchResultLabel.setForeground(VistaTheme.TEXT_MUTED);
         panel.add(searchResultLabel);
         
         return panel;
@@ -452,16 +454,8 @@ public class HttpMessageViewer extends JPanel {
         JTextPane pane = new JTextPane();
         pane.setEditable(false);
         pane.setBackground(BACKGROUND_COLOR);
-        
-        // Set professional monospaced font
-        Font font = new Font("Consolas", Font.PLAIN, 12);
-        if (!font.getFamily().equals("Consolas")) {
-            font = new Font("Monaco", Font.PLAIN, 12);
-        }
-        if (!font.getFamily().equals("Monaco")) {
-            font = new Font("Courier New", Font.PLAIN, 12);
-        }
-        pane.setFont(font);
+        pane.setFont(VistaTheme.FONT_MONO);
+        pane.setMargin(new Insets(4, 6, 4, 6));
         
         return pane;
     }
@@ -472,11 +466,11 @@ public class HttpMessageViewer extends JPanel {
     private JPanel createTitledPanel(String title, JComponent content) {
         JPanel panel = new JPanel(new BorderLayout());
         
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 11));
-        titleLabel.setForeground(new Color(100, 100, 100));
-        titleLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
-        titleLabel.setBackground(new Color(240, 240, 240));
+        JLabel titleLabel = new JLabel("  " + title);
+        titleLabel.setFont(VistaTheme.FONT_SMALL_BOLD);
+        titleLabel.setForeground(VistaTheme.TEXT_SECONDARY);
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(4, 5, 4, 5));
+        titleLabel.setBackground(VistaTheme.BG_CARD);
         titleLabel.setOpaque(true);
         
         panel.add(titleLabel, BorderLayout.NORTH);

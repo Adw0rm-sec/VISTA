@@ -189,10 +189,28 @@ public class Payload {
     
     // JSON helper methods
     private static String extractString(String json, String key) {
-        Pattern pattern = Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"");
+        // Find the key
+        String keyPattern = "\"" + key + "\"\\s*:\\s*\"";
+        Pattern pattern = Pattern.compile(keyPattern);
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
-            return unescapeJson(matcher.group(1));
+            int start = matcher.end(); // Position right after the opening quote
+            StringBuilder sb = new StringBuilder();
+            for (int i = start; i < json.length(); i++) {
+                char c = json.charAt(i);
+                if (c == '\\' && i + 1 < json.length()) {
+                    // Escaped character - include both and skip next
+                    sb.append(c);
+                    sb.append(json.charAt(i + 1));
+                    i++;
+                } else if (c == '"') {
+                    // Unescaped quote = end of string value
+                    break;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return unescapeJson(sb.toString());
         }
         return "";
     }
