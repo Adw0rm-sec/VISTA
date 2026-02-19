@@ -468,3 +468,5 @@ Copyright (c) 2026 Adw0rm-sec
 *Empowering security professionals with AI-powered intelligence*
 
 </div>
+
+<!-- BUILD_INFO --> **Latest Build:** 20260219-132547 | **Version:** 2.10.24 | **Commit:** 6c352f7
