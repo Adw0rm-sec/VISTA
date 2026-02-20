@@ -13,6 +13,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,7 +69,7 @@ public class TestingSuggestionsPanel extends JPanel {
 
     // Current state
     private IHttpRequestResponse currentRequest;
-    private final List<ConversationMessage> conversationHistory = new ArrayList<>();
+    private final List<ConversationMessage> conversationHistory = Collections.synchronizedList(new ArrayList<>());
     // NOTE: testingSteps is now stored per-session in ChatSession, not globally
     private String currentTestingPlan = null; // For interactive mode
     private int currentStep = 0; // Track current step in interactive mode
@@ -90,6 +91,13 @@ public class TestingSuggestionsPanel extends JPanel {
         this.templateManager = PromptTemplateManager.getInstance();
         this.payloadLibraryAI = new PayloadLibraryAIIntegration();
         this.chatSessionManager = ChatSessionManager.getInstance();
+
+        // Auto-install built-in payload libraries so AI has payload data from the start
+        Thread payloadInit = new Thread(() -> {
+            try { BuiltInPayloads.installBuiltInLibraries(); } catch (Exception ignored) {}
+        }, "VISTA-PayloadInit");
+        payloadInit.setDaemon(true);
+        payloadInit.start();
 
         setLayout(new BorderLayout(0, 0));
         buildUI();
@@ -696,13 +704,21 @@ public class TestingSuggestionsPanel extends JPanel {
             
             // If this is a NEW request, create a NEW CHAT SESSION (don't clear old one!)
             if (isNewRequest) {
-                // Get current template's system prompt
-                String systemPrompt = getCurrentSystemPrompt();
+                // Use generic system prompt for session init (templates are processed on first message)
+                String systemPrompt = "You are an expert penetration testing mentor in a Burp Suite extension called VISTA. " +
+                    "You help security testers find and exploit vulnerabilities in web applications. " +
+                    "Users can attach HTTP requests/responses for analysis. " +
+                    "Provide specific, actionable testing guidance with real payloads.";
                 String requestUrl = extractRequestUrl(reqText);
                 
                 // IMPORTANT: Get the previous session BEFORE creating a new one
                 // (createSession() will change the active session)
                 ChatSession previousSession = chatSessionManager.getActiveSession();
+                
+                // Close previous session so cleanupInactiveSessions() can reclaim it
+                if (previousSession != null) {
+                    chatSessionManager.closeSession(previousSession.getSessionId());
+                }
                 
                 // Save old conversation to the previous session if it exists
                 if (previousSession != null && !conversationHistory.isEmpty()) {
@@ -824,18 +840,11 @@ public class TestingSuggestionsPanel extends JPanel {
             return;
         }
 
-        appendSuggestion("YOU", userQuery);
+        // Delegate to sendInteractiveMessage for unified attachment + session handling
         if (interactiveChatField != null) {
-            interactiveChatField.setText("");
+            interactiveChatField.setText(userQuery);
         }
-        conversationHistory.add(new ConversationMessage("user", userQuery));
-        
-        statusLabel.setText("Processing your request...");
-        if (currentAITask != null && !currentAITask.isDone()) {
-            currentAITask.cancel(true);
-        }
-        final String query = userQuery;
-        currentAITask = aiExecutor.submit(() -> handleInteractiveAssistant(query));
+        sendInteractiveMessage();
     }
     
     private void handleQuickSuggestions(String userQuery) {
@@ -1089,7 +1098,7 @@ public class TestingSuggestionsPanel extends JPanel {
             PromptTemplate template = templateManager.getTemplateByName(selectedTemplate);
             if (template != null) {
                 templateContext = "\n\nACTIVE TEMPLATE: " + template.getName() + 
-                    "\nTemplate Guidance: " + truncate(template.getSystemPrompt(), 500);
+                    "\nTemplate Guidance: " + truncate(template.getSystemPrompt(), 2000);
             }
         }
         
@@ -1548,6 +1557,7 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setDeploymentName(config.getDeployment());
             c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new AzureAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
             com.vista.security.service.OpenRouterService.Configuration c = 
@@ -1555,12 +1565,14 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setApiKey(config.getOpenRouterApiKey());
             c.setModel(config.getOpenRouterModel());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new com.vista.security.service.OpenRouterService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new OpenAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
         }
     }
@@ -1578,6 +1590,7 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setDeploymentName(config.getDeployment());
             c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new AzureAIService(c).askWithHistory(messages);
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
             com.vista.security.service.OpenRouterService.Configuration c = 
@@ -1585,12 +1598,14 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setApiKey(config.getOpenRouterApiKey());
             c.setModel(config.getOpenRouterModel());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new com.vista.security.service.OpenRouterService(c).askWithHistory(messages);
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
+            c.setMaxTokens(config.getMaxTokens());
             return new OpenAIService(c).askWithHistory(messages);
         }
     }
@@ -1629,6 +1644,9 @@ public class TestingSuggestionsPanel extends JPanel {
             sessionTestingSteps,
             conversationHistory
         );
+        
+        // Set attached requests count from active session
+        context.setAttachedRequestsCount(activeSession != null ? activeSession.getAttachedRequestCount() : 0);
         
         return context;
     }
@@ -1741,13 +1759,6 @@ public class TestingSuggestionsPanel extends JPanel {
                     field.setForeground(hintColor);
                     field.setText(placeholder);
                 }
-            }
-        });
-
-        field.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) getSuggestions();
             }
         });
     }

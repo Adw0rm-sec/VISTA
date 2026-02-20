@@ -12,19 +12,19 @@ public class SystematicTestingEngine {
 
     /**
      * Get systematic testing methodology for a vulnerability type.
+     * Uses contains()-based matching so user queries like "How to test for XSS?" correctly match.
      */
     public static TestingMethodology getMethodology(String vulnerabilityType, 
                                                      String requestContext, 
                                                      String responseContext) {
-        
-        return switch (vulnerabilityType.toUpperCase()) {
-            case "XSS", "CROSS-SITE SCRIPTING" -> getXSSMethodology(requestContext, responseContext);
-            case "SQLI", "SQL INJECTION" -> getSQLiMethodology(requestContext, responseContext);
-            case "SSTI", "SERVER-SIDE TEMPLATE INJECTION" -> getSSTIMethodology(requestContext, responseContext);
-            case "COMMAND INJECTION", "RCE" -> getCommandInjectionMethodology(requestContext, responseContext);
-            case "SSRF" -> getSSRFMethodology(requestContext, responseContext);
-            default -> getGenericMethodology(vulnerabilityType);
-        };
+        if (vulnerabilityType == null || vulnerabilityType.isBlank()) return getGenericMethodology("General");
+        String upper = vulnerabilityType.toUpperCase();
+        if (upper.contains("XSS") || upper.contains("CROSS-SITE SCRIPTING") || upper.contains("CROSS SITE SCRIPTING")) return getXSSMethodology(requestContext, responseContext);
+        if (upper.contains("SQLI") || upper.contains("SQL INJECTION") || upper.contains("SQL")) return getSQLiMethodology(requestContext, responseContext);
+        if (upper.contains("SSTI") || upper.contains("TEMPLATE INJECTION")) return getSSTIMethodology(requestContext, responseContext);
+        if (upper.contains("COMMAND INJECTION") || upper.contains("CMDI") || upper.contains("RCE") || upper.contains("COMMAND")) return getCommandInjectionMethodology(requestContext, responseContext);
+        if (upper.contains("SSRF") || upper.contains("SERVER-SIDE REQUEST")) return getSSRFMethodology(requestContext, responseContext);
+        return getGenericMethodology(vulnerabilityType);
     }
 
     /**

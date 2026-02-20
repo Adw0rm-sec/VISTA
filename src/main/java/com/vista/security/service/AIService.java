@@ -108,11 +108,14 @@ public interface AIService {
     abstract class Configuration {
         protected String apiKey;
         protected double temperature = 0.7;
+        protected int maxTokens = 2000;
         
         public String getApiKey() { return apiKey; }
         public void setApiKey(String apiKey) { this.apiKey = apiKey; }
         public double getTemperature() { return temperature; }
         public void setTemperature(double temperature) { this.temperature = temperature; }
+        public int getMaxTokens() { return maxTokens; }
+        public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
         
         public abstract boolean isValid();
     }

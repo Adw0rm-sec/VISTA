@@ -12,20 +12,21 @@ public class BypassKnowledgeBase {
 
     /**
      * Get comprehensive bypass knowledge for AI prompts.
+     * Uses contains()-based matching so user queries like "How to test for XSS?" correctly match.
      */
     public static String getBypassKnowledge(String vulnerabilityType) {
-        return switch (vulnerabilityType.toUpperCase()) {
-            case "XSS", "CROSS-SITE SCRIPTING" -> getXSSBypassKnowledge();
-            case "SQLI", "SQL INJECTION" -> getSQLiBypassKnowledge();
-            case "SSTI", "SERVER-SIDE TEMPLATE INJECTION" -> getSSTIBypassKnowledge();
-            case "COMMAND INJECTION", "RCE" -> getCommandInjectionKnowledge();
-            case "XXE" -> getXXEKnowledge();
-            case "SSRF" -> getSSRFKnowledge();
-            case "LFI", "FILE INCLUSION" -> getLFIKnowledge();
-            case "IDOR" -> getIDORKnowledge();
-            case "AUTH BYPASS", "AUTHENTICATION BYPASS" -> getAuthBypassKnowledge();
-            default -> getGeneralBypassKnowledge();
-        };
+        if (vulnerabilityType == null || vulnerabilityType.isBlank()) return getGeneralBypassKnowledge();
+        String upper = vulnerabilityType.toUpperCase();
+        if (upper.contains("XSS") || upper.contains("CROSS-SITE SCRIPTING") || upper.contains("CROSS SITE SCRIPTING")) return getXSSBypassKnowledge();
+        if (upper.contains("SQLI") || upper.contains("SQL INJECTION") || upper.contains("SQL")) return getSQLiBypassKnowledge();
+        if (upper.contains("SSTI") || upper.contains("TEMPLATE INJECTION")) return getSSTIBypassKnowledge();
+        if (upper.contains("COMMAND INJECTION") || upper.contains("CMDI") || upper.contains("RCE") || upper.contains("COMMAND")) return getCommandInjectionKnowledge();
+        if (upper.contains("XXE") || upper.contains("XML EXTERNAL")) return getXXEKnowledge();
+        if (upper.contains("SSRF") || upper.contains("SERVER-SIDE REQUEST")) return getSSRFKnowledge();
+        if (upper.contains("LFI") || upper.contains("FILE INCLUSION") || upper.contains("PATH TRAVERSAL") || upper.contains("DIRECTORY TRAVERSAL")) return getLFIKnowledge();
+        if (upper.contains("IDOR") || upper.contains("INSECURE DIRECT")) return getIDORKnowledge();
+        if (upper.contains("AUTH") || upper.contains("AUTHENTICATION") || upper.contains("LOGIN")) return getAuthBypassKnowledge();
+        return getGeneralBypassKnowledge();
     }
 
     private static String getXSSBypassKnowledge() {

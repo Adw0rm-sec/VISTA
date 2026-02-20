@@ -228,12 +228,13 @@ public class AzureAIService implements AIService {
         return """
                 {
                     "temperature": %.2f,
+                    "max_tokens": %d,
                     "messages": [
                         {"role":"system","content":%s},
                         {"role":"user","content":%s}
                     ]
                 }
-                """.formatted(temperature, toJsonString(systemPrompt), toJsonString(userPrompt));
+                """.formatted(temperature, config.getMaxTokens(), toJsonString(systemPrompt), toJsonString(userPrompt));
     }
     
     private String buildRequestBodyWithHistory(List<ChatMessage> messages, double temperature) {
@@ -262,9 +263,10 @@ public class AzureAIService implements AIService {
         return """
                 {
                     "temperature": %.2f,
+                    "max_tokens": %d,
                     "messages": %s
                 }
-                """.formatted(temperature, messagesJson.toString());
+                """.formatted(temperature, config.getMaxTokens(), messagesJson.toString());
     }
     
     private String parseResponse(HttpResponse<String> response) {

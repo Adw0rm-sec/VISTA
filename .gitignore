@@ -69,6 +69,8 @@ Thumbs.db
 !SECURITY.md
 !CHANGELOG.md
 !LICENSE
+!docs/**/*.md
+!docs/*.md
 
 # Sensitive files
 *.sh

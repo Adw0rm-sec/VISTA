@@ -27,6 +27,7 @@ public class VariableContext {
     private final List<TestingSuggestionsPanel.ConversationMessage> conversationHistory;
     private final Map<String, String> customVariables;
     private String userQuery; // User's current question/prompt
+    private int attachedRequestsCount = 0; // Count of attached requests in active session
     
     public VariableContext(IExtensionHelpers helpers,
                           IHttpRequestResponse request,
@@ -53,6 +54,13 @@ public class VariableContext {
      */
     public void setUserQuery(String userQuery) {
         this.userQuery = userQuery != null ? userQuery : "";
+    }
+    
+    /**
+     * Set the count of attached requests from the active session.
+     */
+    public void setAttachedRequestsCount(int count) {
+        this.attachedRequestsCount = count;
     }
     
     /**
@@ -319,7 +327,6 @@ public class VariableContext {
     }
     
     private String getAttachedRequestsCount() {
-        // This would need to be passed in from TestingSuggestionsPanel
-        return "0";
+        return String.valueOf(attachedRequestsCount);
     }
 }

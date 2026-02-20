@@ -200,6 +200,7 @@ public class OpenAIService implements AIService {
                 {
                     "model": %s,
                     "temperature": %.2f,
+                    "max_tokens": %d,
                     "messages": [
                         {"role":"system","content":%s},
                         {"role":"user","content":%s}
@@ -208,6 +209,7 @@ public class OpenAIService implements AIService {
                 """.formatted(
                     toJsonString(config.getModel()), 
                     temperature,
+                    config.getMaxTokens(),
                     toJsonString(systemPrompt), 
                     toJsonString(userPrompt)
                 );
@@ -240,11 +242,13 @@ public class OpenAIService implements AIService {
                 {
                     "model": %s,
                     "temperature": %.2f,
+                    "max_tokens": %d,
                     "messages": %s
                 }
                 """.formatted(
                     toJsonString(config.getModel()), 
                     temperature,
+                    config.getMaxTokens(),
                     messagesJson.toString()
                 );
     }

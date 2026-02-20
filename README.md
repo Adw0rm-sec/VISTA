@@ -11,7 +11,7 @@
 
 **Real-time AI traffic analysis, intelligent vulnerability detection, and organized testing workflows — all inside Burp Suite.**
 
-[Features](#-key-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](#-documentation)
+[Features](#-key-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://Adw0rm-sec.github.io/VISTA/)
 
 </div>
 
@@ -28,7 +28,7 @@
 - 🤖 **AI-Powered Traffic Analysis** — Real-time HTTP traffic monitoring with AI-driven vulnerability detection
 - 💡 **Interactive AI Advisor** — Context-aware testing suggestions from GPT-4, Azure, or OpenRouter
 - 🆓 **FREE AI Option** — Use OpenRouter with no credit card required
-- 📝 **Custom Templates** — 4 built-in expert templates with a unified customizable prompt system
+- 📝 **Custom Templates** — 12 built-in expert templates covering the most common bug bounty vulnerabilities
 - 🎯 **Payload Library** — 80+ pre-built payloads across 8 categories with AI integration
 - 🛡️ **WAF Detection** — Automatically detect and bypass 8 major WAFs
 - 🎯 **Scope-Aware** — Define target scope, only analyze what matters
@@ -71,10 +71,18 @@ Get intelligent, context-aware testing guidance powered by leading AI models:
 
 Accelerate your testing with pre-built and custom templates:
 
-**4 Built-in Expert Templates:**
+**12 Built-in Expert Templates:**
 - XSS - DOM Based (comprehensive DOM XSS testing)
+- XSS - Reflected Expert (advanced reflected XSS with WAF bypass)
 - SQL Injection Expert (PortSwigger/OWASP-grade methodology)
-- XSS - Reflected Expert (advanced reflected XSS)
+- SSRF Expert (cloud metadata, IP obfuscation, blind SSRF)
+- IDOR / BOLA Expert (object-level authorization, ID manipulation)
+- SSTI Expert (engine fingerprinting, sandbox escape, RCE)
+- Auth Bypass Expert (login flaws, 2FA bypass, privilege escalation)
+- File Upload Expert (extension bypass, web shell, path traversal)
+- Race Condition Expert (TOCTOU, Turbo Intruder, double-spend)
+- JWT / OAuth Expert (algorithm confusion, token manipulation)
+- API Security Expert (OWASP API Top 10, mass assignment, GraphQL)
 - Traffic - Bug Bounty Hunter (AI-powered traffic analysis)
 
 **Template Features:**
@@ -134,7 +142,7 @@ VISTA features a clean, streamlined UI with a professional status bar:
 |-----|---------|
 | 💡 **AI Advisor** | Interactive AI testing assistant with conversation history |
 | 🌐 **Traffic Monitor** | Real-time traffic analysis with AI-powered findings |
-| 📝 **Prompt Templates** | Custom AI prompt management (4 expert built-in) |
+| 📝 **Prompt Templates** | Custom AI prompt management (12 expert built-in) |
 | 🎯 **Payload Library** | Payload organization with AI integration (80+) |
 | ⚙️ **Settings** | AI provider configuration, connection testing, data backup & restore |
 
@@ -396,6 +404,7 @@ src/main/java/
 
 ## 📖 Documentation
 
+- **📚 Full Documentation:** [Adw0rm-sec.github.io/VISTA](https://Adw0rm-sec.github.io/VISTA/)
 - **Issues:** [GitHub Issues](https://github.com/Adw0rm-sec/VISTA/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/Adw0rm-sec/VISTA/discussions)
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
