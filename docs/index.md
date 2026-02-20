@@ -51,7 +51,7 @@ VISTA is a professional Burp Suite extension that enhances security testing with
 - [WAF Detection]({% link features/waf-detection.md %}) — Identify and bypass WAFs
 
 ### Templates
-- [Template Overview]({% link templates/overview.md %}) — How the template system works
+- [Template Overview]({% link templates/index.md %}) — How the template system works
 - [Built-in Templates]({% link templates/built-in-templates.md %}) — All 12 expert templates
 - [Custom Templates]({% link templates/custom-templates.md %}) — Create your own templates
 

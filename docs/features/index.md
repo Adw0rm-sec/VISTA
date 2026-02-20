@@ -21,7 +21,7 @@ VISTA provides five integrated tools for AI-powered security testing.
 | [AI Advisor]({% link features/ai-advisor.md %}) | 💡 AI Advisor | Interactive testing assistant with conversation history |
 | [Payload Library]({% link features/payload-library.md %}) | 🎯 Payload Library | 80+ payloads across 8 categories with AI suggestions |
 | [WAF Detection]({% link features/waf-detection.md %}) | Built-in | Automatic WAF identification with 250+ bypass techniques |
-| [Prompt Templates]({% link templates/overview.md %}) | 📝 Templates | 12 expert templates + custom template creation |
+| [Prompt Templates]({% link templates/index.md %}) | 📝 Templates | 12 expert templates + custom template creation |
 
 ---
 

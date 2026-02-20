@@ -117,7 +117,7 @@ Best for systematic, vulnerability-specific testing.
 
 ## What's Next?
 
-- 📖 Learn about [Templates]({% link templates/overview.md %}) for focused testing
+- 📖 Learn about [Templates]({% link templates/index.md %}) for focused testing
 - 🌐 Explore [Traffic Monitor]({% link features/traffic-monitor.md %}) in detail
 - 🤖 Master the [AI Advisor]({% link features/ai-advisor.md %})
 - 🛡️ Understand [WAF Detection]({% link features/waf-detection.md %})
