@@ -331,6 +331,11 @@ public class IntelligentTrafficAnalyzer {
                 ? customTemplate 
                 : DEFAULT_TEMPLATE;
             
+            // Log to AIRequestLogStore for transparency
+            AIRequestLogStore.AIRequestRecord logRecord = AIRequestLogStore.getInstance().logRequest(
+                "Traffic Monitor JS", getAIProvider(), getAIModel(),
+                "Traffic Monitor JavaScript", systemPrompt, prompt);
+            
             long startTime = System.currentTimeMillis();
             // Call the full ask() method with template name and HTTP data for proper logging
             String aiResponse = aiService.ask(
@@ -341,6 +346,8 @@ public class IntelligentTrafficAnalyzer {
                 truncatedContent
             );
             long duration = System.currentTimeMillis() - startTime;
+            
+            AIRequestLogStore.getInstance().logResponse(logRecord, aiResponse);
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                 findings.addAll(parseAIFindings(transaction, aiResponse));
@@ -407,6 +414,11 @@ public class IntelligentTrafficAnalyzer {
                 ? customTemplate 
                 : DEFAULT_TEMPLATE;
             
+            // Log to AIRequestLogStore for transparency
+            AIRequestLogStore.AIRequestRecord logRecord = AIRequestLogStore.getInstance().logRequest(
+                "Traffic Monitor HTML", getAIProvider(), getAIModel(),
+                "Traffic Monitor HTML", systemPrompt, prompt);
+            
             long startTime = System.currentTimeMillis();
             // Call the full ask() method with template name and HTTP data for proper logging
             String aiResponse = aiService.ask(
@@ -417,6 +429,8 @@ public class IntelligentTrafficAnalyzer {
                 truncatedContent
             );
             long duration = System.currentTimeMillis() - startTime;
+            
+            AIRequestLogStore.getInstance().logResponse(logRecord, aiResponse);
             
             if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                 findings.addAll(parseAIFindings(transaction, aiResponse));

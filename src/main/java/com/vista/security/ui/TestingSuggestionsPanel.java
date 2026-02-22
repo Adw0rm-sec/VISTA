@@ -2,6 +2,7 @@ package com.vista.security.ui;
 
 import burp.*;
 import com.vista.security.core.*;
+import com.vista.security.core.AIRequestLogStore;
 import com.vista.security.model.ChatMessage;
 import com.vista.security.model.ChatSession;
 import com.vista.security.model.PromptTemplate;
@@ -904,17 +905,47 @@ public class TestingSuggestionsPanel extends JPanel {
                 attachedContext.append(userQuery).append("\n\n");
                 attachedContext.append("=== ATTACHED REQUEST/RESPONSE FOR ANALYSIS ===\n\n");
                 
+                // Detect if multiple requests form a redirect chain
+                boolean isRedirectChain = false;
+                if (sessionTestingSteps.size() >= 2) {
+                    isRedirectChain = detectRedirectChain(sessionTestingSteps);
+                }
+                
+                if (sessionTestingSteps.size() > 1) {
+                    if (isRedirectChain) {
+                        attachedContext.append("⚠️ REDIRECT CHAIN DETECTED: These requests are part of a redirect sequence.\n");
+                        attachedContext.append("The server responded to Request #1 with a redirect, and Request #2 is the follow-up.\n");
+                        attachedContext.append("Analyze the FULL chain — check if payloads survive through the redirect.\n\n");
+                    } else {
+                        attachedContext.append("📋 INDEPENDENT REQUESTS: These are separate requests, NOT a redirect chain.\n");
+                        attachedContext.append("Analyze each request/response pair independently and provide findings for each.\n\n");
+                    }
+                }
+                
                 // Include the most recent attached requests (last 3 max to avoid token overflow)
                 int startIndex = Math.max(0, sessionTestingSteps.size() - 3);
                 for (int i = startIndex; i < sessionTestingSteps.size(); i++) {
                     ChatSession.TestingStep step = sessionTestingSteps.get(i);
-                    attachedContext.append("--- ").append(step.stepName).append(" ---\n");
+                    attachedContext.append("--- ").append(step.stepName);
+                    if (isRedirectChain) {
+                        attachedContext.append(i == startIndex ? " (ORIGINAL REQUEST)" : " (REDIRECT TARGET)");
+                    }
+                    attachedContext.append(" ---\n");
                     attachedContext.append("User's Observation: ").append(step.observation).append("\n\n");
                     attachedContext.append("REQUEST:\n");
-                    attachedContext.append(truncate(step.request, 2000)).append("\n\n");
+                    attachedContext.append(truncate(step.request, 3000)).append("\n\n");
                     if (step.response != null && !step.response.isEmpty()) {
                         attachedContext.append("RESPONSE:\n");
-                        attachedContext.append(truncate(step.response, 1500)).append("\n\n");
+                        // Smart truncation: preserve areas around reflected values
+                        String smartTruncated = smartTruncateResponse(step.response, step.request, 5000);
+                        attachedContext.append(smartTruncated).append("\n\n");
+                        
+                        // Run reflection analysis on THIS attached request (not just session's currentRequest)
+                        String attachedReflection = analyzeAttachedReflection(step.request, step.response);
+                        if (attachedReflection != null && !attachedReflection.isEmpty()) {
+                            attachedContext.append("REFLECTION ANALYSIS FOR THIS REQUEST:\n");
+                            attachedContext.append(attachedReflection).append("\n\n");
+                        }
                     }
                 }
                 
@@ -1043,11 +1074,51 @@ public class TestingSuggestionsPanel extends JPanel {
             deepResponseAnalysis = truncate(respAnalysis.toFormattedString(), 1200);
         }
         
-        // Reflection analysis
-        String reflectionAnalysis = "Not available";
+        // Reflection analysis — prioritize ATTACHED requests over session's currentRequest.
+        // When a user attaches a request with a payload (e.g., ';alert(12345);//), the reflection
+        // points are in THAT request's response, not in the original session request's response.
+        // The original currentRequest is just the baseline — the attached requests have the actual payloads.
+        String reflectionAnalysis = "";
+        boolean foundAttachedReflections = false;
+        
+        // FIRST: Analyze all recent testing steps (attached requests) — these have the user's payloads
+        if (!testingSteps.isEmpty()) {
+            StringBuilder attachedReflections = new StringBuilder();
+            int startIdx = Math.max(0, testingSteps.size() - 3);
+            for (int i = startIdx; i < testingSteps.size(); i++) {
+                ChatSession.TestingStep step = testingSteps.get(i);
+                if (step.request == null || step.response == null || step.response.isEmpty()) continue;
+                
+                // Run the FULL ReflectionAnalyzer on the attached request
+                String fullReflection = runFullReflectionAnalysis(step.request, step.response);
+                
+                // Also run the lightweight text-search for encoded variants
+                String textReflection = analyzeAttachedReflection(step.request, step.response);
+                
+                if ((fullReflection != null && !fullReflection.contains("No parameter reflections")) 
+                    || textReflection != null) {
+                    foundAttachedReflections = true;
+                    attachedReflections.append("\n--- ").append(step.stepName).append(" ---\n");
+                    if (fullReflection != null && !fullReflection.contains("No parameter reflections")) {
+                        attachedReflections.append(fullReflection).append("\n");
+                    }
+                    if (textReflection != null) {
+                        attachedReflections.append(textReflection).append("\n");
+                    }
+                }
+            }
+            
+            if (foundAttachedReflections) {
+                reflectionAnalysis = "⚡ REFLECTIONS FOUND IN USER'S ATTACHED REQUESTS (these contain the actual payloads):\n"
+                    + attachedReflections.toString();
+            }
+        }
+        
+        // SECOND: Also include original session request analysis (as baseline context)
         if (currentRequest != null) {
             ReflectionAnalyzer.ReflectionAnalysis analysis = reflectionAnalyzer.analyze(currentRequest);
-            reflectionAnalysis = truncate(analysis.getSummary(), 1000);
+            String baselineReflection = analysis.getSummary();
+            
             if (analysis.getReflections() != null && !analysis.getReflections().isEmpty()) {
                 var firstReflection = analysis.getReflections().get(0);
                 if (firstReflection != null) {
@@ -1057,7 +1128,21 @@ public class TestingSuggestionsPanel extends JPanel {
                     }
                 }
             }
+            
+            if (foundAttachedReflections) {
+                // Attached reflections are primary — add baseline as secondary
+                reflectionAnalysis += "\n\nBaseline (session's original request — no payload):\n" 
+                    + truncate(baselineReflection, 800);
+            } else {
+                // No attached reflections — use baseline as primary
+                reflectionAnalysis = baselineReflection;
+            }
         }
+        
+        if (reflectionAnalysis.isEmpty()) {
+            reflectionAnalysis = "No reflection analysis available.";
+        }
+        reflectionAnalysis = truncate(reflectionAnalysis, 4000);
         
         // Payload library context
         String payloadLibraryContext = "";
@@ -1469,10 +1554,11 @@ public class TestingSuggestionsPanel extends JPanel {
                 CRITICAL: Do NOT list payloads for different contexts as categories.
                 You have the reflection data — use it to give ONE precise, targeted recommendation.
                 Write conversationally but be specific and actionable.
-                """.formatted(userQuery, testingHistory.toString(), deepRequestAnalysis, deepResponseAnalysis,
-                             reflectionAnalysis,
+                """.formatted(userQuery, testingHistory.toString(), 
+                             truncate(deepRequestAnalysis, 2000), truncate(deepResponseAnalysis, 1500),
+                             truncate(reflectionAnalysis, 3000),
                              wafInfo, truncate(methodology, 2000), truncate(bypassKnowledge, 1500),
-                             payloadLibraryContext);
+                             truncate(payloadLibraryContext, 2000));
         } else {
             // Follow-up - adapt based on user's reported results AND actual tested requests
             return """
@@ -1533,10 +1619,10 @@ public class TestingSuggestionsPanel extends JPanel {
                 NEVER list multiple context categories — you know what context the reflection is in.
                 NEVER give generic advice — you have the actual test results, analyze them.
                 Write conversationally but be surgical and specific.
-                """.formatted(conversationContext.toString(), testingHistory.toString(),
-                             deepRequestAnalysis, deepResponseAnalysis,
+                """.formatted(truncate(conversationContext.toString(), 4000), truncate(testingHistory.toString(), 3000),
+                             truncate(deepRequestAnalysis, 2000), truncate(deepResponseAnalysis, 1500),
                              wafInfo, truncate(bypassKnowledge, 1500),
-                             payloadLibraryContext);
+                             truncate(payloadLibraryContext, 2000));
         }
     }
 
@@ -1551,6 +1637,32 @@ public class TestingSuggestionsPanel extends JPanel {
                                      String httpRequest, String httpResponse) throws Exception {
         AIConfigManager config = AIConfigManager.getInstance();
         
+        // ═══ GLOBAL TOKEN BUDGET ENFORCEMENT ═══
+        // Most models have 128K context. We target 100K tokens (~400K chars) max input
+        // to leave room for output tokens and avoid API errors.
+        final int MAX_TOTAL_CHARS = 400_000; // ~100K tokens
+        int totalChars = (systemPrompt != null ? systemPrompt.length() : 0) 
+                       + (userPrompt != null ? userPrompt.length() : 0);
+        
+        if (totalChars > MAX_TOTAL_CHARS) {
+            // Truncate userPrompt (system prompt is usually small and critical)
+            int systemLen = systemPrompt != null ? systemPrompt.length() : 0;
+            int userBudget = MAX_TOTAL_CHARS - systemLen;
+            if (userBudget < 1000) userBudget = 1000; // Minimum user prompt
+            
+            if (userPrompt != null && userPrompt.length() > userBudget) {
+                userPrompt = userPrompt.substring(0, userBudget) 
+                    + "\n\n... [PROMPT TRUNCATED: " + totalChars + " chars exceeded " + MAX_TOTAL_CHARS + " budget]";
+                callbacks.printOutput("[VISTA] ⚠️ Token budget enforced: truncated prompt from " 
+                    + totalChars + " to ~" + MAX_TOTAL_CHARS + " chars");
+            }
+        }
+        
+        // Log to AIRequestLogStore for transparency panel
+        AIRequestLogStore.AIRequestRecord logRecord = AIRequestLogStore.getInstance().logRequest(
+            "AI Advisor", config.getProvider(), config.getModel(),
+            templateName, systemPrompt, userPrompt);
+        
         if ("Azure AI".equalsIgnoreCase(config.getProvider())) {
             AzureAIService.Configuration c = new AzureAIService.Configuration();
             c.setEndpoint(config.getEndpoint());
@@ -1558,7 +1670,15 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new AzureAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+            String result;
+            try {
+                result = new AzureAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
             com.vista.security.service.OpenRouterService.Configuration c = 
                 new com.vista.security.service.OpenRouterService.Configuration();
@@ -1566,14 +1686,30 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setModel(config.getOpenRouterModel());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new com.vista.security.service.OpenRouterService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+            String result;
+            try {
+                result = new com.vista.security.service.OpenRouterService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new OpenAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+            String result;
+            try {
+                result = new OpenAIService(c).ask(systemPrompt, userPrompt, templateName, httpRequest, httpResponse);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         }
     }
     
@@ -1584,6 +1720,51 @@ public class TestingSuggestionsPanel extends JPanel {
     private String callAIWithHistory(java.util.List<ChatMessage> messages) throws Exception {
         AIConfigManager config = AIConfigManager.getInstance();
         
+        // ═══ GLOBAL TOKEN BUDGET ENFORCEMENT FOR HISTORY ═══
+        final int MAX_TOTAL_CHARS = 400_000;
+        int totalChars = 0;
+        for (ChatMessage m : messages) {
+            totalChars += m.getContent() != null ? m.getContent().length() : 0;
+        }
+        
+        if (totalChars > MAX_TOTAL_CHARS) {
+            // Trim oldest non-system messages until under budget
+            // Keep system prompt (index 0) and most recent messages
+            while (totalChars > MAX_TOTAL_CHARS && messages.size() > 2) {
+                // Find the first non-system message (oldest user/assistant)
+                for (int i = 0; i < messages.size(); i++) {
+                    if (messages.get(i).getRole() != ChatMessage.Role.SYSTEM) {
+                        totalChars -= messages.get(i).getContent() != null ? messages.get(i).getContent().length() : 0;
+                        messages = new java.util.ArrayList<>(messages); // make mutable copy
+                        messages.remove(i);
+                        break;
+                    }
+                }
+            }
+            // If still over budget after removing old messages, truncate the system prompt
+            if (totalChars > MAX_TOTAL_CHARS && !messages.isEmpty() 
+                && messages.get(0).getRole() == ChatMessage.Role.SYSTEM) {
+                String sysContent = messages.get(0).getContent();
+                if (sysContent != null && sysContent.length() > MAX_TOTAL_CHARS / 2) {
+                    messages = new java.util.ArrayList<>(messages);
+                    messages.set(0, new ChatMessage(ChatMessage.Role.SYSTEM, 
+                        sysContent.substring(0, MAX_TOTAL_CHARS / 2) + "\n[TRUNCATED FOR TOKEN BUDGET]"));
+                }
+            }
+            callbacks.printOutput("[VISTA] ⚠️ History token budget enforced: trimmed conversation to fit context window");
+        }
+        
+        // Log to AIRequestLogStore - extract system/user from messages for transparency
+        String logSysPrompt = "";
+        String logUserPrompt = "";
+        for (ChatMessage m : messages) {
+            if (m.getRole() == ChatMessage.Role.SYSTEM) logSysPrompt = m.getContent();
+            if (m.getRole() == ChatMessage.Role.USER) logUserPrompt = m.getContent(); // last user msg
+        }
+        AIRequestLogStore.AIRequestRecord logRecord = AIRequestLogStore.getInstance().logRequest(
+            "AI Advisor (History)", config.getProvider(), config.getModel(),
+            "Chat Session", logSysPrompt, logUserPrompt);
+        
         if ("Azure AI".equalsIgnoreCase(config.getProvider())) {
             AzureAIService.Configuration c = new AzureAIService.Configuration();
             c.setEndpoint(config.getEndpoint());
@@ -1591,7 +1772,15 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setApiKey(config.getAzureApiKey());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new AzureAIService(c).askWithHistory(messages);
+            String result;
+            try {
+                result = new AzureAIService(c).askWithHistory(messages);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
             com.vista.security.service.OpenRouterService.Configuration c = 
                 new com.vista.security.service.OpenRouterService.Configuration();
@@ -1599,14 +1788,30 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setModel(config.getOpenRouterModel());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new com.vista.security.service.OpenRouterService(c).askWithHistory(messages);
+            String result;
+            try {
+                result = new com.vista.security.service.OpenRouterService(c).askWithHistory(messages);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         } else {
             OpenAIService.Configuration c = new OpenAIService.Configuration();
             c.setApiKey(config.getOpenAIApiKey());
             c.setModel(config.getModel());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
-            return new OpenAIService(c).askWithHistory(messages);
+            String result;
+            try {
+                result = new OpenAIService(c).askWithHistory(messages);
+                AIRequestLogStore.getInstance().logResponse(logRecord, result);
+                return result;
+            } catch (Exception ex) {
+                AIRequestLogStore.getInstance().logError(logRecord, ex.getMessage());
+                throw ex;
+            }
         }
     }
     
@@ -1735,6 +1940,263 @@ public class TestingSuggestionsPanel extends JPanel {
     private String truncate(String s, int max) {
         if (s == null) return "";
         return s.length() > max ? s.substring(0, max) + "..." : s;
+    }
+
+    /**
+     * Detects if multiple testing steps form a redirect chain.
+     * Checks if the response of step N has a 3xx status with a Location header
+     * that matches the URL of step N+1.
+     */
+    private boolean detectRedirectChain(List<ChatSession.TestingStep> steps) {
+        for (int i = 0; i < steps.size() - 1; i++) {
+            String response = steps.get(i).response;
+            String nextRequest = steps.get(i + 1).request;
+            if (response == null || response.isEmpty() || nextRequest == null) continue;
+            
+            // Check for 3xx status code
+            String firstLine = response.split("\\r?\\n", 2)[0];
+            boolean is3xx = firstLine.matches(".*\\s3\\d{2}\\s.*");
+            
+            // Check for Location header
+            boolean hasLocation = false;
+            String locationUrl = "";
+            for (String line : response.split("\\r?\\n")) {
+                if (line.toLowerCase().startsWith("location:")) {
+                    hasLocation = true;
+                    locationUrl = line.substring(9).trim();
+                    break;
+                }
+            }
+            
+            if (is3xx && hasLocation) {
+                // Check if next request's URL matches the Location
+                String nextFirstLine = nextRequest.split("\\r?\\n", 2)[0];
+                if (nextFirstLine.contains(locationUrl) || 
+                    locationUrl.contains(nextFirstLine.split(" ")[1].split("\\?")[0])) {
+                    return true;
+                }
+                // Even if URLs don't exactly match, 3xx + Location is a redirect chain
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Smart response truncation that preserves areas around reflected parameter values.
+     * Instead of blindly cutting at N chars, this finds reflection points in the response
+     * and includes windows around them, plus the headers.
+     */
+    private String smartTruncateResponse(String response, String request, int maxLength) {
+        if (response == null) return "";
+        if (response.length() <= maxLength) return response;
+        
+        // Always include headers (up to first blank line)
+        int headerEnd = response.indexOf("\r\n\r\n");
+        if (headerEnd < 0) headerEnd = response.indexOf("\n\n");
+        if (headerEnd < 0) headerEnd = Math.min(500, response.length());
+        
+        String headers = response.substring(0, Math.min(headerEnd + 4, response.length()));
+        int bodyBudget = maxLength - headers.length() - 200; // Reserve for markers
+        
+        if (bodyBudget <= 0) return truncate(response, maxLength);
+        
+        String body = response.substring(Math.min(headerEnd + 4, response.length()));
+        
+        // Extract parameter values from request to find reflection points
+        List<String> paramValues = extractParamValuesFromRequest(request);
+        
+        // Find positions of reflected values in response body
+        List<int[]> reflectionWindows = new ArrayList<>();
+        for (String val : paramValues) {
+            if (val.length() < 3) continue;
+            // Check exact, HTML-encoded, and core substrings
+            String[] variants = {
+                val,
+                val.replace("'", "&#039;").replace("\"", "&#034;"),
+                val.replace("'", "&#x27;").replace("\"", "&#x22;"),
+                val.replaceAll("^[^a-zA-Z0-9]+", "").replaceAll("[^a-zA-Z0-9]+$", "")
+            };
+            for (String variant : variants) {
+                if (variant.length() < 3) continue;
+                int idx = 0;
+                while ((idx = body.indexOf(variant, idx)) != -1) {
+                    int windowStart = Math.max(0, idx - 200);
+                    int windowEnd = Math.min(body.length(), idx + variant.length() + 200);
+                    reflectionWindows.add(new int[]{windowStart, windowEnd});
+                    idx += variant.length();
+                }
+            }
+        }
+        
+        if (reflectionWindows.isEmpty()) {
+            // No reflections found — just do regular truncation of the body
+            return headers + truncate(body, bodyBudget);
+        }
+        
+        // Merge overlapping windows
+        reflectionWindows.sort((a, b) -> Integer.compare(a[0], b[0]));
+        List<int[]> merged = new ArrayList<>();
+        merged.add(reflectionWindows.get(0));
+        for (int i = 1; i < reflectionWindows.size(); i++) {
+            int[] last = merged.get(merged.size() - 1);
+            int[] curr = reflectionWindows.get(i);
+            if (curr[0] <= last[1]) {
+                last[1] = Math.max(last[1], curr[1]);
+            } else {
+                merged.add(curr);
+            }
+        }
+        
+        // Build output: headers + beginning of body + reflection windows
+        StringBuilder result = new StringBuilder(headers);
+        int bodyStart = Math.min(body.length(), 500); // First 500 chars of body always
+        result.append(body, 0, bodyStart);
+        
+        for (int[] window : merged) {
+            if (window[0] > bodyStart) {
+                result.append("\n... [truncated ").append(window[0] - bodyStart).append(" chars] ...\n");
+            }
+            if (window[0] >= bodyStart) {
+                result.append(body, window[0], Math.min(window[1], body.length()));
+                bodyStart = window[1];
+            }
+        }
+        
+        if (result.length() > maxLength) {
+            return result.substring(0, maxLength) + "...";
+        }
+        return result.toString();
+    }
+    
+    /**
+     * Extracts parameter values from a raw HTTP request string.
+     */
+    private List<String> extractParamValuesFromRequest(String request) {
+        List<String> values = new ArrayList<>();
+        if (request == null) return values;
+        
+        String firstLine = request.split("\\r?\\n", 2)[0];
+        // Extract from URL query string
+        if (firstLine.contains("?")) {
+            String query = firstLine.substring(firstLine.indexOf("?") + 1);
+            if (query.contains(" ")) query = query.substring(0, query.indexOf(" "));
+            for (String pair : query.split("&")) {
+                String[] kv = pair.split("=", 2);
+                if (kv.length == 2 && !kv[1].isEmpty()) {
+                    try {
+                        values.add(java.net.URLDecoder.decode(kv[1], "UTF-8"));
+                    } catch (Exception e) {
+                        values.add(kv[1]);
+                    }
+                }
+            }
+        }
+        
+        // Extract from POST body
+        int bodyStart = request.indexOf("\r\n\r\n");
+        if (bodyStart < 0) bodyStart = request.indexOf("\n\n");
+        if (bodyStart >= 0) {
+            String body = request.substring(bodyStart).trim();
+            if (body.contains("=")) {
+                for (String pair : body.split("&")) {
+                    String[] kv = pair.split("=", 2);
+                    if (kv.length == 2 && !kv[1].isEmpty()) {
+                        try {
+                            values.add(java.net.URLDecoder.decode(kv[1], "UTF-8"));
+                        } catch (Exception e) {
+                            values.add(kv[1]);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return values;
+    }
+    
+    /**
+     * Runs the FULL ReflectionAnalyzer on a raw request/response string pair.
+     * Creates a synthetic IHttpRequestResponse wrapper so the analyzer can parse
+     * headers, parameters, and response body with full context detection
+     * (HTML tag, HTML attribute, JavaScript, JS string, HTML comment, CSS, etc.).
+     * This is critical because the attached requests contain the user's payloads,
+     * while the session's currentRequest is just the baseline without payloads.
+     */
+    private String runFullReflectionAnalysis(String requestStr, String responseStr) {
+        try {
+            if (requestStr == null || responseStr == null || responseStr.isEmpty()) return null;
+            
+            byte[] reqBytes = requestStr.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+            byte[] respBytes = responseStr.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+            
+            // Create a lightweight IHttpRequestResponse wrapper
+            IHttpRequestResponse synthetic = new IHttpRequestResponse() {
+                @Override public byte[] getRequest() { return reqBytes; }
+                @Override public byte[] getResponse() { return respBytes; }
+            };
+            
+            ReflectionAnalyzer.ReflectionAnalysis analysis = reflectionAnalyzer.analyze(synthetic);
+            if (analysis.hasReflections()) {
+                return analysis.getSummary();
+            }
+            return null;
+        } catch (Exception e) {
+            callbacks.printOutput("[VISTA] runFullReflectionAnalysis error: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Runs reflection analysis on an attached request/response pair.
+     * This is separate from the session's currentRequest — it analyzes
+     * the ACTUAL request the user just attached (which may have a payload).
+     */
+    private String analyzeAttachedReflection(String requestStr, String responseStr) {
+        try {
+            if (requestStr == null || responseStr == null || responseStr.isEmpty()) return null;
+            
+            // Extract parameters from request
+            List<String> paramValues = extractParamValuesFromRequest(requestStr);
+            if (paramValues.isEmpty()) return null;
+            
+            StringBuilder result = new StringBuilder();
+            boolean anyFound = false;
+            
+            // Check each parameter value in response
+            for (String value : paramValues) {
+                if (value.length() < 3) continue;
+                
+                // Check exact
+                if (responseStr.contains(value)) {
+                    result.append("⚡ REFLECTED (exact): '").append(truncate(value, 80)).append("' found in response\n");
+                    anyFound = true;
+                    continue;
+                }
+                
+                // Check HTML-encoded variants
+                String numEncoded = value.replace("'", "&#039;").replace("\"", "&#034;")
+                    .replace("<", "&lt;").replace(">", "&gt;");
+                if (responseStr.contains(numEncoded)) {
+                    result.append("⚡ REFLECTED (HTML-encoded): '").append(truncate(value, 80))
+                          .append("' found as '").append(truncate(numEncoded, 80)).append("'\n");
+                    anyFound = true;
+                    continue;
+                }
+                
+                // Check core substring
+                String core = value.replaceAll("^[^a-zA-Z0-9]+", "").replaceAll("[^a-zA-Z0-9]+$", "");
+                if (core.length() >= 4 && responseStr.contains(core)) {
+                    result.append("⚡ REFLECTED (partial): core '").append(core)
+                          .append("' from '").append(truncate(value, 80)).append("' found in response\n");
+                    anyFound = true;
+                }
+            }
+            
+            return anyFound ? result.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void installPlaceholder(JTextField field, String placeholder) {

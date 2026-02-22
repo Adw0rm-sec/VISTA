@@ -7,6 +7,7 @@ import burp.IResponseInfo;
 import com.vista.security.model.ChatSession;
 import com.vista.security.ui.TestingSuggestionsPanel;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +15,20 @@ import java.util.Map;
 /**
  * Context for variable substitution in prompt templates.
  * Holds all available data that can be used in templates.
+ * 
+ * Uses SecurityContentExtractor for intelligent response extraction:
+ * instead of blindly truncating large responses (losing reflection points),
+ * it extracts only security-relevant content (scripts, forms, reflections,
+ * comments, errors, sensitive patterns) — giving the AI better data in fewer tokens.
  */
 public class VariableContext {
+    
+    // Budget for intelligent extraction (chars)
+    // SecurityContentExtractor will extract security-relevant sections within this budget
+    private static final int RESPONSE_EXTRACTION_BUDGET = 30_000;  // ~7.5K tokens — rich context
+    private static final int RESPONSE_BODY_EXTRACTION_BUDGET = 25_000;
+    private static final int MAX_REQUEST_CHARS = 4000;       // Requests are usually small
+    private static final int MAX_REQUEST_BODY_CHARS = 3000;
     
     private final IExtensionHelpers helpers;
     private final IHttpRequestResponse request;
@@ -120,7 +133,8 @@ public class VariableContext {
     // Request variable getters
     private String getRequest() {
         if (request == null || request.getRequest() == null) return "(No request)";
-        return new String(request.getRequest(), java.nio.charset.StandardCharsets.UTF_8);
+        String full = new String(request.getRequest(), java.nio.charset.StandardCharsets.UTF_8);
+        return smartTruncate(full, MAX_REQUEST_CHARS, "REQUEST");
     }
     
     private String getRequestMethod() {
@@ -193,7 +207,8 @@ public class VariableContext {
         if (bodyOffset >= request.getRequest().length) return "";
         byte[] body = new byte[request.getRequest().length - bodyOffset];
         System.arraycopy(request.getRequest(), bodyOffset, body, 0, body.length);
-        return new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        String full = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        return smartTruncate(full, MAX_REQUEST_BODY_CHARS, "REQUEST_BODY");
     }
     
     private String getRequestCookies() {
@@ -211,7 +226,15 @@ public class VariableContext {
     // Response variable getters
     private String getResponse() {
         if (request == null || request.getResponse() == null) return "(No response)";
-        return new String(request.getResponse(), java.nio.charset.StandardCharsets.UTF_8);
+        String full = new String(request.getResponse(), java.nio.charset.StandardCharsets.UTF_8);
+        
+        // If small enough, return as-is (no extraction needed)
+        if (full.length() <= RESPONSE_EXTRACTION_BUDGET) return full;
+        
+        // Use intelligent extraction: pull only security-relevant content
+        // Pass parameter values so the extractor preserves areas around reflections
+        List<String> paramValues = getKnownParamValues();
+        return SecurityContentExtractor.extract(full, paramValues, RESPONSE_EXTRACTION_BUDGET);
     }
     
     private String getResponseStatus() {
@@ -242,7 +265,14 @@ public class VariableContext {
         if (bodyOffset >= request.getResponse().length) return "";
         byte[] body = new byte[request.getResponse().length - bodyOffset];
         System.arraycopy(request.getResponse(), bodyOffset, body, 0, body.length);
-        return new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        String full = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        
+        // If small enough, return as-is
+        if (full.length() <= RESPONSE_BODY_EXTRACTION_BUDGET) return full;
+        
+        // Intelligent extraction for body-only
+        List<String> paramValues = getKnownParamValues();
+        return SecurityContentExtractor.extract(full, paramValues, RESPONSE_BODY_EXTRACTION_BUDGET);
     }
     
     private String getResponseSize() {
@@ -328,5 +358,66 @@ public class VariableContext {
     
     private String getAttachedRequestsCount() {
         return String.valueOf(attachedRequestsCount);
+    }
+    
+    /**
+     * Get known parameter values from the request — used to find reflection points.
+     * Combines values from the deep request analysis (if available) and from
+     * the reflection analysis results.
+     */
+    private List<String> getKnownParamValues() {
+        List<String> values = new ArrayList<>();
+        
+        // From deep request analysis (parsed parameters)
+        if (deepRequestAnalysis != null && deepRequestAnalysis.parameters != null) {
+            for (DeepRequestAnalyzer.ParameterInfo param : deepRequestAnalysis.parameters) {
+                if (param.value != null && param.value.length() >= 2) {
+                    values.add(param.value);
+                }
+            }
+        }
+        
+        // From reflection analysis (known reflected values)
+        if (reflectionAnalysis != null && reflectionAnalysis.getReflections() != null) {
+            for (ReflectionAnalyzer.ReflectionPoint rp : reflectionAnalysis.getReflections()) {
+                if (rp.getParameterValue() != null && rp.getParameterValue().length() >= 2) {
+                    if (!values.contains(rp.getParameterValue())) {
+                        values.add(rp.getParameterValue());
+                    }
+                }
+            }
+        }
+        
+        // Fallback: extract from raw request text
+        if (values.isEmpty() && request != null && request.getRequest() != null) {
+            String reqText = new String(request.getRequest(), java.nio.charset.StandardCharsets.UTF_8);
+            values = SecurityContentExtractor.extractParamValues(reqText);
+        }
+        
+        return values;
+    }
+    
+    /**
+     * Simple truncation for request data (requests are usually small).
+     * Preserves headers and truncates body.
+     */
+    private static String smartTruncate(String text, int maxChars, String label) {
+        if (text == null || text.length() <= maxChars) return text;
+        
+        int headerEnd = text.indexOf("\r\n\r\n");
+        if (headerEnd < 0) headerEnd = text.indexOf("\n\n");
+        
+        if (headerEnd > 0 && headerEnd < maxChars - 200) {
+            String headers = text.substring(0, headerEnd + 4);
+            int bodyBudget = maxChars - headers.length() - 100;
+            if (bodyBudget > 0) {
+                String body = text.substring(headerEnd + 4);
+                return headers + body.substring(0, Math.min(body.length(), bodyBudget))
+                    + "\n\n... [" + label + " TRUNCATED: showing " + maxChars + " of " + text.length() + " chars]";
+            }
+        }
+        
+        return text.substring(0, maxChars) 
+            + "\n\n... [" + label + " TRUNCATED: showing " + maxChars + " of " + text.length() + " chars]";
     }
 }

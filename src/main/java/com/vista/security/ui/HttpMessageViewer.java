@@ -342,34 +342,20 @@ public class HttpMessageViewer extends JPanel {
     }
     
     /**
-     * Clears all search highlights.
+     * Clears all search highlights from the Highlighter overlay layer.
+     * Note: Syntax highlighting uses StyledDocument attributes (a separate layer),
+     * so removing Highlighter highlights does NOT affect syntax colors.
+     * Previously this method re-rendered the document via displayRequest/displayResponse,
+     * which caused double pretty-formatting of JSON/HTML bodies, invalidating all
+     * stored search result positions and breaking highlight + scroll.
      */
     private void clearSearchHighlights() {
         requestPane.getHighlighter().removeAllHighlights();
         responsePane.getHighlighter().removeAllHighlights();
-        
-        // Re-apply syntax highlighting
-        if (requestPane.getDocument().getLength() > 0) {
-            try {
-                String text = requestPane.getDocument().getText(0, requestPane.getDocument().getLength());
-                displayRequest(text);
-            } catch (BadLocationException e) {
-                // Ignore
-            }
-        }
-        
-        if (responsePane.getDocument().getLength() > 0) {
-            try {
-                String text = responsePane.getDocument().getText(0, responsePane.getDocument().getLength());
-                displayResponse(text);
-            } catch (BadLocationException e) {
-                // Ignore
-            }
-        }
     }
     
     /**
-     * Highlights the current search result.
+     * Highlights the current search result and scrolls to make it visible.
      */
     private void highlightCurrentResult() {
         clearSearchHighlights();
@@ -380,8 +366,7 @@ public class HttpMessageViewer extends JPanel {
         if (currentSearchPane == requestPane && currentRequestResultIndex >= 0 && 
             currentRequestResultIndex < requestSearchResults.size()) {
             SearchResult result = requestSearchResults.get(currentRequestResultIndex);
-            requestPane.setCaretPosition(result.start);
-            requestPane.moveCaretPosition(result.end);
+            scrollToPosition(requestPane, result.start);
             
             int totalResults = requestSearchResults.size() + responseSearchResults.size();
             int currentPos = currentRequestResultIndex + 1;
@@ -390,12 +375,34 @@ public class HttpMessageViewer extends JPanel {
         } else if (currentSearchPane == responsePane && currentResponseResultIndex >= 0 && 
                    currentResponseResultIndex < responseSearchResults.size()) {
             SearchResult result = responseSearchResults.get(currentResponseResultIndex);
-            responsePane.setCaretPosition(result.start);
-            responsePane.moveCaretPosition(result.end);
+            scrollToPosition(responsePane, result.start);
             
             int totalResults = requestSearchResults.size() + responseSearchResults.size();
             int currentPos = requestSearchResults.size() + currentResponseResultIndex + 1;
             searchResultLabel.setText(currentPos + " of " + totalResults + " results");
+        }
+    }
+    
+    /**
+     * Scrolls the text pane to make the given position visible.
+     * Uses modelToView to convert document offset to screen coordinates,
+     * then scrollRectToVisible with padding for comfortable viewing.
+     */
+    private void scrollToPosition(JTextPane pane, int position) {
+        try {
+            @SuppressWarnings("deprecation")
+            Rectangle rect = pane.modelToView(position);
+            if (rect != null) {
+                // Add vertical padding so the match isn't at the very edge
+                rect.y = Math.max(0, rect.y - 60);
+                rect.height += 120;
+                pane.scrollRectToVisible(rect);
+            }
+        } catch (BadLocationException e) {
+            // Fallback: try setting caret position (may not scroll with NEVER_UPDATE policy)
+            try {
+                pane.setCaretPosition(position);
+            } catch (Exception ignored) {}
         }
     }
     

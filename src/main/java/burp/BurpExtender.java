@@ -4,6 +4,7 @@ import com.vista.security.ui.TestingSuggestionsPanel;
 import com.vista.security.ui.SettingsPanel;
 import com.vista.security.ui.PromptTemplatePanel;
 import com.vista.security.ui.PayloadLibraryPanel;
+import com.vista.security.ui.AIRequestLogPanel;
 import com.vista.security.ui.VistaTheme;
 import com.vista.security.core.AIConfigManager;
 
@@ -103,6 +104,7 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                     tabbedPane.addTab("  Prompt Templates  ", promptTemplatePanel);
                     tabbedPane.addTab("  Payload Library  ", payloadLibraryPanel);
                     tabbedPane.addTab("  Settings  ", settingsPanel);
+                    tabbedPane.addTab("  AI Request Log  ", new AIRequestLogPanel(null));
                     callbacks.printOutput("[VISTA] ✓ All tabs added to tabbed pane");
                     
                     // Build root panel: status bar + tabs

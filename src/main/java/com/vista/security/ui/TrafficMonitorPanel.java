@@ -181,6 +181,9 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         activityLogPanel = new ActivityLogPanel();
         contentTabbedPane.addTab("  📋 Activity Log  ", activityLogPanel);
         
+        // AI Request Log tab (filtered to Traffic Monitor calls only)
+        contentTabbedPane.addTab("  🔍 AI Log  ", new AIRequestLogPanel("Traffic Monitor"));
+        
         // Add to main panel
         add(contentTabbedPane, BorderLayout.CENTER);
         
@@ -461,8 +464,14 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         });
         
         // Add right-click context menu for scope management
+        // NOTE: Do NOT use setComponentPopupMenu() — it shows the popup WITHOUT updating
+        // the table selection to the right-clicked row, so getSelectedRow() returns the
+        // previously selected row, causing the wrong host to be read.
+        // Instead, the MouseListener's handlePopup() below correctly:
+        //   1. Finds the row at click point
+        //   2. Updates selection to that row
+        //   3. THEN shows the popup
         JPopupMenu contextMenu = createTrafficContextMenu();
-        trafficTable.setComponentPopupMenu(contextMenu);
         
         // Mouse listener for: right-click popup + double-click on # cell for color highlight
         trafficTable.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -1568,20 +1577,28 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         addToScopeItem.addActionListener(e -> {
             int selectedRow = trafficTable.getSelectedRow();
             if (selectedRow >= 0) {
-                List<HttpTransaction> transactions = bufferManager.getAllTransactions();
-                if (selectedRow < transactions.size()) {
-                    HttpTransaction tx = transactions.get(selectedRow);
-                    String host = tx.getHost();
-                    scopeManager.addScope(host);
-                    // Clear analyzed URLs cache to allow re-analysis with new scope
-                    clearAnalyzedUrlsCache();
-                    callbacks.printOutput("[Traffic Monitor] Added to scope: " + host);
-                    JOptionPane.showMessageDialog(
-                        this,
-                        "Added to scope: " + host + "\n\nEnable scope filtering to see only in-scope traffic.",
-                        "Scope Updated",
-                        JOptionPane.INFORMATION_MESSAGE
-                    );
+                // Convert view row to model row (handles sorting/filtering)
+                int modelRow;
+                try {
+                    modelRow = trafficTable.convertRowIndexToModel(selectedRow);
+                } catch (Exception ex) {
+                    modelRow = selectedRow;
+                }
+                if (modelRow < trafficTableModel.getRowCount()) {
+                    // Read host directly from the table model (column 1 = Host)
+                    String host = (String) trafficTableModel.getValueAt(modelRow, 1);
+                    if (host != null && !host.isEmpty()) {
+                        scopeManager.addScope(host);
+                        // Clear analyzed URLs cache to allow re-analysis with new scope
+                        clearAnalyzedUrlsCache();
+                        callbacks.printOutput("[Traffic Monitor] Added to scope: " + host);
+                        JOptionPane.showMessageDialog(
+                            this,
+                            "Added to scope: " + host + "\n\nEnable scope filtering to see only in-scope traffic.",
+                            "Scope Updated",
+                            JOptionPane.INFORMATION_MESSAGE
+                        );
+                    }
                 }
             }
         });
@@ -1590,26 +1607,34 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         addDomainToScopeItem.addActionListener(e -> {
             int selectedRow = trafficTable.getSelectedRow();
             if (selectedRow >= 0) {
-                List<HttpTransaction> transactions = bufferManager.getAllTransactions();
-                if (selectedRow < transactions.size()) {
-                    HttpTransaction tx = transactions.get(selectedRow);
-                    String host = tx.getHost();
-                    // Extract domain (remove subdomain)
-                    String[] parts = host.split("\\.");
-                    String domain = parts.length >= 2 
-                        ? parts[parts.length - 2] + "." + parts[parts.length - 1]
-                        : host;
-                    String pattern = "*." + domain;
-                    scopeManager.addScope(pattern);
-                    // Clear analyzed URLs cache to allow re-analysis with new scope
-                    clearAnalyzedUrlsCache();
-                    callbacks.printOutput("[Traffic Monitor] Added to scope: " + pattern);
-                    JOptionPane.showMessageDialog(
-                        this,
-                        "Added to scope: " + pattern + "\n\nThis will match all subdomains.\nEnable scope filtering to see only in-scope traffic.",
-                        "Scope Updated",
-                        JOptionPane.INFORMATION_MESSAGE
-                    );
+                // Convert view row to model row (handles sorting/filtering)
+                int modelRow;
+                try {
+                    modelRow = trafficTable.convertRowIndexToModel(selectedRow);
+                } catch (Exception ex) {
+                    modelRow = selectedRow;
+                }
+                if (modelRow < trafficTableModel.getRowCount()) {
+                    // Read host directly from the table model (column 1 = Host)
+                    String host = (String) trafficTableModel.getValueAt(modelRow, 1);
+                    if (host != null && !host.isEmpty()) {
+                        // Extract domain (remove subdomain)
+                        String[] parts = host.split("\\.");
+                        String domain = parts.length >= 2 
+                            ? parts[parts.length - 2] + "." + parts[parts.length - 1]
+                            : host;
+                        String pattern = "*." + domain;
+                        scopeManager.addScope(pattern);
+                        // Clear analyzed URLs cache to allow re-analysis with new scope
+                        clearAnalyzedUrlsCache();
+                        callbacks.printOutput("[Traffic Monitor] Added to scope: " + pattern);
+                        JOptionPane.showMessageDialog(
+                            this,
+                            "Added to scope: " + pattern + "\n\nThis will match all subdomains.\nEnable scope filtering to see only in-scope traffic.",
+                            "Scope Updated",
+                            JOptionPane.INFORMATION_MESSAGE
+                        );
+                    }
                 }
             }
         });

@@ -134,28 +134,114 @@ public class ReflectionAnalyzer {
     }
     
     /**
-     * Analyzes how a specific parameter value is reflected in the response
+     * Analyzes how a specific parameter value is reflected in the response.
+     * Checks for exact matches, HTML-encoded variants, and significant substrings
+     * so that partially-encoded reflections (e.g. &#039;;alert(12345);/&#039;) are detected.
      */
     private ReflectionPoint analyzeParameterReflection(String paramName, String paramValue, 
                                                        String responseBody, String responseHeaders) {
         
-        // Check if parameter value appears in response
-        if (!responseBody.contains(paramValue) && !responseHeaders.contains(paramValue)) {
+        // Build all variants of the value to check
+        String htmlEncoded = htmlEncode(paramValue);
+        String urlEncoded = urlEncode(paramValue);
+        
+        // Also build "mixed" HTML-encoded version using numeric entities for quotes
+        // (many apps encode ' as &#039; or &#x27; but leave other chars raw)
+        String numericEntityEncoded = paramValue
+            .replace("'", "&#039;")
+            .replace("\"", "&#034;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;");
+        String hexEntityEncoded = paramValue
+            .replace("'", "&#x27;")
+            .replace("\"", "&#x22;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;");
+        
+        // Extract "core" alphanumeric substrings from the value (e.g., "alert(12345)" from "';alert(12345);//")
+        // This catches reflections where only special chars are encoded/stripped
+        List<String> coreSubstrings = extractCoreSubstrings(paramValue);
+        
+        // Check if ANY variant appears in response
+        boolean foundInBody = responseBody.contains(paramValue)
+            || responseBody.contains(htmlEncoded)
+            || responseBody.contains(numericEntityEncoded)
+            || responseBody.contains(hexEntityEncoded);
+        boolean foundInHeaders = responseHeaders.contains(paramValue)
+            || responseHeaders.contains(urlEncoded);
+        
+        // Also check core substrings (minimum 4 chars to avoid false positives)
+        boolean coreFound = false;
+        String matchedCore = null;
+        if (!foundInBody) {
+            for (String core : coreSubstrings) {
+                if (core.length() >= 4 && responseBody.contains(core)) {
+                    coreFound = true;
+                    matchedCore = core;
+                    foundInBody = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!foundInBody && !foundInHeaders) {
             return null;
         }
         
         ReflectionPoint reflection = new ReflectionPoint(paramName, paramValue);
         
         // Check reflection in headers
-        if (responseHeaders.contains(paramValue)) {
+        if (foundInHeaders) {
             reflection.setReflectedInHeaders(true);
             reflection.addLocation("HTTP Headers");
         }
         
-        // Analyze reflection context in body
-        analyzeReflectionContext(paramValue, responseBody, reflection);
+        // Analyze reflection context in body — try all matching variants
+        if (responseBody.contains(paramValue)) {
+            // Exact match (best case)
+            analyzeReflectionContext(paramValue, responseBody, reflection);
+        } else if (responseBody.contains(numericEntityEncoded)) {
+            // HTML numeric entity encoded (e.g., &#039; for ')
+            analyzeReflectionContext(numericEntityEncoded, responseBody, reflection);
+            reflection.addLocation("HTML Entity Encoded (&#039; style)");
+        } else if (responseBody.contains(hexEntityEncoded)) {
+            // HTML hex entity encoded (e.g., &#x27; for ')
+            analyzeReflectionContext(hexEntityEncoded, responseBody, reflection);
+            reflection.addLocation("HTML Entity Encoded (&#x27; style)");
+        } else if (responseBody.contains(htmlEncoded)) {
+            // Full HTML entity encoded
+            analyzeReflectionContext(htmlEncoded, responseBody, reflection);
+            reflection.addLocation("HTML Entity Encoded (&amp; style)");
+        } else if (coreFound && matchedCore != null) {
+            // Core substring match — partial reflection
+            analyzeReflectionContext(matchedCore, responseBody, reflection);
+            reflection.addLocation("Partial reflection (core: " + matchedCore + ")");
+        }
         
         return reflection;
+    }
+    
+    /**
+     * Extracts significant alphanumeric substrings from a payload value.
+     * For example, from "';alert(12345);//" extracts ["alert(12345)", "alert", "12345"].
+     * This helps detect reflections where only special characters are encoded/stripped.
+     */
+    private List<String> extractCoreSubstrings(String value) {
+        List<String> cores = new ArrayList<>();
+        
+        // Extract contiguous alphanumeric+parentheses substrings
+        java.util.regex.Matcher m = Pattern.compile("[a-zA-Z0-9()_]{4,}").matcher(value);
+        while (m.find()) {
+            cores.add(m.group());
+        }
+        
+        // Also try the value with only leading/trailing special chars stripped
+        String stripped = value.replaceAll("^[^a-zA-Z0-9]+", "").replaceAll("[^a-zA-Z0-9]+$", "");
+        if (stripped.length() >= 4 && !cores.contains(stripped)) {
+            cores.add(0, stripped); // Higher priority
+        }
+        
+        return cores;
     }
     
     /**
@@ -403,22 +489,28 @@ public class ReflectionAnalyzer {
         
         public String getSummary() {
             if (reflections.isEmpty()) {
-                return "No parameter reflections detected in response.";
+                return "No parameter reflections detected in response (checked exact, HTML-encoded, and partial matches).";
             }
             
             StringBuilder summary = new StringBuilder();
-            summary.append("REFLECTION ANALYSIS:\n\n");
+            summary.append("REFLECTION ANALYSIS (").append(reflections.size()).append(" parameter(s) reflected):\n\n");
             
             for (ReflectionPoint reflection : reflections) {
-                summary.append("Parameter: ").append(reflection.getParameterName()).append("\n");
-                summary.append("Value: ").append(reflection.getParameterValue()).append("\n");
-                summary.append("Reflected in: ").append(String.join(", ", reflection.getLocations())).append("\n");
+                summary.append("⚡ Parameter: ").append(reflection.getParameterName()).append("\n");
+                summary.append("   Injected Value: ").append(reflection.getParameterValue()).append("\n");
+                summary.append("   Reflected in: ").append(String.join(", ", reflection.getLocations())).append("\n");
                 
                 for (ReflectionContext ctx : reflection.getContexts()) {
-                    summary.append("  - Context: ").append(ctx.getContextType()).append("\n");
-                    summary.append("    Location: ").append(ctx.getDescription()).append("\n");
-                    summary.append("    Encoded: ").append(ctx.isEncoded() ? "Yes (" + ctx.getEncodingType() + ")" : "No").append("\n");
-                    summary.append("    Exploitable: ").append(ctx.isExploitable() ? "✓ YES" : "✗ NO").append("\n");
+                    summary.append("   → Context: ").append(ctx.getContextType()).append("\n");
+                    summary.append("     Location: ").append(ctx.getDescription()).append("\n");
+                    summary.append("     Encoded: ").append(ctx.isEncoded() ? "Yes (" + ctx.getEncodingType() + ")" : "No (RAW reflection!)").append("\n");
+                    summary.append("     Exploitable: ").append(ctx.isExploitable() ? "✓ YES — breakout likely possible" : "✗ Unlikely — encoding prevents breakout").append("\n");
+                    // Include a snippet of the surrounding context so AI can see exactly what's around the reflection
+                    if (ctx.getContext() != null && !ctx.getContext().isEmpty()) {
+                        String snippet = ctx.getContext();
+                        if (snippet.length() > 300) snippet = snippet.substring(0, 300) + "...";
+                        summary.append("     Surrounding HTML: ").append(snippet).append("\n");
+                    }
                 }
                 summary.append("\n");
             }
