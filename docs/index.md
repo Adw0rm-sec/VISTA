@@ -20,7 +20,9 @@ permalink: /
 
 VISTA is a professional Burp Suite extension that enhances security testing with AI-powered intelligence. It combines real-time traffic analysis, interactive AI guidance, and practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.10.24 · **License:** MIT · **Java:** 17+ · **Size:** ~511KB · **Zero Dependencies**
+**Version:** 2.10.27 · **License:** MIT · **Java:** 17+ · **Size:** ~511KB · **Zero Dependencies**
+
+> **New in v2.10.27:** Robust extraction, edge case handling, token overflow prevention, JSON param parsing, binary detection, fallback preview.
 
 ---
 
