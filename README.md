@@ -21,7 +21,7 @@
 
 **VISTA** (Vulnerability Insight & Strategic Test Assistant) is a professional Burp Suite extension that enhances your security testing workflow with AI-powered intelligence. It combines real-time traffic analysis, interactive AI guidance, and practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.10.24 | **Status:** Production Ready | **Size:** ~511KB
+**Version:** 2.10.27 | **Status:** Production Ready | **Size:** ~511KB
 
 ### Why VISTA?
 
