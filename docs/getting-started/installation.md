@@ -35,7 +35,7 @@ Download, build, and install VISTA in Burp Suite.
 The fastest way to get started:
 
 1. Visit the [Latest Release](https://github.com/Adw0rm-sec/VISTA/releases/latest)
-2. Download `vista-2.10.27.jar` from **Assets**
+2. Download `vista-2.10.28.jar` from **Assets**
 3. Open Burp Suite
 4. Go to **Extensions → Installed → Add**
 5. Set Extension type to **Java**
@@ -51,7 +51,7 @@ The fastest way to get started:
 
 ```bash
 # Download latest release
-curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10.27.jar
+curl -LO https://github.com/Adw0rm-sec/VISTA/releases/download/latest/vista-2.10.28.jar
 
 # Then load in Burp Suite: Extensions → Add → Java → Select JAR
 ```
@@ -70,10 +70,10 @@ cd VISTA
 # Build the JAR
 mvn clean package -DskipTests
 
-# Output: target/vista-2.10.27.jar
+# Output: target/vista-2.10.28.jar
 ```
 
-Then load `target/vista-2.10.24.jar` in Burp Suite as described in Option 1.
+Then load `target/vista-2.10.28.jar` in Burp Suite as described in Option 1.
 
 ### Development Setup
 

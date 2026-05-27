@@ -8,7 +8,7 @@ nav_order: 1
 # AI Provider Configuration
 {: .no_toc }
 
-Configure OpenAI, Azure OpenAI, or OpenRouter for VISTA's AI capabilities.
+Configure OpenAI, Azure AI, or OpenRouter for VISTA's AI capabilities.
 {: .fs-6 .fw-300 }
 
 <details open markdown="block">
@@ -24,9 +24,9 @@ Configure OpenAI, Azure OpenAI, or OpenRouter for VISTA's AI capabilities.
 
 | Provider | Models | Cost | Best For |
 |:---------|:-------|:-----|:---------|
-| **OpenAI** | GPT-4, GPT-4o, GPT-4o-mini | Pay-per-use | Direct API access, production use |
-| **Azure OpenAI** | GPT-4, GPT-4o (via deployment) | Pay-per-use | Enterprise, compliance, SLA |
-| **OpenRouter** | 500+ models, 2 free | Free + paid tiers | Everyone, free option |
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-5, o1/o3/o4 | Pay-per-use | Direct API, latest models |
+| **Azure AI** | Any deployed model incl. GPT-5, o-series | Pay-per-use | Enterprise, compliance, Azure Identity |
+| **OpenRouter** | 500+ models, free tier available | Free + paid | Everyone — fastest way to start |
 
 ---
 
@@ -46,40 +46,104 @@ Configure OpenAI, Azure OpenAI, or OpenRouter for VISTA's AI capabilities.
 |:--------|:------|
 | Provider | `OpenAI` |
 | API Key | `sk-...` |
-| Model | `gpt-4o-mini` (recommended) |
+| Model | `gpt-4o-mini` (recommended for cost) |
 
 ### Recommended Models
 
-| Model | Context | Cost | Best For |
-|:------|:--------|:-----|:---------|
-| `gpt-4o-mini` | 128K | ~$0.001/req | Cost-effective, fast |
-| `gpt-4o` | 128K | ~$0.01/req | Highest quality |
-| `gpt-4` | 8K | ~$0.03/req | Legacy, proven |
+| Model | Context | Cost | Notes |
+|:------|:--------|:-----|:------|
+| `gpt-4o-mini` | 128K | ~$0.001/req | Cost-effective, fast — good default |
+| `gpt-4o` | 128K | ~$0.01/req | Higher quality analysis |
+| `gpt-5.2` | 128K | varies | Latest GPT-5 family |
+| `o4-mini` | 128K | varies | Reasoning model — temperature omitted automatically |
+| `o3` | 128K | varies | Reasoning model — temperature omitted automatically |
+
+{: .tip }
+> VISTA automatically detects `o1`, `o3`, and `o4`-series models and omits the `temperature` parameter, which these models reject. No manual configuration needed.
 
 ---
 
-## Azure OpenAI Configuration
+## Azure AI Configuration
 
-### Prerequisites
+VISTA supports **two Azure endpoint flavours** and **two auth modes**, auto-detected from your endpoint URL.
 
-1. Azure subscription with OpenAI access approved
-2. Azure OpenAI resource created
-3. Model deployed in Azure OpenAI Studio
+### Endpoint Types
 
-### Settings
+#### Azure AI Foundry (New — Recommended)
+
+Endpoints on `*.services.ai.azure.com`:
+
+```
+Endpoint:   https://your-resource.services.ai.azure.com/openai/v1
+Deployment: gpt-5.2   (or any deployed model name)
+```
+
+VISTA sends the model name in the request body, matching the Azure AI Foundry OpenAI-compatible API format.
+
+#### Classic Azure OpenAI
+
+Endpoints on `*.openai.azure.com`:
+
+```
+Endpoint:   https://your-resource.openai.azure.com
+Deployment: your-deployment-name
+API Version: 2025-01-01-preview  (configurable)
+```
+
+VISTA puts the deployment name in the URL path, matching the classic Azure OpenAI format.
+
+{: .note }
+> VISTA auto-detects the endpoint type from your URL — no manual selection needed. Just paste your endpoint and it routes correctly.
+
+### Auth Modes
+
+#### API Key (Default)
+
+Standard key-based authentication:
 
 | Setting | Value |
 |:--------|:------|
 | Provider | `Azure AI` |
+| Auth Mode | `API Key` |
 | API Key | Your Azure key |
-| Endpoint | `https://your-resource.openai.azure.com` |
-| Deployment | Your deployment name |
+| Endpoint | Your endpoint URL |
+| Deployment | Your deployment / model name |
 
-### Finding Your Credentials
+**Finding your credentials:**
+- Azure Portal → Your AI resource → **Keys and Endpoint**
+- Copy Key 1 or Key 2 and the Endpoint URL
+- Deployment name: Azure AI Foundry Portal → Deployments tab
 
-- **API Key:** Azure Portal → Your OpenAI Resource → Keys and Endpoint
-- **Endpoint:** Same location, copy the endpoint URL
-- **Deployment:** Azure OpenAI Studio → Deployments → Your deployment name
+#### Azure Identity (Keyless / Entra ID)
+
+Authenticate without an API key using Microsoft Entra ID. VISTA implements the DefaultAzureCredential chain in pure Java:
+
+1. **Environment variables** — `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET`
+2. **Azure CLI** — `az login` (fallback; runs `az account get-access-token`)
+
+| Setting | Value |
+|:--------|:------|
+| Provider | `Azure AI` |
+| Auth Mode | `Azure Identity` |
+| Endpoint | Your endpoint URL |
+| Deployment | Your deployment / model name |
+| API Key | *(leave blank — not needed)* |
+
+{: .tip }
+> **Azure Identity setup:** Set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` in your environment before launching Burp Suite, or run `az login` in a terminal. Tokens are cached and refreshed automatically.
+
+### API Version
+
+The API version is configurable in Settings (default: `2025-01-01-preview`). Only applies to Classic Azure OpenAI endpoints — Foundry endpoints don't need it.
+
+### Settings Summary
+
+| Setting | Classic Azure OpenAI | Azure AI Foundry |
+|:--------|:---------------------|:-----------------|
+| Endpoint | `https://xxx.openai.azure.com` | `https://xxx.services.ai.azure.com/openai/v1` |
+| Deployment | Deployment name from Studio | Model name (e.g. `gpt-5.2`) |
+| API Version | `2025-01-01-preview` | N/A (auto) |
+| Auth Mode | API Key or Azure Identity | API Key or Azure Identity |
 
 ---
 
@@ -88,7 +152,7 @@ Configure OpenAI, Azure OpenAI, or OpenRouter for VISTA's AI capabilities.
 ### Getting an API Key
 
 1. Go to [openrouter.ai](https://openrouter.ai)
-2. Sign up (no credit card required for free models)
+2. Sign up — no credit card required for free models
 3. Visit [openrouter.ai/keys](https://openrouter.ai/keys)
 4. Click **"Create Key"**
 5. Copy the key (starts with `sk-or-v1-...`)
@@ -99,14 +163,18 @@ Configure OpenAI, Azure OpenAI, or OpenRouter for VISTA's AI capabilities.
 |:--------|:------|
 | Provider | `OpenRouter` |
 | API Key | `sk-or-v1-...` |
-| Model | `meta-llama/llama-3.3-70b-instruct:free` |
+| Model | `deepseek/deepseek-r1-0528:free` |
 
-### Free Models
+### Recommended Free Models
 
-| Model | Quality | Speed |
-|:------|:--------|:------|
-| `meta-llama/llama-3.3-70b-instruct:free` | ⭐⭐⭐⭐⭐ | Fast |
-| `tngtech/deepseek-r1t2-chimera:free` | ⭐⭐⭐⭐⭐ | Medium (reasoning) |
+| Model | ID | Quality | Speed |
+|:------|:---|:--------|:------|
+| **DeepSeek R1 0528** ⭐ | `deepseek/deepseek-r1-0528:free` | ⭐⭐⭐⭐⭐ | Medium (reasoning) |
+| **Llama 3.3 70B** | `meta-llama/llama-3.3-70b-instruct:free` | ⭐⭐⭐⭐⭐ | Fast |
+| **DeepSeek R1T2 Chimera** | `tngtech/deepseek-r1t2-chimera:free` | ⭐⭐⭐⭐⭐ | Medium |
+
+{: .tip }
+> Free models on OpenRouter rotate periodically. If a model returns a 404, switch to another from the list above.
 
 ---
 
@@ -124,11 +192,11 @@ Controls response randomness:
 | `1.0` | Maximum creativity | Brainstorming only |
 
 {: .tip }
-> The default temperature of `0.3` is optimal for security testing. Lower values give more consistent results.
+> The default temperature of `0.3` is optimal for security testing. For reasoning models (o1, o3, o4-series), temperature is omitted automatically.
 
 ### Max Tokens
 
-Controls maximum response length:
+Controls maximum response length (uses `max_completion_tokens` — the current API standard):
 
 | Value | Approximate Length |
 |:------|:------------------|
@@ -143,8 +211,10 @@ After configuring any provider:
 
 1. Click **"Test Connection"** in Settings
 2. VISTA sends a test request to verify credentials
-3. Success: Status bar shows 🟢 with provider/model info
-4. Failure: Error message displayed with troubleshooting hints
+3. Success: Status bar shows 🟢 with `(Provider / model-name)`
+4. Failure: Detailed error message with troubleshooting hints
+
+The status bar model name shows the **correct model for each provider** — deployment name for Azure AI, OpenRouter model for OpenRouter, and model name for OpenAI.
 
 ---
 
@@ -154,18 +224,23 @@ AI configuration is stored at `~/.vista-ai-config.json`:
 
 ```json
 {
-  "provider": "openrouter",
-  "apiKey": "sk-or-v1-...",
-  "model": "meta-llama/llama-3.3-70b-instruct:free",
-  "endpoint": "",
-  "deployment": "",
+  "provider": "Azure AI",
+  "openaiApiKey": "",
+  "azureApiKey": "your-azure-key",
+  "model": "gpt-4o-mini",
+  "endpoint": "https://your-resource.services.ai.azure.com/openai/v1",
+  "deployment": "gpt-5.2",
+  "azureApiVersion": "2025-01-01-preview",
+  "azureAuthMode": "api-key",
+  "openRouterApiKey": "",
+  "openRouterModel": "deepseek/deepseek-r1-0528:free",
   "temperature": 0.3,
   "maxTokens": 2000
 }
 ```
 
 {: .warning }
-> The API key is stored in plaintext in this file. Ensure appropriate file permissions on shared systems.
+> The API key is stored in plaintext in this file. Ensure appropriate file permissions on shared systems. Consider using Azure Identity auth mode to avoid storing keys on disk.
 
 ---
 

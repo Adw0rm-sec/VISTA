@@ -20,9 +20,9 @@ permalink: /
 
 VISTA is a professional Burp Suite extension that enhances security testing with AI-powered intelligence. It combines real-time traffic analysis, interactive AI guidance, and practical pentesting tools to help you test faster, smarter, and more systematically.
 
-**Version:** 2.10.27 · **License:** MIT · **Java:** 17+ · **Size:** ~511KB · **Zero Dependencies**
+**Version:** 2.10.28 · **License:** MIT · **Java:** 17+ · **Size:** ~1.3MB · **Zero Dependencies**
 
-> **New in v2.10.27:** Robust extraction, edge case handling, token overflow prevention, JSON param parsing, binary detection, fallback preview.
+> **New in v2.10.28:** Azure AI Foundry support (new endpoint format), Azure Identity (DefaultAzureCredential) auth, configurable API version, status bar shows correct model name per provider, `+ New Chat` properly creates a new session, `max_completion_tokens` for all providers, reasoning model temperature fix (o1/o3/o4), errors now surface correctly from OpenAI.
 
 ---
 

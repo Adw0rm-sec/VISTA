@@ -38,14 +38,24 @@ Model:    gpt-4o-mini (recommended for cost-effectiveness)
 | Temperature | `0.3` (focused responses) |
 | Cost | ~$0.001–$0.003 per interaction |
 
-### Azure OpenAI
+### Azure AI
+
+VISTA supports both **Azure AI Foundry** and **Classic Azure OpenAI** endpoints:
 
 ```
+# Azure AI Foundry (new)
 Provider:   Azure AI
-API Key:    your-azure-key
+Endpoint:   https://your-resource.services.ai.azure.com/openai/v1
+Deployment: gpt-5.2
+
+# Classic Azure OpenAI
+Provider:   Azure AI
 Endpoint:   https://your-resource.openai.azure.com
 Deployment: your-deployment-name
+API Version: 2025-01-01-preview
 ```
+
+For keyless auth, set Auth Mode to **Azure Identity** and configure `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` env vars (or run `az login`).
 
 ### OpenRouter (Free Option) ⭐
 

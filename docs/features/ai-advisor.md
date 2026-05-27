@@ -119,10 +119,11 @@ Templates dramatically improve AI response quality by providing structured, expe
 
 ## Session Management
 
-- **Conversations persist** across interactions within the same session
-- **New request** starts a fresh session (previous session is properly closed)
-- **Sessions are saved** to `~/.vista/sessions/` for persistence across Burp restarts
+- **`+ New Chat` button** — creates a proper new `ChatSession`, saves and closes the previous one so you can start fresh without losing prior work
+- **New request** automatically starts a fresh session (previous session saved and closed)
+- **Sessions are stored** in `ChatSessionManager` and saved to `~/.vista/sessions/` for persistence across Burp restarts
 - **Thread-safe** — conversation history is synchronized for safe concurrent access
+- **Status bar** shows the correct model name for the active provider (deployment name for Azure AI, model ID for OpenRouter/OpenAI)
 
 ---
 
