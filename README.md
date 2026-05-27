@@ -494,4 +494,4 @@ Copyright (c) 2026 Adw0rm-sec
 
 </div>
 
-<!-- BUILD_INFO --> **Latest Build:** 20260222-105316 | **Version:** 2.10.27 | **Commit:** 2d366aa
+<!-- BUILD_INFO --> **Latest Build:** 20260527-181643 | **Version:** 2.10.28 | **Commit:** 49a012d
