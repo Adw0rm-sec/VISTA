@@ -30,6 +30,8 @@ public class SettingsPanel extends JPanel {
     private final JTextField modelField = new JTextField("gpt-4o-mini", 20);
     private final JTextField endpointField = new JTextField(35);
     private final JTextField deploymentField = new JTextField(20);
+    private final JTextField azureApiVersionField = new JTextField("2025-01-01-preview", 20);
+    private final JComboBox<String> azureAuthModeCombo = new JComboBox<>(new String[]{"API Key", "Azure Identity"});
     private final JPasswordField openRouterApiKeyField = new JPasswordField(35);
     private final JComboBox<String> openRouterModelCombo = new JComboBox<>();
     private final JSlider temperatureSlider = new JSlider(0, 100, 30);
@@ -115,7 +117,18 @@ public class SettingsPanel extends JPanel {
 
         // Azure Settings
         azurePanel = createSection("Azure AI Configuration");
-        
+
+        // Auth mode selector — show/hide API key field accordingly
+        JPanel authModeRow = createRow("Auth Mode:", azureAuthModeCombo);
+        azureAuthModeCombo.setToolTipText("API Key: use azure key  |  Azure Identity: DefaultAzureCredential (env vars or az CLI)");
+        azurePanel.add(authModeRow);
+        azureAuthModeCombo.addActionListener(e -> {
+            boolean needKey = "API Key".equals(azureAuthModeCombo.getSelectedItem());
+            azureApiKeyField.setEnabled(needKey);
+            saveConfig();
+            onFieldsChanged();
+        });
+
         JPanel azureKeyRow = createRow("API Key:", azureApiKeyField);
         JButton showAzureKeyBtn = VistaTheme.compactButton("Show");
         showAzureKeyBtn.addActionListener(e -> {
@@ -131,12 +144,22 @@ public class SettingsPanel extends JPanel {
         azurePanel.add(azureKeyRow);
         azureApiKeyField.addActionListener(e -> saveConfig());
         
+        JLabel identityHint = new JLabel("Azure Identity: set AZURE_TENANT_ID / CLIENT_ID / CLIENT_SECRET env vars, or run 'az login'");
+        identityHint.setFont(VistaTheme.FONT_SMALL);
+        identityHint.setForeground(VistaTheme.TEXT_MUTED);
+        JPanel identityHintRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
+        identityHintRow.setOpaque(false);
+        identityHintRow.add(identityHint);
+        azurePanel.add(identityHintRow);
+
         azurePanel.add(createRow("Endpoint:", endpointField));
         azurePanel.add(createRow("Deployment:", deploymentField));
-        endpointField.setToolTipText("e.g., https://your-resource.openai.azure.com");
-        deploymentField.setToolTipText("Your Azure deployment name");
-        
-        JLabel azureInfo = new JLabel("Configure in Azure Portal > Azure OpenAI Service");
+        azurePanel.add(createRow("API Version:", azureApiVersionField));
+        endpointField.setToolTipText("e.g., https://your-resource.services.ai.azure.com/openai/v1  or  https://your-resource.openai.azure.com");
+        deploymentField.setToolTipText("Your Azure deployment name (e.g., gpt-5.2)");
+        azureApiVersionField.setToolTipText("Only used for classic Azure OpenAI endpoints (ignored for Foundry)");
+
+        JLabel azureInfo = new JLabel("Foundry: *.services.ai.azure.com/openai/v1   |   Classic: *.openai.azure.com");
         azureInfo.setFont(VistaTheme.FONT_SMALL);
         azureInfo.setForeground(VistaTheme.TEXT_MUTED);
         JPanel azureInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 108, 0));
@@ -270,6 +293,8 @@ public class SettingsPanel extends JPanel {
         azureApiKeyField.getDocument().addDocumentListener(fieldChangeListener);
         endpointField.getDocument().addDocumentListener(fieldChangeListener);
         deploymentField.getDocument().addDocumentListener(fieldChangeListener);
+        azureApiVersionField.getDocument().addDocumentListener(fieldChangeListener);
+        azureAuthModeCombo.addActionListener(e -> onFieldsChanged());
         openRouterApiKeyField.getDocument().addDocumentListener(fieldChangeListener);
         providerCombo.addActionListener(e -> onFieldsChanged());
         openRouterModelCombo.addActionListener(e -> onFieldsChanged());
@@ -364,10 +389,15 @@ public class SettingsPanel extends JPanel {
             String model = modelField.getText().trim();
             hasRequiredFields = !key.isEmpty() && !model.isEmpty();
         } else if ("Azure AI".equals(provider)) {
-            String key = new String(azureApiKeyField.getPassword()).trim();
-            String endpoint = endpointField.getText().trim();
-            String deployment = deploymentField.getText().trim();
-            hasRequiredFields = !key.isEmpty() && !endpoint.isEmpty() && !deployment.isEmpty();
+            String endpoint    = endpointField.getText().trim();
+            String deployment  = deploymentField.getText().trim();
+            boolean isIdentity = "Azure Identity".equals(azureAuthModeCombo.getSelectedItem());
+            if (isIdentity) {
+                hasRequiredFields = !endpoint.isEmpty() && !deployment.isEmpty();
+            } else {
+                String key = new String(azureApiKeyField.getPassword()).trim();
+                hasRequiredFields = !key.isEmpty() && !endpoint.isEmpty() && !deployment.isEmpty();
+            }
         } else if ("OpenRouter".equals(provider)) {
             String key = new String(openRouterApiKeyField.getPassword()).trim();
             Object model = openRouterModelCombo.getSelectedItem();
@@ -384,6 +414,10 @@ public class SettingsPanel extends JPanel {
         modelField.setText(config.getModel());
         endpointField.setText(config.getEndpoint());
         deploymentField.setText(config.getDeployment());
+        azureApiVersionField.setText(config.getAzureApiVersion());
+        azureAuthModeCombo.setSelectedItem(
+            "azure-identity".equalsIgnoreCase(config.getAzureAuthMode()) ? "Azure Identity" : "API Key");
+        azureApiKeyField.setEnabled(!"azure-identity".equalsIgnoreCase(config.getAzureAuthMode()));
         openRouterApiKeyField.setText(config.getOpenRouterApiKey());
         
         // Set OpenRouter model (add if not in list)
@@ -411,6 +445,8 @@ public class SettingsPanel extends JPanel {
     private void saveConfig() {
         String provider = (String) providerCombo.getSelectedItem();
         
+        String authModeValue = "Azure Identity".equals(azureAuthModeCombo.getSelectedItem())
+            ? "azure-identity" : "api-key";
         config.updateConfig(
             provider,
             new String(apiKeyField.getPassword()),
@@ -418,10 +454,14 @@ public class SettingsPanel extends JPanel {
             modelField.getText().trim(),
             endpointField.getText().trim(),
             deploymentField.getText().trim(),
+            azureApiVersionField.getText().trim(),
+            authModeValue,
             new String(openRouterApiKeyField.getPassword()),
             (String) openRouterModelCombo.getSelectedItem(),
             temperatureSlider.getValue() / 100.0
         );
+        // Clear cached credential tokens when config changes
+        com.vista.security.service.AzureCredentialProvider.getInstance().clearCache();
         updateStatus();
     }
 
@@ -461,6 +501,8 @@ public class SettingsPanel extends JPanel {
                     azureConfig.setEndpoint(config.getEndpoint());
                     azureConfig.setDeploymentName(config.getDeployment());
                     azureConfig.setApiKey(config.getAzureApiKey());
+                    azureConfig.setApiVersion(config.getAzureApiVersion());
+                    azureConfig.setAuthMode(config.getAzureAuthMode());
                     azureConfig.setTemperature(0.1);
                     response = new AzureAIService(azureConfig).testConnection();
                 } else if ("OpenRouter".equals(provider)) {

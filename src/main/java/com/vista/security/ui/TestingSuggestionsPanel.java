@@ -1668,6 +1668,8 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setEndpoint(config.getEndpoint());
             c.setDeploymentName(config.getDeployment());
             c.setApiKey(config.getAzureApiKey());
+            c.setApiVersion(config.getAzureApiVersion());
+            c.setAuthMode(config.getAzureAuthMode());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
             String result;
@@ -1770,6 +1772,8 @@ public class TestingSuggestionsPanel extends JPanel {
             c.setEndpoint(config.getEndpoint());
             c.setDeploymentName(config.getDeployment());
             c.setApiKey(config.getAzureApiKey());
+            c.setApiVersion(config.getAzureApiVersion());
+            c.setAuthMode(config.getAzureAuthMode());
             c.setTemperature(config.getTemperature());
             c.setMaxTokens(config.getMaxTokens());
             String result;
@@ -1888,42 +1892,59 @@ public class TestingSuggestionsPanel extends JPanel {
      * Start a new session - clears conversation but keeps current request.
      */
     private void startNewSession() {
-        // Save current session before clearing
-        if (!conversationHistory.isEmpty()) {
+        // Get the current session before creating a new one
+        ChatSession previousSession = chatSessionManager.getActiveSession();
+
+        // Persist old conversation into the previous session's message history
+        if (previousSession != null && !conversationHistory.isEmpty()) {
+            for (ConversationMessage msg : conversationHistory) {
+                if ("USER".equals(msg.role) || "user".equals(msg.role)) {
+                    previousSession.addUserMessage(msg.content, null);
+                } else if ("AI".equals(msg.role) || "assistant".equals(msg.role)) {
+                    previousSession.addAssistantMessage(msg.content);
+                }
+            }
             SessionManager.getInstance().saveConversationHistory(conversationHistory);
         }
-        
-        // Clear conversation
-        conversationHistory.clear();
-        
-        // Clear session-specific data
-        ChatSession activeSession = chatSessionManager.getActiveSession();
-        if (activeSession != null) {
-            activeSession.clearTestingSteps();
-            activeSession.clearAttachedRequests();
+
+        // Close the previous session so it can be revisited later
+        if (previousSession != null) {
+            chatSessionManager.closeSession(previousSession.getSessionId());
         }
-        
+
+        // Clear all UI state
+        conversationHistory.clear();
         attachedRequests.clear();
         conversationPane.clear();
         currentTestingPlan = null;
         currentStep = 0;
-        
-        updateMultiRequestLabel();
-        
-        // Show new session message
+
+        // Determine the request URL / summary for the new session
+        String requestUrl = "New Session";
         String requestSummary = "current request";
         if (currentRequest != null) {
             String reqText = HttpMessageParser.requestToText(helpers, currentRequest.getRequest());
+            requestUrl = extractRequestUrl(reqText);
             requestSummary = extractRequestSummary(reqText);
         }
-        
+
+        // Create and activate a proper new ChatSession
+        String systemPrompt = getCurrentSystemPrompt();
+        ChatSession newSession = chatSessionManager.createSession(requestUrl, systemPrompt);
+        if (currentRequest != null) {
+            newSession.setRequestResponse(currentRequest);
+        }
+        chatSessionManager.setActiveSession(newSession.getSessionId());
+
+        updateMultiRequestLabel();
+
         statusLabel.setText("New Session Started");
-        appendSuggestion("SYSTEM", "🆕 NEW SESSION STARTED\n\n" +
-            "Previous conversation saved and cleared.\n" +
+        appendSuggestion("SYSTEM", "NEW SESSION STARTED\n\n" +
+            "Previous conversation saved.\n" +
             "Current request: " + requestSummary + "\n\n" +
             "This is a fresh session. Ask me how to test for vulnerabilities!");
-        
-        callbacks.printOutput("[VISTA] New session started manually by user");
+
+        callbacks.printOutput("[VISTA] New chat session created: " + newSession.getSessionId());
     }
 
     private void appendSuggestion(String sender, String message) {

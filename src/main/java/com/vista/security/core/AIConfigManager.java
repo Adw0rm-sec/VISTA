@@ -22,6 +22,8 @@ public class AIConfigManager {
     private String model = "gpt-4o-mini";
     private String endpoint = "";
     private String deployment = "";
+    private String azureApiVersion = "2025-01-01-preview";
+    private String azureAuthMode = "api-key";
     private String openRouterApiKey = "";
     private String openRouterModel = "deepseek/deepseek-r1-0528:free";
     private double temperature = 0.3; // Lower default for cost efficiency
@@ -55,6 +57,8 @@ public class AIConfigManager {
     public String getModel() { return model; }
     public String getEndpoint() { return endpoint; }
     public String getDeployment() { return deployment; }
+    public String getAzureApiVersion() { return azureApiVersion; }
+    public String getAzureAuthMode()   { return azureAuthMode; }
     public String getOpenRouterApiKey() { return openRouterApiKey; }
     public String getOpenRouterModel() { return openRouterModel; }
     public double getTemperature() { return temperature; }
@@ -106,12 +110,26 @@ public class AIConfigManager {
         notifyListeners();
     }
     
-    public void setDeployment(String deployment) { 
-        this.deployment = deployment; 
+    public void setDeployment(String deployment) {
+        this.deployment = deployment;
         save();
         notifyListeners();
     }
-    
+
+    public void setAzureApiVersion(String azureApiVersion) {
+        this.azureApiVersion = (azureApiVersion != null && !azureApiVersion.isBlank())
+            ? azureApiVersion.trim() : "2025-01-01-preview";
+        save();
+        notifyListeners();
+    }
+
+    public void setAzureAuthMode(String azureAuthMode) {
+        this.azureAuthMode = (azureAuthMode != null && !azureAuthMode.isBlank())
+            ? azureAuthMode : "api-key";
+        save();
+        notifyListeners();
+    }
+
     public void setOpenRouterApiKey(String openRouterApiKey) { 
         this.openRouterApiKey = (openRouterApiKey != null) ? openRouterApiKey.trim() : ""; 
         save();
@@ -185,8 +203,9 @@ public class AIConfigManager {
     /**
      * Bulk update configuration.
      */
-    public void updateConfig(String provider, String openaiApiKey, String azureApiKey, String model, 
-                            String endpoint, String deployment, String openRouterApiKey,
+    public void updateConfig(String provider, String openaiApiKey, String azureApiKey, String model,
+                            String endpoint, String deployment, String azureApiVersion,
+                            String azureAuthMode, String openRouterApiKey,
                             String openRouterModel, double temperature) {
         this.provider = provider;
         this.openaiApiKey = (openaiApiKey != null) ? openaiApiKey.trim() : "";
@@ -194,6 +213,10 @@ public class AIConfigManager {
         this.model = model;
         this.endpoint = endpoint;
         this.deployment = deployment;
+        this.azureApiVersion = (azureApiVersion != null && !azureApiVersion.isBlank())
+            ? azureApiVersion.trim() : "2025-01-01-preview";
+        this.azureAuthMode = (azureAuthMode != null && !azureAuthMode.isBlank())
+            ? azureAuthMode : "api-key";
         this.openRouterApiKey = (openRouterApiKey != null) ? openRouterApiKey.trim() : "";
         this.openRouterModel = openRouterModel;
         this.temperature = temperature;
@@ -206,9 +229,10 @@ public class AIConfigManager {
      */
     public boolean isConfigured() {
         if ("Azure AI".equalsIgnoreCase(provider)) {
-            return azureApiKey != null && !azureApiKey.isBlank()
-                && endpoint != null && !endpoint.isBlank() 
-                && deployment != null && !deployment.isBlank();
+            boolean baseOk = endpoint != null && !endpoint.isBlank()
+                          && deployment != null && !deployment.isBlank();
+            if ("azure-identity".equalsIgnoreCase(azureAuthMode)) return baseOk;
+            return baseOk && azureApiKey != null && !azureApiKey.isBlank();
         } else if ("OpenRouter".equalsIgnoreCase(provider)) {
             return openRouterApiKey != null && !openRouterApiKey.isBlank()
                 && openRouterModel != null && !openRouterModel.isBlank();
@@ -223,9 +247,10 @@ public class AIConfigManager {
     public String getStatusMessage() {
         if (!isConfigured()) {
             if ("Azure AI".equalsIgnoreCase(provider)) {
-                if (azureApiKey == null || azureApiKey.isBlank()) return "Azure API key not configured";
                 if (endpoint == null || endpoint.isBlank()) return "Azure endpoint not configured";
                 if (deployment == null || deployment.isBlank()) return "Azure deployment not configured";
+                if (!"azure-identity".equalsIgnoreCase(azureAuthMode) &&
+                    (azureApiKey == null || azureApiKey.isBlank())) return "Azure API key not configured";
             } else if ("OpenRouter".equalsIgnoreCase(provider)) {
                 if (openRouterApiKey == null || openRouterApiKey.isBlank()) return "OpenRouter API key not configured";
                 if (openRouterModel == null || openRouterModel.isBlank()) return "OpenRouter model not configured";
@@ -272,6 +297,8 @@ public class AIConfigManager {
             json.append("  \"model\": \"").append(escapeJson(model)).append("\",\n");
             json.append("  \"endpoint\": \"").append(escapeJson(endpoint)).append("\",\n");
             json.append("  \"deployment\": \"").append(escapeJson(deployment)).append("\",\n");
+            json.append("  \"azureApiVersion\": \"").append(escapeJson(azureApiVersion)).append("\",\n");
+            json.append("  \"azureAuthMode\": \"").append(escapeJson(azureAuthMode)).append("\",\n");
             json.append("  \"openRouterApiKey\": \"").append(escapeJson(openRouterApiKey)).append("\",\n");
             json.append("  \"openRouterModel\": \"").append(escapeJson(openRouterModel)).append("\",\n");
             json.append("  \"temperature\": ").append(temperature).append(",\n");
@@ -302,6 +329,8 @@ public class AIConfigManager {
             model = extractJsonString(content, "model", "gpt-4o-mini");
             endpoint = extractJsonString(content, "endpoint", "");
             deployment = extractJsonString(content, "deployment", "");
+            azureApiVersion = extractJsonString(content, "azureApiVersion", "2025-01-01-preview");
+            azureAuthMode   = extractJsonString(content, "azureAuthMode", "api-key");
             openRouterApiKey = extractJsonString(content, "openRouterApiKey", "");
             openRouterModel = extractJsonString(content, "openRouterModel", "deepseek/deepseek-r1-0528:free");
             temperature = extractJsonDouble(content, "temperature", 0.3);

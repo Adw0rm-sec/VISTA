@@ -196,71 +196,78 @@ public class OpenAIService implements AIService {
     }
 
     private String buildRequestBody(String systemPrompt, String userPrompt, double temperature) {
+        String tempField = isReasoningModel(config.getModel())
+                ? "" : "\"temperature\": %.2f,\n    ".formatted(temperature);
         return """
                 {
                     "model": %s,
-                    "temperature": %.2f,
-                    "max_tokens": %d,
+                    %s"max_completion_tokens": %d,
                     "messages": [
                         {"role":"system","content":%s},
                         {"role":"user","content":%s}
                     ]
                 }
                 """.formatted(
-                    toJsonString(config.getModel()), 
-                    temperature,
+                    toJsonString(config.getModel()),
+                    tempField,
                     config.getMaxTokens(),
-                    toJsonString(systemPrompt), 
+                    toJsonString(systemPrompt),
                     toJsonString(userPrompt)
                 );
     }
-    
+
     private String buildRequestBodyWithHistory(List<ChatMessage> messages, double temperature) {
         StringBuilder messagesJson = new StringBuilder();
         messagesJson.append("[\n");
-        
+
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
             String role = switch (msg.getRole()) {
-                case SYSTEM -> "system";
-                case USER -> "user";
+                case SYSTEM    -> "system";
+                case USER      -> "user";
                 case ASSISTANT -> "assistant";
             };
-            
             messagesJson.append("        {\"role\":\"").append(role).append("\",\"content\":")
                        .append(toJsonString(msg.getContent())).append("}");
-            
-            if (i < messages.size() - 1) {
-                messagesJson.append(",");
-            }
+            if (i < messages.size() - 1) messagesJson.append(",");
             messagesJson.append("\n");
         }
-        
         messagesJson.append("    ]");
-        
+
+        String tempField = isReasoningModel(config.getModel())
+                ? "" : "\"temperature\": %.2f,\n    ".formatted(temperature);
         return """
                 {
                     "model": %s,
-                    "temperature": %.2f,
-                    "max_tokens": %d,
+                    %s"max_completion_tokens": %d,
                     "messages": %s
                 }
                 """.formatted(
-                    toJsonString(config.getModel()), 
-                    temperature,
+                    toJsonString(config.getModel()),
+                    tempField,
                     config.getMaxTokens(),
                     messagesJson.toString()
                 );
     }
+
+    private static boolean isReasoningModel(String modelName) {
+        if (modelName == null) return false;
+        String lower = modelName.toLowerCase();
+        return lower.matches("o\\d+.*")
+            || lower.startsWith("o1")
+            || lower.startsWith("o3")
+            || lower.startsWith("o4");
+    }
     
-    private String parseResponse(HttpResponse<String> response) {
+    private String parseResponse(HttpResponse<String> response) throws Exception {
         if (response.statusCode() >= 300) {
-            return "OpenAI API error: HTTP " + response.statusCode() + " — " + truncate(response.body(), 800);
+            throw new Exception("OpenAI API error: HTTP " + response.statusCode() + " — " + truncate(response.body(), 800));
         }
-        
+
         String content = extractContent(response.body());
         if (content == null || content.isBlank()) {
-            return "Received response but couldn't parse content:\n" + truncate(response.body(), 1000);
+            throw new Exception("OpenAI returned an empty response. Try again or check your model/token limit.\n"
+                + truncate(response.body(), 400));
         }
         return content;
     }

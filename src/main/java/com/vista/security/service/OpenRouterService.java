@@ -202,53 +202,48 @@ public class OpenRouterService implements AIService {
                 {
                     "model": %s,
                     "temperature": %.2f,
-                    "max_tokens": %d,
+                    "max_completion_tokens": %d,
                     "messages": [
                         {"role":"system","content":%s},
                         {"role":"user","content":%s}
                     ]
                 }
                 """.formatted(
-                    toJsonString(config.getModel()), 
+                    toJsonString(config.getModel()),
                     temperature,
                     config.getMaxTokens(),
-                    toJsonString(systemPrompt), 
+                    toJsonString(systemPrompt),
                     toJsonString(userPrompt)
                 );
     }
-    
+
     private String buildRequestBodyWithHistory(List<ChatMessage> messages, double temperature) {
         StringBuilder messagesJson = new StringBuilder();
         messagesJson.append("[\n");
-        
+
         for (int i = 0; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
             String role = switch (msg.getRole()) {
-                case SYSTEM -> "system";
-                case USER -> "user";
+                case SYSTEM    -> "system";
+                case USER      -> "user";
                 case ASSISTANT -> "assistant";
             };
-            
             messagesJson.append("        {\"role\":\"").append(role).append("\",\"content\":")
                        .append(toJsonString(msg.getContent())).append("}");
-            
-            if (i < messages.size() - 1) {
-                messagesJson.append(",");
-            }
+            if (i < messages.size() - 1) messagesJson.append(",");
             messagesJson.append("\n");
         }
-        
         messagesJson.append("    ]");
-        
+
         return """
                 {
                     "model": %s,
                     "temperature": %.2f,
-                    "max_tokens": %d,
+                    "max_completion_tokens": %d,
                     "messages": %s
                 }
                 """.formatted(
-                    toJsonString(config.getModel()), 
+                    toJsonString(config.getModel()),
                     temperature,
                     config.getMaxTokens(),
                     messagesJson.toString()

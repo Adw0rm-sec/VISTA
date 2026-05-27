@@ -18,13 +18,13 @@ import java.util.List;
  * VISTA - AI-Powered Security Testing Assistant
  * Professional-grade Burp Suite extension for intelligent vulnerability exploitation.
  * 
- * @version 2.10.26
+ * @version 2.10.28
  * @author VISTA Security Team
  */
 public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
     
     private static final String EXTENSION_NAME = "VISTA";
-    private static final String VERSION = "2.10.26";
+    private static final String VERSION = "2.10.28";
     
     private IBurpExtenderCallbacks callbacks;
     private TestingSuggestionsPanel testingSuggestionsPanel;
@@ -389,8 +389,15 @@ public class BurpExtender implements IBurpExtender, ITab, IContextMenuFactory {
                 aiStatusDot.setForeground(VistaTheme.STATUS_READY);
                 aiStatusText.setText("AI: Ready");
                 aiStatusText.setForeground(VistaTheme.STATUS_READY);
-                String model = config.getModel();
                 String provider = config.getProvider();
+                String model;
+                if ("Azure AI".equalsIgnoreCase(provider)) {
+                    model = config.getDeployment();
+                } else if ("OpenRouter".equalsIgnoreCase(provider)) {
+                    model = config.getOpenRouterModel();
+                } else {
+                    model = config.getModel();
+                }
                 aiModelText.setText("(" + provider + (model != null && !model.isEmpty() ? " / " + model : "") + ")");
             } else {
                 aiStatusDot.setForeground(VistaTheme.STATUS_ERROR);

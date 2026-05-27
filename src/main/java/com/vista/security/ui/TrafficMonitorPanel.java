@@ -1784,13 +1784,15 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
         
         try {
             if ("Azure AI".equalsIgnoreCase(config.getProvider())) {
-                com.vista.security.service.AzureAIService.Configuration azureConfig = 
+                com.vista.security.service.AzureAIService.Configuration azureConfig =
                     new com.vista.security.service.AzureAIService.Configuration();
                 azureConfig.setEndpoint(config.getEndpoint());
                 azureConfig.setDeploymentName(config.getDeployment());
                 azureConfig.setApiKey(config.getAzureApiKey());
+                azureConfig.setApiVersion(config.getAzureApiVersion());
+                azureConfig.setAuthMode(config.getAzureAuthMode());
                 azureConfig.setTemperature(config.getTemperature());
-                // Removed misleading log - only log when AI is actually USED
+                azureConfig.setMaxTokens(config.getMaxTokens());
                 return new com.vista.security.service.AzureAIService(azureConfig);
                 
             } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
@@ -1799,16 +1801,16 @@ public class TrafficMonitorPanel extends JPanel implements TrafficBufferListener
                 openRouterConfig.setApiKey(config.getOpenRouterApiKey());
                 openRouterConfig.setModel(config.getOpenRouterModel());
                 openRouterConfig.setTemperature(config.getTemperature());
-                // Removed misleading log - only log when AI is actually USED
+                openRouterConfig.setMaxTokens(config.getMaxTokens());
                 return new com.vista.security.service.OpenRouterService(openRouterConfig);
-                
+
             } else {
-                com.vista.security.service.OpenAIService.Configuration openaiConfig = 
+                com.vista.security.service.OpenAIService.Configuration openaiConfig =
                     new com.vista.security.service.OpenAIService.Configuration();
                 openaiConfig.setApiKey(config.getOpenAIApiKey());
                 openaiConfig.setModel(config.getModel());
                 openaiConfig.setTemperature(config.getTemperature());
-                // Removed misleading log - only log when AI is actually USED
+                openaiConfig.setMaxTokens(config.getMaxTokens());
                 return new com.vista.security.service.OpenAIService(openaiConfig);
             }
         } catch (Exception e) {

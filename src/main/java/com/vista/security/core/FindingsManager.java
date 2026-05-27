@@ -407,7 +407,10 @@ public class FindingsManager {
             azureConfig.setEndpoint(config.getEndpoint());
             azureConfig.setDeploymentName(config.getDeployment());
             azureConfig.setApiKey(config.getAzureApiKey());
-            azureConfig.setTemperature(0.3); // Lower for more consistent output
+            azureConfig.setApiVersion(config.getAzureApiVersion());
+            azureConfig.setAuthMode(config.getAzureAuthMode());
+            azureConfig.setTemperature(0.3);
+            azureConfig.setMaxTokens(config.getMaxTokens());
             return new AzureAIService(azureConfig).ask(
                 "You are a professional security researcher writing vulnerability reports.", prompt);
         } else if ("OpenRouter".equalsIgnoreCase(config.getProvider())) {
@@ -415,14 +418,16 @@ public class FindingsManager {
                 new com.vista.security.service.OpenRouterService.Configuration();
             openRouterConfig.setApiKey(config.getOpenRouterApiKey());
             openRouterConfig.setModel(config.getOpenRouterModel());
-            openRouterConfig.setTemperature(0.3); // Lower for more consistent output
+            openRouterConfig.setTemperature(0.3);
+            openRouterConfig.setMaxTokens(config.getMaxTokens());
             return new com.vista.security.service.OpenRouterService(openRouterConfig).ask(
                 "You are a professional security researcher writing vulnerability reports.", prompt);
         } else {
             OpenAIService.Configuration openaiConfig = new OpenAIService.Configuration();
             openaiConfig.setApiKey(config.getOpenAIApiKey());
             openaiConfig.setModel(config.getModel());
-            openaiConfig.setTemperature(0.3); // Lower for more consistent output
+            openaiConfig.setTemperature(0.3);
+            openaiConfig.setMaxTokens(config.getMaxTokens());
             return new OpenAIService(openaiConfig).ask(
                 "You are a professional security researcher writing vulnerability reports.", prompt);
         }
